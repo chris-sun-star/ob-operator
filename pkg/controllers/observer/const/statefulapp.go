@@ -14,9 +14,8 @@ package observerconst
 
 // StatefulApp
 const (
-	ImgProfix     = "oceanbase/oceanbase-ce:operator"
 	ImgOb         = "observer"
-	ImgPullPolicy = "Always"
+	ImgPullPolicy = "IfNotPresent"
 
 	DatafileStorageName = "data-file"
 	DatafileStoragePath = "/home/admin/data_file"

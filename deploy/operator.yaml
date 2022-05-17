@@ -396,8 +396,8 @@ spec:
         - --cluster-name=cn
         command:
         - /manager
-        image: oceanbase/obce-operator:v0.0.1
-        imagePullPolicy: Always
+        image: oceanbase/obce-operator:v0.0.2
+        imagePullPolicy: IfNotPresent
         livenessProbe:
           httpGet:
             path: /healthz

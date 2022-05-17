@@ -180,7 +180,7 @@ func (ctrl *OBClusterCtrl) TopologyNotReadyEffector(statefulApp cloudv1.Stateful
 
 func (ctrl *OBClusterCtrl) TopologyReadyEffector(statefulApp cloudv1.StatefulApp) error {
 	// check version update
-	versionIsModified, err := judge.VersionIsModified(ctrl.OBCluster.Spec.Version, statefulApp)
+	versionIsModified, err := judge.VersionIsModified(ctrl.OBCluster.Spec.Tag, statefulApp)
 	if err != nil {
 		return err
 	}

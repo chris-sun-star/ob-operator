@@ -102,13 +102,16 @@ spec:
                   - zone
                   type: object
                 type: array
-              version:
+              imageRepo:
+                type: string
+              tag:
                 type: string
             required:
             - clusterID
             - resources
             - topology
-            - version
+            - imageRepo
+            - tag
             type: object
           status:
             description: OBClusterStatus defines the observed state of OBCluster
