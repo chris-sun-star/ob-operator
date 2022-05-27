@@ -52,6 +52,20 @@ func (S *Server) Init() {
 		// readiness update
 		oboperator.POST("/readinessUpdate", OBReadinessUpdate)
 	}
+    obproxyoperator := router.Group("/api/obproxy")
+    {
+        // start
+        obproxyoperator.POST("/start", ObproxyStart)
+        // stop
+        obproxyoperator.POST("/stop", ObproxyStop)
+		// status
+		obproxyoperator.GET("/status", ObproxyStatus)
+		// readiness
+		obproxyoperator.GET("/readiness", ObproxyReadiness)
+		// readiness update
+		obproxyoperator.POST("/readinessUpdate", ObproxyReadinessUpdate)
+    }
+
 	S.Router = router
 	S.HttpServer = &http.Server{
 		Addr:    ":19001",

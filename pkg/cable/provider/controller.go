@@ -18,11 +18,13 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/oceanbase/ob-operator/pkg/cable/observer"
+	"github.com/oceanbase/ob-operator/pkg/cable/obproxy"
 	"github.com/oceanbase/ob-operator/pkg/infrastructure/ob"
 	"github.com/oceanbase/ob-operator/pkg/util"
 	"github.com/oceanbase/ob-operator/pkg/util/system"
 )
 
+// system handler
 func Info(c *gin.Context) {
 	data, err := system.GetNICInfo(ob.NIC)
 	if err != nil {
@@ -45,6 +47,7 @@ func Rework(c *gin.Context) {
 	Sender(c, 200, data)
 }
 
+// ob handler
 func OBStart(c *gin.Context) {
 	param := new(ob.StartObServerProcessArguments)
 	if err := c.ShouldBind(&param); err != nil {
@@ -91,5 +94,55 @@ func OBReadiness(c *gin.Context) {
 func OBReadinessUpdate(c *gin.Context) {
 	data := make(map[string]interface{})
 	observer.Readiness = true
+	Sender(c, 200, data)
+}
+
+// obproxy handler
+func ObproxyStart(c *gin.Context) {
+	param := new(obproxy.StartObproxyProcessParam)
+	if err := c.ShouldBind(&param); err != nil {
+		panic(err)
+	}
+	log.Println("start obproxy with param", util.CovertToJSON(param))
+
+	if !obproxy.Liveness {
+		go obproxy.StartObproxyProcess(param)
+        obproxy.CheckStatusOnce.Do (
+            func () {
+		        go obproxy.CheckStatusLoop()
+            })
+		obproxy.Liveness = true
+	}
+	data := make(map[string]interface{})
+	Sender(c, 200, data)
+}
+
+func ObproxyStop(c *gin.Context) {
+	go obproxy.StopProcess()
+	data := make(map[string]interface{})
+	Sender(c, 200, data)
+}
+
+func ObproxyStatus(c *gin.Context) {
+	data := make(map[string]interface{})
+	if obproxy.Liveness {
+		Sender(c, 200, data)
+	} else {
+		Sender(c, 400, data)
+	}
+}
+
+func ObproxyReadiness(c *gin.Context) {
+	data := make(map[string]interface{})
+	if obproxy.Readiness {
+		Sender(c, 200, data)
+	} else {
+		Sender(c, 400, data)
+	}
+}
+
+func ObproxyReadinessUpdate(c *gin.Context) {
+	data := make(map[string]interface{})
+	obproxy.Readiness = true
 	Sender(c, 200, data)
 }

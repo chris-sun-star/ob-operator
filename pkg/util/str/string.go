@@ -10,9 +10,21 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details.
 */
 
-package util
+package str
+
+import (
+   "strings"
+)
 
 func TrimSuffixLastest(s string) string {
 	s = s[:len(s)-1]
 	return s
+}
+
+func ReplaceAll(template string, replacers ...*strings.Replacer) string {
+   s := template
+   for _, replacer := range replacers {
+      s = replacer.Replace(s)
+   }
+   return s
 }

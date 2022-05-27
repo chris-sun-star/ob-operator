@@ -20,7 +20,8 @@ import (
 )
 
 func InitForK8s() {
-	DirInit()
+    // no need to init dir, should contains in dockerfile
+    // DirInit()
 	// init http server
 	Tiny.Init()
 	// run http server
