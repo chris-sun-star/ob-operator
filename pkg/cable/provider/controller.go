@@ -17,8 +17,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/oceanbase/ob-operator/pkg/cable/observer"
 	"github.com/oceanbase/ob-operator/pkg/cable/obproxy"
+	"github.com/oceanbase/ob-operator/pkg/cable/observer"
 	"github.com/oceanbase/ob-operator/pkg/infrastructure/ob"
 	"github.com/oceanbase/ob-operator/pkg/util"
 	"github.com/oceanbase/ob-operator/pkg/util/system"
@@ -105,44 +105,44 @@ func ObproxyStart(c *gin.Context) {
 	}
 	log.Println("start obproxy with param", util.CovertToJSON(param))
 
-	if !obproxy.Liveness {
+	if !obproxy.ProcessStarted {
 		go obproxy.StartObproxyProcess(param)
-        obproxy.CheckStatusOnce.Do (
-            func () {
-		        go obproxy.CheckStatusLoop()
-            })
-		obproxy.Liveness = true
+		obproxy.CheckStatusOnce.Do(
+			func() {
+				go obproxy.CheckStatusLoop()
+			})
+		obproxy.ProcessStarted = true
 	}
 	data := make(map[string]interface{})
-	Sender(c, 200, data)
+	Sender(c, 200, NewSuccessResponse(data))
 }
 
 func ObproxyStop(c *gin.Context) {
 	go obproxy.StopProcess()
 	data := make(map[string]interface{})
-	Sender(c, 200, data)
+	Sender(c, 200, NewSuccessResponse(data))
 }
 
 func ObproxyStatus(c *gin.Context) {
 	data := make(map[string]interface{})
 	if obproxy.Liveness {
-		Sender(c, 200, data)
+		Sender(c, 200, NewSuccessResponse(data))
 	} else {
-		Sender(c, 400, data)
+		Sender(c, 400, NewBadRequestResponse(nil))
 	}
 }
 
 func ObproxyReadiness(c *gin.Context) {
 	data := make(map[string]interface{})
 	if obproxy.Readiness {
-		Sender(c, 200, data)
+		Sender(c, 200, NewSuccessResponse(data))
 	} else {
-		Sender(c, 400, data)
+		Sender(c, 400, NewBadRequestResponse(nil))
 	}
 }
 
 func ObproxyReadinessUpdate(c *gin.Context) {
 	data := make(map[string]interface{})
 	obproxy.Readiness = true
-	Sender(c, 200, data)
+	Sender(c, 200, NewSuccessResponse(data))
 }

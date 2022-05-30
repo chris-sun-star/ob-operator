@@ -13,7 +13,7 @@ See the Mulan PSL v2 for more details.
 package str
 
 import (
-   "strings"
+	"strings"
 )
 
 func TrimSuffixLastest(s string) string {
@@ -22,9 +22,9 @@ func TrimSuffixLastest(s string) string {
 }
 
 func ReplaceAll(template string, replacers ...*strings.Replacer) string {
-   s := template
-   for _, replacer := range replacers {
-      s = replacer.Replace(s)
-   }
-   return s
+	s := template
+	for _, replacer := range replacers {
+		s = replacer.Replace(s)
+	}
+	return s
 }
