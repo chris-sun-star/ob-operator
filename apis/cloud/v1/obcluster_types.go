@@ -25,6 +25,20 @@ type OBClusterSpec struct {
 	ClusterID int           `json:"clusterID"`
 	Topology  []Cluster     `json:"topology"`
 	Resources ResourcesSpec `json:"resources"`
+    Obproxy   ObproxySpec   `json:"obproxy"`
+}
+
+type ObproxySpec struct {
+	ImageRepo string `json:"imageRepo"`
+	Tag       string `json:"tag"`
+	Name      string `json:"name"`
+    Topology  []ObproxyZone `json:"topology"`
+}
+
+type ObproxyZone struct {
+    Region string `json:"region"`
+    Replicas int `json:"replicas"`
+    NodeSelector map[string]string `json:"nodeSelector"`
 }
 
 type Cluster struct {

@@ -24,6 +24,23 @@ spec:
         nodeSelector:
           topology.kubernetes.io/zone: zone3
         replicas: 1
+  obproxy:
+    imageRepo: oceanbase/obproxy-ce
+    tag: 3.2.3-2
+    name: helloworld
+    topology:
+      - region: region1
+        replicas: 1
+        nodeSelector:
+          topology.kubernetes.io/zone: zone1
+      - region: region1
+        replicas: 1
+        nodeSelector:
+          topology.kubernetes.io/zone: zone2
+      - region: region1
+        replicas: 1
+        nodeSelector:
+          topology.kubernetes.io/zone: zone3
   resources:
     cpu: 2
     memory: 10Gi
