@@ -61,6 +61,20 @@ func (ctrl *OBClusterCtrl) OBClusterReadyForStep(step string, statefulApp cloudv
 		}
 	}
 
+    // create user for obproxy
+	clusterIP, err := ctrl.GetServiceClusterIPByName(ctrl.OBCluster.Namespace, ctrl.OBCluster.Name)
+	if err != nil {
+        return err
+	}
+    err = sql.CreateUser(clusterIp, "proxyro", "")
+	if err != nil {
+        return err
+	}
+    err = sql.GrantPrivilege(clusterIp, "select", "*.*", "proxyro")
+	if err != nil {
+        return err
+	}
+
 	// update status
 	return ctrl.UpdateOBClusterAndZoneStatus(observerconst.ClusterReady, "", "")
 }

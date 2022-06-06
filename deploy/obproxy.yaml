@@ -1,0 +1,21 @@
+apiVersion: cloud.oceanbase.com/v1
+kind: Obproxy
+metadata:
+  name: obproxy-test
+spec:
+  obCluster: cn
+  imageRepo: oceanbase/obproxy-ce
+  tag: 3.2.3-2
+  topology:
+    - region: region1
+      replicas: 1
+      nodeSelector:
+        topology.kubernetes.io/zone: zone1
+    - region: region1
+      replicas: 1
+      nodeSelector:
+        topology.kubernetes.io/zone: zone2
+    - region: region1
+      replicas: 1
+      nodeSelector:
+        topology.kubernetes.io/zone: zone3
