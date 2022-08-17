@@ -19,9 +19,9 @@ import (
 func InitDir() {
 	cmd := exec.Command("rm", "-rf", "/home/admin/oceanbase/log")
 	cmd.Run()
-	cmd = exec.Command("mkdir", "-p", "/home/admin/log")
+	cmd = exec.Command("mkdir", "-p", "/home/admin/log/log")
 	cmd.Run()
-	cmd = exec.Command("ln", "-sf", "/home/admin/log", "/home/admin/oceanbase/log")
+	cmd = exec.Command("ln", "-sf", "/home/admin/log/log", "/home/admin/oceanbase/log")
 	cmd.Run()
 	cmd = exec.Command("rm", "-rf", "/home/admin/oceanbase/store")
 	cmd.Run()
