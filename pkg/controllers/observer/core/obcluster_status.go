@@ -33,12 +33,14 @@ import (
 
 func (ctrl *OBClusterCtrl) OBClusterReadyForStep(step string, statefulApp cloudv1.StatefulApp) error {
 	// update RootService
+	klog.Infoln("update rootservice status")
 	err := ctrl.UpdateRootServiceStatus(statefulApp)
 	if err != nil {
 		return err
 	}
 
 	// update OBZone
+	klog.Infoln("update zone status")
 	err = ctrl.UpdateOBZoneStatus(statefulApp)
 	if err != nil {
 		return err
@@ -47,21 +49,27 @@ func (ctrl *OBClusterCtrl) OBClusterReadyForStep(step string, statefulApp cloudv
 	// create service
 	switch step {
 	case observerconst.StepBootstrap:
+	    klog.Infoln("create ob service")
 		err = ctrl.CreateService(statefulApp.Name)
 		if err != nil {
+	        klog.Infoln("create ob service failed %v", err)
 			return err
 		}
+	    klog.Infoln("create prometheus service")
 		err = ctrl.CreateServiceForPrometheus(statefulApp.Name)
 		if err != nil {
+	        klog.Infoln("create prometheus service failed %v", err)
 			return err
 		}
 	case observerconst.StepMaintain:
 		_, err = ctrl.GetServiceByName(ctrl.OBCluster.Namespace, ctrl.OBCluster.Name)
 		if err != nil {
+	        klog.Infoln("create ob service")
 			err = ctrl.CreateService(statefulApp.Name)
 			if err != nil {
 				return err
 			}
+	        klog.Infoln("create prometheus service")
 			err = ctrl.CreateServiceForPrometheus(statefulApp.Name)
 			if err != nil {
 				return err
@@ -69,8 +77,39 @@ func (ctrl *OBClusterCtrl) OBClusterReadyForStep(step string, statefulApp cloudv
 		}
 	}
 
+	klog.Infoln("preparation for obproxy")
+	err = ctrl.CreateUserForObproxy(statefulApp)
+    if err != nil {
+        klog.Infoln("preparation for obproxy failed: %v", err)
+        return err
+    }
+
+	klog.Infoln("preparation for obagent")
+	err = ctrl.CreateUserForObagent(statefulApp)
+    if err != nil {
+        klog.Infoln("preparation for obagent failed: %v", err)
+        return err
+    }
+	err = ctrl.ReviseAllOBAgentConfig(statefulApp)
+    if err != nil {
+        klog.Infoln("preparation for obagent config failed: %v", err)
+        return err
+    }
+
+	klog.Infoln("preparation for admin")
+    err = ctrl.CreateAdminUser(statefulApp)
+    if err != nil {
+        klog.Infoln("preparation for admin failed: %v", err)
+        return err
+    }
+
 	// update status
-	return ctrl.UpdateOBClusterAndZoneStatus(observerconst.ClusterReady, "", "")
+	klog.Infoln("update cluster and zone status")
+	err = ctrl.UpdateOBClusterAndZoneStatus(observerconst.ClusterReady, "", "")
+    if err != nil {
+	    klog.Infoln("update cluster and zone status failed")
+    }
+    return err
 }
 
 func (ctrl *OBClusterCtrl) UpdateOBClusterAndZoneStatus(clusterStatus, zoneName, zoneStatus string) error {
