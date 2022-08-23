@@ -61,6 +61,31 @@ func (ctrl *OBClusterCtrl) OBClusterReadyForStep(step string, statefulApp cloudv
 	        klog.Infoln("create prometheus service failed %v", err)
 			return err
 		}
+	    klog.Infoln("preparation for obproxy")
+	    err = ctrl.CreateUserForObproxy(statefulApp)
+        if err != nil {
+            klog.Infoln("preparation for obproxy failed: %v", err)
+            return err
+        }
+
+	    klog.Infoln("preparation for obagent")
+	    err = ctrl.CreateUserForObagent(statefulApp)
+        if err != nil {
+            klog.Infoln("preparation for obagent failed: %v", err)
+            return err
+        }
+	    err = ctrl.ReviseAllOBAgentConfig(statefulApp)
+        if err != nil {
+            klog.Infoln("preparation for obagent config failed: %v", err)
+            return err
+        }
+
+	    klog.Infoln("preparation for admin")
+        err = ctrl.CreateAdminUser(statefulApp)
+        if err != nil {
+            klog.Infoln("preparation for admin failed: %v", err)
+            return err
+        }
 	case observerconst.StepMaintain:
 		_, err = ctrl.GetServiceByName(ctrl.OBCluster.Namespace, ctrl.OBCluster.Name)
 		if err != nil {
@@ -77,31 +102,6 @@ func (ctrl *OBClusterCtrl) OBClusterReadyForStep(step string, statefulApp cloudv
 		}
 	}
 
-	klog.Infoln("preparation for obproxy")
-	err = ctrl.CreateUserForObproxy(statefulApp)
-    if err != nil {
-        klog.Infoln("preparation for obproxy failed: %v", err)
-        return err
-    }
-
-	klog.Infoln("preparation for obagent")
-	err = ctrl.CreateUserForObagent(statefulApp)
-    if err != nil {
-        klog.Infoln("preparation for obagent failed: %v", err)
-        return err
-    }
-	err = ctrl.ReviseAllOBAgentConfig(statefulApp)
-    if err != nil {
-        klog.Infoln("preparation for obagent config failed: %v", err)
-        return err
-    }
-
-	klog.Infoln("preparation for admin")
-    err = ctrl.CreateAdminUser(statefulApp)
-    if err != nil {
-        klog.Infoln("preparation for admin failed: %v", err)
-        return err
-    }
 
 	// update status
 	klog.Infoln("update cluster and zone status")
