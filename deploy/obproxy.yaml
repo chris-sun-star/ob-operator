@@ -46,4 +46,3 @@ spec:
     - name: "tcp"
       port: 2883
       targetPort: 2883
-      nodePort: 30083
