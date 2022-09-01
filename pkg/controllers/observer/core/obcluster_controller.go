@@ -62,6 +62,9 @@ type OBClusterCtrlOperator interface {
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=services/finalizers,verbs=update
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=secrets/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups="",resources=secrets/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 func (r *OBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -154,12 +157,6 @@ func (ctrl *OBClusterCtrl) TopologyPrepareingEffector(statefulApp cloudv1.Statef
 			case observerconst.OBClusterReady:
 				// OBCluster bootstrap succeeded
 				err = ctrl.OBClusterReadyForStep(observerconst.StepBootstrap, statefulApp)
-				if err == nil {
-					err = ctrl.CreateUserForObproxy(statefulApp)
-					klog.Infoln("preparation for obagent")
-					err = ctrl.CreateUserForObagent(statefulApp)
-					err = ctrl.ReviseAllOBAgentConfig(statefulApp)
-				}
 			}
 		}
 	}
