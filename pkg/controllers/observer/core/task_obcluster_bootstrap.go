@@ -200,6 +200,8 @@ func (ctrl *OBClusterCtrl) BootstrapForOB(statefulApp corev1.StatefulApp, SQL st
     if err != nil {
         return errors.Wrap("get sql operator when bootstrap")
     }
+    // set timeout 10 min
+    sqlOperator.ConnectProperties.Timeout = 600
 	sqlOperator.BootstrapForOB(SQL)
 	klog.Infoln("OBCluster", ctrl.OBCluster.Name, "run bootstrap sql finish")
 	_ = ctrl.UpdateOBClusterStatusBootstrapReady()
