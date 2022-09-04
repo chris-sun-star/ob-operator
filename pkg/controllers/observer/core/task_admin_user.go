@@ -29,11 +29,16 @@ func (ctrl *OBClusterCtrl) CreateAdminUser(statefulApp cloudv1.StatefulApp) erro
     }
 
     klog.Info("generated password: %s", pwd)
-	err = sql.CreateUser(podIp, "admin", pwd)
+
+    sqlOperator, err := ctrl.GetSqlOperator()
+    if err != nil {
+        return errors.Wrap("get sql operator when create user for operation")
+    }
+	err = sqlOperator.CreateUser("admin", pwd)
 	if err != nil {
 		return err
 	}
-	err = sql.GrantPrivilege(podIp, "all", "*.*", "admin")
+	err = sqlOperator.GrantPrivilege("all", "*.*", "admin")
 	if err != nil {
 		return err
 	}

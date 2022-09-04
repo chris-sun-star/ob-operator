@@ -133,6 +133,29 @@ func (ctrl *OBClusterCtrl) OBZoneScaleUP(statefulApp cloudv1.StatefulApp) error 
 
 }
 
+func (ctrl *OBClusterCtrl) GetInfoForDelZone(clusterIP string, clusterSpec cloudv1.Cluster, statefulApp cloudv1.StatefulApp) (error, string) {
+    sqlOperator, err := ctrl.GetSqlOperator()
+    if err != nil {
+        return errors.Wrap("get sql operator when get info for del zone"), ""
+    }
+
+	obZoneList := sqlOperator.GetOBZone()
+	if len(obZoneList) == 0 {
+		return errors.New(observerconst.DataBaseError), ""
+	}
+	zoneNodeMap := GenerateZoneNodeMapByOBZoneList(obZoneList)
+
+	for _, obZone := range obZoneList {
+		zoneSpec := GetZoneSpecFromClusterSpec(obZone.Zone, clusterSpec)
+		if zoneNodeMap[obZone.Zone] != nil && zoneSpec.Name == "" {
+			return nil, obZone.Zone
+		}
+	}
+
+	return errors.New("none zone need del"), ""
+}
+
+
 func (ctrl *OBClusterCtrl) OBZoneScaleDown(statefulApp cloudv1.StatefulApp) error {
 	klog.Infoln("----------------------------OBZoneScaleDown----------------------------")
 
@@ -159,7 +182,7 @@ func (ctrl *OBClusterCtrl) OBZoneScaleDown(statefulApp cloudv1.StatefulApp) erro
 
 	// get info for delete obzone
 	clusterSpec := converter.GetClusterSpecFromOBTopology(ctrl.OBCluster.Spec.Topology)
-	err, zoneName := converter.GetInfoForDelZone(clusterIP, clusterSpec, statefulApp)
+	err, zoneName := ctrl.GetInfoForDelZone(clusterIP, clusterSpec, statefulApp)
 	// nil : need to delete zone
 	if err == nil {
 		// del obzone

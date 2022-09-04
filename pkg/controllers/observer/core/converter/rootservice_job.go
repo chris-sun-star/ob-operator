@@ -19,15 +19,3 @@ import (
 	"github.com/oceanbase/ob-operator/pkg/controllers/observer/sql"
 )
 
-func IsRSJobSuccess(clusterIP, podIP string) (bool, error) {
-	rsJobStatusList := sql.GetRSJobStatus(clusterIP, podIP)
-	if len(rsJobStatusList) == 0 {
-		return false, errors.New("get rs job status faild")
-	}
-	lastJob := rsJobStatusList[len(rsJobStatusList)-1]
-	// job status is not SUCCESS
-	if lastJob.JobStatus != observerconst.RSJobStatusSuccess {
-		return false, nil
-	}
-	return true, nil
-}

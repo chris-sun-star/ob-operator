@@ -28,6 +28,10 @@ import (
 )
 
 func (ctrl *OBClusterCtrl) UpdateOBZoneStatus(statefulApp cloudv1.StatefulApp) error {
+    sqlOperator, err := ctrl.GetSqlOperator()
+    if err != nil {
+        return errors.Wrap("get sql operator when update ob zone status")
+    }
 	subsets := statefulApp.Status.Subsets
 	// TODO: check owner
 	obZoneName := converter.GenerateOBZoneName(ctrl.OBCluster.Name)
@@ -38,19 +42,7 @@ func (ctrl *OBClusterCtrl) UpdateOBZoneStatus(statefulApp cloudv1.StatefulApp) e
 	}
 	// TODO: add a common method to execute sql iterating servers
 	obServerList := make([]model.AllServer, 0, 0)
-	for _, sb := range subsets {
-		success := false
-		for _, pod := range sb.Pods {
-			obServerList = sql.GetOBServer(pod.PodIP)
-			if len(obServerList) > 0 {
-				success = true
-				break
-			}
-		}
-		if success {
-			break
-		}
-	}
+	obServerList = sqlOperator.GetOBServer()
 
 	if len(obServerList) == 0 {
 		klog.Error("observer list is empty")
@@ -70,9 +62,13 @@ func (ctrl *OBClusterCtrl) UpdateOBZoneStatus(statefulApp cloudv1.StatefulApp) e
 }
 
 func (ctrl *OBClusterCtrl) buildOBZoneStatusFromDB(obCluster cloudv1.OBCluster, clusterIP string) (cloudv1.OBCluster, error) {
+    sqlOperator, err := ctrl.GetSqlOperator()
+    if err != nil {
+        return obCluster, errors.Wrap("get sql operator when build obzone status")
+    }
 	clusterSpec := converter.GetClusterSpecFromOBTopology(ctrl.OBCluster.Spec.Topology)
 	expectedOBZoneList := clusterSpec.Zone
-	obZoneListFromDB := sql.GetOBZone(clusterIP)
+	obZoneListFromDB := sqlOperator.GetOBZone()
 
 	// 期望的 zone 比实际的 少
 	if len(expectedOBZoneList) < len(obZoneListFromDB) {

@@ -19,13 +19,17 @@ import (
 
 func (ctrl *OBClusterCtrl) CreateUserForObproxy(statefulApp cloudv1.StatefulApp) error {
 	subsets := statefulApp.Status.Subsets
-	podIp := subsets[0].Pods[0].PodIP
+    sqlOperator, err := ctrl.GetSqlOperator()
+    if err != nil {
+        return errors.Wrap("get sql operator when create user for obproxy")
+    }
 
-	err := sql.CreateUser(podIp, "proxyro", "")
+	err = sqlOperator.CreateUser("proxyro", "")
 	if err != nil {
 		return err
 	}
-	err = sql.GrantPrivilege(podIp, "select", "*.*", "proxyro")
+
+	err = sqlOperator.GrantPrivilege("select", "*.*", "proxyro")
 	if err != nil {
 		return err
 	}

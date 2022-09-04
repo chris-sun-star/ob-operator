@@ -189,14 +189,18 @@ func (ctrl *OBClusterCtrl) OBServerReadyEffectorForBootstrap(statefulApp cloudv1
 		}
 
 		// run bootstrap SQL
-		go ctrl.BootstrapForOB(subsets[0].Pods[0].PodIP, obclusterBootstrapArgs)
+		go ctrl.BootstrapForOB(statefulApp, obclusterBootstrapArgs)
 	}
 
 	return nil
 }
 
-func (ctrl *OBClusterCtrl) BootstrapForOB(IP, SQL string) {
-	sql.BootstrapForOB(IP, SQL)
+func (ctrl *OBClusterCtrl) BootstrapForOB(statefulApp corev1.StatefulApp, SQL string) error{
+    sqlOperator, err := ctrl.GetSqlOperatorFromStatefulApp(statefulApp)
+    if err != nil {
+        return errors.Wrap("get sql operator when bootstrap")
+    }
+	sqlOperator.BootstrapForOB(SQL)
 	klog.Infoln("OBCluster", ctrl.OBCluster.Name, "run bootstrap sql finish")
 	_ = ctrl.UpdateOBClusterStatusBootstrapReady()
 }
@@ -213,6 +217,10 @@ func (ctrl *OBClusterCtrl) OBClusterBootstraping(statefulApp cloudv1.StatefulApp
 }
 
 func (ctrl *OBClusterCtrl) OBClusterBootstrapReady(statefulApp cloudv1.StatefulApp) error {
+    sqlOperator, err := ctrl.GetSqlOperatorFromStatefulApp(statefulApp)
+    if err != nil {
+        return errors.Wrap("get sql operator when bootstrap")
+    }
 	// time out, delete StatefulApp
 	status, err := ctrl.CheckTimeoutAndKillForBootstrap(statefulApp)
 	if err != nil {
@@ -221,7 +229,7 @@ func (ctrl *OBClusterCtrl) OBClusterBootstrapReady(statefulApp cloudv1.StatefulA
 
 	if !status {
 		subsets := statefulApp.Status.Subsets
-		obServerList := sql.GetOBServer(subsets[0].Pods[0].PodIP)
+		obServerList := sqlOperator.GetOBServer()
 
 		obServerBootstrapSucceed := converter.IsAllOBServerActive(obServerList, ctrl.OBCluster.Spec.Topology)
 		if obServerBootstrapSucceed {

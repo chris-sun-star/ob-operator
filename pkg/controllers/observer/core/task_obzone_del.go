@@ -10,14 +10,24 @@ import (
 )
 
 func (ctrl *OBClusterCtrl) GetAllUnit(clusterIP string) []model.AllUnit {
-	return sql.GetAllUnit(clusterIP)
+    res := make([]model.AllUnit, 0)
+    sqlOperator, err := ctrl.GetSqlOperator()
+    if err == nil {
+	    res = sqlOperator.GetAllUnit()
+    }
+    return res
 }
 
 func (ctrl *OBClusterCtrl) StopZone(clusterIP, zoneName string) error {
 	klog.Infoln("begin stop OBZone", zoneName)
 
+    sqlOperator, err := ctrl.GetSqlOperator()
+    if err == nil {
+        return errors.Wrap("get sql operator when stop zone")
+    }
+
 	// stop zone
-	err := sql.StopZone(clusterIP, zoneName)
+	err := sqlOperator.StopZone(zoneName)
 	if err != nil {
 		klog.Errorln("stop zone error", zoneName, clusterIP)
 		return err
@@ -28,8 +38,13 @@ func (ctrl *OBClusterCtrl) StopZone(clusterIP, zoneName string) error {
 func (ctrl *OBClusterCtrl) DeleteZone(clusterIP, zoneName string) error {
 	klog.Infoln("begin delete OBZone", zoneName)
 
+    sqlOperator, err := ctrl.GetSqlOperator()
+    if err == nil {
+        return errors.Wrap("get sql operator when delete zone")
+    }
+
 	// delete zone
-	err := sql.DeleteZone(clusterIP, zoneName)
+	err := sqlOperator.DeleteZone(zoneName)
 	if err != nil {
 		klog.Errorln("Delete zone: error zoneName, clusterIP ", zoneName, clusterIP)
 		return err
@@ -57,8 +72,14 @@ func (ctrl *OBClusterCtrl) DeleteOBZoneExecuter(clusterIP, zoneName string, stat
 		return err
 	}
 
+    sqlOperator, err := ctrl.GetSqlOperator()
+    if err == nil {
+        return errors.Wrap("get sql operator in delete zone executer")
+    }
+
+
 	// get observerList
-	obServerList := sql.GetOBServer(clusterIP)
+	obServerList := sqlOperator.GetOBServer()
 	for _, observer := range obServerList {
 		if observer.Zone == zoneName && observer.Status != observerconst.OBServerDeleting {
 			klog.Infoln("observerList is not nil, begin delete observer...")

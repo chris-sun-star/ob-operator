@@ -182,7 +182,7 @@ func (ctrl *OBClusterCtrl) buildOBClusterStatus(obCluster cloudv1.OBCluster, clu
 	}
 
 	// zoneList := buildZoneStatusList(cluster, statefulAppCurrent, nodeMap, zoneName, zoneStatus)
-	zoneListFromDB := buildZoneStatusListFromDB(clusterSpec, clusterIP, statefulAppCurrent, nodeMap, zoneName, zoneStatus)
+	zoneListFromDB := ctrl.buildZoneStatusListFromDB(clusterSpec, clusterIP, statefulAppCurrent, nodeMap, zoneName, zoneStatus)
 
 	// old cluster status
 	var lastTransitionTime metav1.Time
@@ -216,15 +216,17 @@ func (ctrl *OBClusterCtrl) buildOBClusterStatus(obCluster cloudv1.OBCluster, clu
 	return obCluster, nil
 }
 
-func buildZoneStatusListFromDB(clusterSpec cloudv1.Cluster, clusterIP string, statefulAppCurrent cloudv1.StatefulApp, nodeMap map[string][]cloudv1.OBNode, name, status string) []cloudv1.ZoneStatus {
+func (ctrl *OBClusterCtrl) buildZoneStatusListFromDB(clusterSpec cloudv1.Cluster, clusterIP string, statefulAppCurrent cloudv1.StatefulApp, nodeMap map[string][]cloudv1.OBNode, name, status string) []cloudv1.ZoneStatus {
 	zoneList := make([]cloudv1.ZoneStatus, 0)
-	obZoneList := sql.GetOBZone(clusterIP)
-
-	for _, zone := range obZoneList {
-		zoneSpec := converter.GetZoneSpecFromClusterSpec(zone.Zone, clusterSpec)
-		zoneStatus := buildZoneStatus(zoneSpec, statefulAppCurrent, nodeMap, name, status, zone.Zone)
-		zoneList = append(zoneList, zoneStatus)
-	}
+    sqlOperator, err := ctrl.GetSqlOperator()
+    if err == nil {
+        obZoneList := sqlOperator.GetOBZone()
+        for _, zone := range obZoneList {
+            zoneSpec := converter.GetZoneSpecFromClusterSpec(zone.Zone, clusterSpec)
+            zoneStatus := buildZoneStatus(zoneSpec, statefulAppCurrent, nodeMap, name, status, zone.Zone)
+            zoneList = append(zoneList, zoneStatus)
+        }
+    }
 	return zoneList
 }
 
@@ -277,11 +279,14 @@ func buildMultiClusterStatus(obCluster cloudv1.OBCluster, clusterCurrentStatus c
 	return topologyStatus
 }
 
-func getNodeMapFromDB(clusterIP string) map[string][]cloudv1.OBNode {
+func (ctrl *OBClusterCtrl) getNodeMapFromDB(clusterIP string) map[string][]cloudv1.OBNode {
 	nodeMap := make(map[string][]cloudv1.OBNode)
-	obServerList := sql.GetOBServer(clusterIP)
-	if len(obServerList) > 0 {
-		nodeMap = converter.GenerateNodeMapByOBServerList(obServerList)
-	}
+    sqlOperator, err := ctrl.GetSqlOperator()
+    if err == nil {
+        obServerList := sqlOperator.GetOBServer()
+        if len(obServerList) > 0 {
+            nodeMap = converter.GenerateNodeMapByOBServerList(obServerList)
+        }
+    }
 	return nodeMap
 }

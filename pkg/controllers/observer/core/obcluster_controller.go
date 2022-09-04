@@ -22,6 +22,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	statefulAppCore "github.com/oceanbase/ob-operator/pkg/controllers/statefulapp/core"
 
 	cloudv1 "github.com/oceanbase/ob-operator/apis/cloud/v1"
 	myconfig "github.com/oceanbase/ob-operator/pkg/config"
@@ -91,6 +92,47 @@ func NewOBServerCtrl(client client.Client, recorder record.EventRecorder, obClus
 		Resource:  ctrlResource,
 		OBCluster: obCluster,
 	}
+}
+
+func (ctrl *OBClusterCtrl) GetSqlOperatorFromStatefulApp(statefulApp corev1.StatefulApp) *sql.SqlOperator, error {
+    podCtrl := &statefulAppCore.PodCtrl {
+        Resource : ctrl.Resource,
+        StatefulApp : statefulApp,
+    }
+    return podCtrl.GetSqlOperator()
+}
+
+func (ctrl *OBClusterCtrl) GetSqlOperator() *sql.SqlOperator, error {
+    clusterIP, err := ctrl.GetServiceClusterIPByName(ctrl.OBCluster.Namespace, ctrl.OBCluster.Name)
+
+    // get svc failed
+    if err != nil {
+        return nil, errors.New("failed to get service address")
+    }
+
+    secretName := obConverter.GenerateSecretNameForDBUser(ctrl.OBCluster.Name, "sys", "admin")
+    secretExecutor := resource.NewSecretResource(ctrl.Resource)
+    secret, err := secretExecutor.Get(context.TODO(), ctrl.OBCluster.Namespace, secretName)
+    user := "root"
+    password := ""
+    if err != nil {
+        user = "admin"
+        password = secret.StringData
+    }
+
+    p := &sql.DBConnectProperties {
+        IP: clusterIP,
+        Port: observerconst.MysqlPort,
+        User: user
+        Password: password
+        Database: "oceanbase",
+        Timeout: 10,
+    }
+    so := sql.NewSqlOperator(p)
+    if so.TestOk() {
+        return so, nil
+    }
+    return nil, errors.New("failed to get sql operator")
 }
 
 func (ctrl *OBClusterCtrl) OBClusterCoordinator() (ctrl.Result, error) {
@@ -186,6 +228,32 @@ func (ctrl *OBClusterCtrl) TopologyNotReadyEffector(statefulApp cloudv1.Stateful
 	return err
 }
 
+func (ctrl *OBClusterCtrl) ZoneNumberIsModified() (string, error) {
+    sqlOperator, err := ctrl.GetSqlOperator()
+    if err != nil {
+        return "", errors.Wrap("get sql operator when judge zone number")
+    }
+
+	cluster := converter.GetClusterSpecFromOBTopology(ctrl.OBCluster.Spec.Topology)
+	zoneNumberNew := len(cluster.Zone)
+	if zoneNumberNew == 0 {
+		return observerconst.Maintain, kubeerrors.NewServiceUnavailable("can't scale Zone to zero")
+	}
+
+	obZoneList := sqlOperator.GetOBZone()
+	zoneNumberCurrent := len(obZoneList)
+	if zoneNumberCurrent == 0 {
+		return "", errors.New(observerconst.DataBaseError)
+	}
+	if zoneNumberNew > zoneNumberCurrent {
+		return observerconst.ZoneScaleUP, nil
+	} else if zoneNumberNew < zoneNumberCurrent {
+		return observerconst.ZoneScaleDown, nil
+	} else {
+		return observerconst.Maintain, nil
+	}
+}
+
 func (ctrl *OBClusterCtrl) TopologyReadyEffector(statefulApp cloudv1.StatefulApp) error {
 	// check parameter and version in obcluster, set parameter when modified
 	ctrl.CheckAndSetParameters()
@@ -218,7 +286,7 @@ func (ctrl *OBClusterCtrl) TopologyReadyEffector(statefulApp cloudv1.StatefulApp
 	}
 
 	// check zone number modified
-	zoneScaleStatus, err := judge.ZoneNumberIsModified(ctrl.OBCluster.Spec.Topology, ctrl.OBCluster, clusterIP)
+	zoneScaleStatus, err := ctrl.ZoneNumberIsModified()
 	if err != nil {
 		return err
 	}

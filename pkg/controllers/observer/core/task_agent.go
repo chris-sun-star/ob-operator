@@ -32,15 +32,18 @@ type Configs struct {
 	Value string `json:"value"`
 }
 
+// TODO generate random passwd
 func (ctrl *OBClusterCtrl) CreateUserForObagent(statefulApp cloudv1.StatefulApp) error {
 	subsets := statefulApp.Status.Subsets
-	podIp := subsets[0].Pods[0].PodIP
-	err := sql.CreateUser(podIp, "ocp_monitor", "root")
-	klog.Infoln("CreateUser podIP is :", podIp)
+    sqlOperator, err := ctrl.GetSqlOperator()
+    if err != nil {
+        return errors.Wrap("get sql operator when create user for agent")
+    }
+	err = sqlOperator.CreateUser("ocp_monitor", "root")
 	if err != nil {
 		return err
 	}
-	err = sql.GrantPrivilege(podIp, "select", "*", "ocp_monitor")
+	err = sqlOperator.GrantPrivilege("select", "*", "ocp_monitor")
 	if err != nil {
 		return err
 	}
