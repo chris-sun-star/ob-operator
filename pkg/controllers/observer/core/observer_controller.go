@@ -252,15 +252,27 @@ func (ctrl *OBClusterCtrl) GetInfoForDelServerByZone(clusterIP string, clusterSp
 
 		// number of observer in db > replica
 		if len(nodeMap[subset.Name]) > zoneSpec.Replicas {
-			for _, pod := range nodeMap[subset.Name] {
+			for _, node := range nodeMap[subset.Name] {
+				if node.Status == observerconst.OBServerInactive {
+					podExists := false
+					for _, pod := range subset.Pods {
+						if pod.PodIP == node.ServerIP {
+							podExists = true
+							break
+						}
+					}
+					if !podExists {
+						return nil, subset.Name, node.ServerIP
+					}
+				}
 
 				if zoneSpec.Replicas == 0 {
-					return nil, subset.Name, pod.ServerIP
+					return nil, subset.Name, node.ServerIP
 				}
 
 				for _, podToDelete := range podListToDelete {
-					if pod.ServerIP == podToDelete {
-						return nil, subset.Name, pod.ServerIP
+					if node.ServerIP == podToDelete {
+						return nil, subset.Name, node.ServerIP
 					}
 				}
 			}
