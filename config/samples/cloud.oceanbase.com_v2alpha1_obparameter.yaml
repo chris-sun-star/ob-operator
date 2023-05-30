@@ -1,4 +1,4 @@
-apiVersion: cloud.oceanbase.com/v2alpha1
+apiVersion: oceanbase.oceanbase.com/v2alpha1
 kind: OBParameter
 metadata:
   labels:

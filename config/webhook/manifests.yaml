@@ -11,12 +11,12 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-cloud-oceanbase-com-v2alpha1-obcluster
+      path: /mutate-oceanbase-oceanbase-com-v2alpha1-obcluster
   failurePolicy: Fail
   name: mobcluster.kb.io
   rules:
   - apiGroups:
-    - cloud.oceanbase.com
+    - oceanbase.oceanbase.com
     apiVersions:
     - v2alpha1
     operations:
@@ -31,12 +31,12 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-cloud-oceanbase-com-v2alpha1-observer
+      path: /mutate-oceanbase-oceanbase-com-v2alpha1-observer
   failurePolicy: Fail
   name: mobserver.kb.io
   rules:
   - apiGroups:
-    - cloud.oceanbase.com
+    - oceanbase.oceanbase.com
     apiVersions:
     - v2alpha1
     operations:
@@ -51,12 +51,12 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-cloud-oceanbase-com-v2alpha1-obzone
+      path: /mutate-oceanbase-oceanbase-com-v2alpha1-obzone
   failurePolicy: Fail
   name: mobzone.kb.io
   rules:
   - apiGroups:
-    - cloud.oceanbase.com
+    - oceanbase.oceanbase.com
     apiVersions:
     - v2alpha1
     operations:
@@ -78,12 +78,12 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-cloud-oceanbase-com-v2alpha1-obcluster
+      path: /validate-oceanbase-oceanbase-com-v2alpha1-obcluster
   failurePolicy: Fail
   name: vobcluster.kb.io
   rules:
   - apiGroups:
-    - cloud.oceanbase.com
+    - oceanbase.oceanbase.com
     apiVersions:
     - v2alpha1
     operations:
@@ -98,12 +98,12 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-cloud-oceanbase-com-v2alpha1-observer
+      path: /validate-oceanbase-oceanbase-com-v2alpha1-observer
   failurePolicy: Fail
   name: vobserver.kb.io
   rules:
   - apiGroups:
-    - cloud.oceanbase.com
+    - oceanbase.oceanbase.com
     apiVersions:
     - v2alpha1
     operations:
@@ -118,12 +118,12 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-cloud-oceanbase-com-v2alpha1-obzone
+      path: /validate-oceanbase-oceanbase-com-v2alpha1-obzone
   failurePolicy: Fail
   name: vobzone.kb.io
   rules:
   - apiGroups:
-    - cloud.oceanbase.com
+    - oceanbase.oceanbase.com
     apiVersions:
     - v2alpha1
     operations:

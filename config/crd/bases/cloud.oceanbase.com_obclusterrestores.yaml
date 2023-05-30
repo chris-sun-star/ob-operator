@@ -5,9 +5,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.3
   creationTimestamp: null
-  name: obclusterrestores.cloud.oceanbase.com
+  name: obclusterrestores.oceanbase.oceanbase.com
 spec:
-  group: cloud.oceanbase.com
+  group: oceanbase.oceanbase.com
   names:
     kind: OBClusterRestore
     listKind: OBClusterRestoreList

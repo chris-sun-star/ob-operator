@@ -12,7 +12,7 @@ metadata:
   name: obtenant-editor-role
 rules:
 - apiGroups:
-  - cloud.oceanbase.com
+  - oceanbase.oceanbase.com
   resources:
   - obtenants
   verbs:
@@ -24,7 +24,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - cloud.oceanbase.com
+  - oceanbase.oceanbase.com
   resources:
   - obtenants/status
   verbs:

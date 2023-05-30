@@ -12,7 +12,7 @@ metadata:
   name: observer-viewer-role
 rules:
 - apiGroups:
-  - cloud.oceanbase.com
+  - oceanbase.oceanbase.com
   resources:
   - observers
   verbs:
@@ -20,7 +20,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - cloud.oceanbase.com
+  - oceanbase.oceanbase.com
   resources:
   - observers/status
   verbs:

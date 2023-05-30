@@ -4,9 +4,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.3
   creationTimestamp: null
-  name: obclusterbackups.cloud.oceanbase.com
+  name: obclusterbackups.oceanbase.oceanbase.com
 spec:
-  group: cloud.oceanbase.com
+  group: oceanbase.oceanbase.com
   names:
     kind: OBClusterBackup
     listKind: OBClusterBackupList
@@ -54,9 +54,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.3
   creationTimestamp: null
-  name: obclusterrestores.cloud.oceanbase.com
+  name: obclusterrestores.oceanbase.oceanbase.com
 spec:
-  group: cloud.oceanbase.com
+  group: oceanbase.oceanbase.com
   names:
     kind: OBClusterRestore
     listKind: OBClusterRestoreList
@@ -104,9 +104,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.3
   creationTimestamp: null
-  name: obclusters.cloud.oceanbase.com
+  name: obclusters.oceanbase.oceanbase.com
 spec:
-  group: cloud.oceanbase.com
+  group: oceanbase.oceanbase.com
   names:
     kind: OBCluster
     listKind: OBClusterList
@@ -1969,9 +1969,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.3
   creationTimestamp: null
-  name: obparameters.cloud.oceanbase.com
+  name: obparameters.oceanbase.oceanbase.com
 spec:
-  group: cloud.oceanbase.com
+  group: oceanbase.oceanbase.com
   names:
     kind: OBParameter
     listKind: OBParameterList
@@ -2093,9 +2093,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.3
   creationTimestamp: null
-  name: observers.cloud.oceanbase.com
+  name: observers.oceanbase.oceanbase.com
 spec:
-  group: cloud.oceanbase.com
+  group: oceanbase.oceanbase.com
   names:
     kind: OBServer
     listKind: OBServerList
@@ -3917,9 +3917,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.3
   creationTimestamp: null
-  name: obtenantbackups.cloud.oceanbase.com
+  name: obtenantbackups.oceanbase.oceanbase.com
 spec:
-  group: cloud.oceanbase.com
+  group: oceanbase.oceanbase.com
   names:
     kind: OBTenantBackup
     listKind: OBTenantBackupList
@@ -3967,9 +3967,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.3
   creationTimestamp: null
-  name: obtenantrestores.cloud.oceanbase.com
+  name: obtenantrestores.oceanbase.oceanbase.com
 spec:
-  group: cloud.oceanbase.com
+  group: oceanbase.oceanbase.com
   names:
     kind: OBTenantRestore
     listKind: OBTenantRestoreList
@@ -4017,9 +4017,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.3
   creationTimestamp: null
-  name: obtenants.cloud.oceanbase.com
+  name: obtenants.oceanbase.oceanbase.com
 spec:
-  group: cloud.oceanbase.com
+  group: oceanbase.oceanbase.com
   names:
     kind: OBTenant
     listKind: OBTenantList
@@ -4067,9 +4067,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.3
   creationTimestamp: null
-  name: obunits.cloud.oceanbase.com
+  name: obunits.oceanbase.oceanbase.com
 spec:
-  group: cloud.oceanbase.com
+  group: oceanbase.oceanbase.com
   names:
     kind: OBUnit
     listKind: OBUnitList
@@ -4117,9 +4117,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.3
   creationTimestamp: null
-  name: obzones.cloud.oceanbase.com
+  name: obzones.oceanbase.oceanbase.com
 spec:
-  group: cloud.oceanbase.com
+  group: oceanbase.oceanbase.com
   names:
     kind: OBZone
     listKind: OBZoneList

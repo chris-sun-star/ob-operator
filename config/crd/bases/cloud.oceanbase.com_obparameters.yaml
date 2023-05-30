@@ -5,9 +5,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.3
   creationTimestamp: null
-  name: obparameters.cloud.oceanbase.com
+  name: obparameters.oceanbase.oceanbase.com
 spec:
-  group: cloud.oceanbase.com
+  group: oceanbase.oceanbase.com
   names:
     kind: OBParameter
     listKind: OBParameterList

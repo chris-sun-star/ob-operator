@@ -5,9 +5,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.3
   creationTimestamp: null
-  name: obtenantrestores.cloud.oceanbase.com
+  name: obtenantrestores.oceanbase.oceanbase.com
 spec:
-  group: cloud.oceanbase.com
+  group: oceanbase.oceanbase.com
   names:
     kind: OBTenantRestore
     listKind: OBTenantRestoreList

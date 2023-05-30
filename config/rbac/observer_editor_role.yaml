@@ -12,7 +12,7 @@ metadata:
   name: observer-editor-role
 rules:
 - apiGroups:
-  - cloud.oceanbase.com
+  - oceanbase.oceanbase.com
   resources:
   - observers
   verbs:
@@ -24,7 +24,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - cloud.oceanbase.com
+  - oceanbase.oceanbase.com
   resources:
   - observers/status
   verbs:

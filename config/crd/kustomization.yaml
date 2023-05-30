@@ -2,16 +2,16 @@
 # since it depends on service name and namespace that are out of this kustomize package.
 # It should be run by config/default
 resources:
-- bases/cloud.oceanbase.com_obclusters.yaml
-- bases/cloud.oceanbase.com_obzones.yaml
-- bases/cloud.oceanbase.com_observers.yaml
-- bases/cloud.oceanbase.com_obparameters.yaml
-- bases/cloud.oceanbase.com_obtenants.yaml
-- bases/cloud.oceanbase.com_obunits.yaml
-- bases/cloud.oceanbase.com_obclusterbackups.yaml
-- bases/cloud.oceanbase.com_obtenantbackups.yaml
-- bases/cloud.oceanbase.com_obclusterrestores.yaml
-- bases/cloud.oceanbase.com_obtenantrestores.yaml
+- bases/oceanbase.oceanbase.com_obclusters.yaml
+- bases/oceanbase.oceanbase.com_obzones.yaml
+- bases/oceanbase.oceanbase.com_observers.yaml
+- bases/oceanbase.oceanbase.com_obparameters.yaml
+- bases/oceanbase.oceanbase.com_obtenants.yaml
+- bases/oceanbase.oceanbase.com_obunits.yaml
+- bases/oceanbase.oceanbase.com_obclusterbackups.yaml
+- bases/oceanbase.oceanbase.com_obtenantbackups.yaml
+- bases/oceanbase.oceanbase.com_obclusterrestores.yaml
+- bases/oceanbase.oceanbase.com_obtenantrestores.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:
