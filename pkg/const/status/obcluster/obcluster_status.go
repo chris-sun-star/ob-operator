@@ -14,6 +14,6 @@ package obcluster
 
 const (
 	New         = "new"
-	Maintaining = "maintaining"
 	Running     = "running"
+	Bootstraped = "bootstraped"
 )

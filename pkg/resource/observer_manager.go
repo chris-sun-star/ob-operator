@@ -122,11 +122,11 @@ func (m *OBServerManager) GetTaskFlow() (*task.TaskFlow, error) {
 		if obcluster.Status.Status == clusterstatus.New {
 			// created when create obcluster
 			m.Logger.Info("Create observer when create obcluster")
-			taskFlow, err = task.GetRegistry().Get(flowname.CreateServerForBootstrap)
+			taskFlow, err = task.GetRegistry().Get(flowname.PrepareOBServerForBootstrap)
 		} else {
 			// created normally
 			m.Logger.Info("Create observer when obcluster already exists")
-			taskFlow, err = task.GetRegistry().Get(flowname.CreateServer)
+			taskFlow, err = task.GetRegistry().Get(flowname.CreateOBServer)
 		}
 		if err != nil {
 			return nil, errors.Wrap(err, "Get create observer task flow")

@@ -19,8 +19,8 @@ spec:
   observer:
     image: oceanbasedev/oceanbase-cn:v4.1.0.0-100000192023032010
     resource:
-      cpu: 2
-      memory: 10Gi
+      cpu: 8
+      memory: 30Gi
     storage:
       dataStorage:
         storageClass: local-path

@@ -64,7 +64,7 @@ func (m *OBClusterManager) GetTaskFlow() (*task.TaskFlow, error) {
 	// newly created cluster
 	m.Logger.Info("create task flow according to obcluster status")
 	if m.OBCluster.Status.Status == clusterstatus.New {
-		taskFlow, err := task.GetRegistry().Get(flowname.CreateCluster)
+		taskFlow, err := task.GetRegistry().Get(flowname.BootstrapOBCluster)
 		if err != nil {
 			return nil, errors.Wrap(err, "Get create obcluster task flow")
 		}

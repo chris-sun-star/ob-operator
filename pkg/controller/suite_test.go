@@ -82,85 +82,87 @@ var _ = BeforeSuite(func() {
 
 	//+kubebuilder:scaffold:scheme
 
-	// init k8s manager and setup controllers
-	k8sManager, err = ctrl.NewManager(cfg, ctrl.Options{Scheme: scheme.Scheme})
-	logf.Log.Error(err, "create manager failed")
-	Expect(err).NotTo(HaveOccurred())
+	if os.Getenv("TEST_USE_EXISTING_CLUSTER") != "true" {
+		// init k8s manager and setup controllers
+		k8sManager, err = ctrl.NewManager(cfg, ctrl.Options{Scheme: scheme.Scheme})
+		logf.Log.Error(err, "create manager failed")
+		Expect(err).NotTo(HaveOccurred())
 
-	err = (&OBClusterReconciler{
-		Client:   k8sManager.GetClient(),
-		Scheme:   k8sManager.GetScheme(),
-		Recorder: k8sManager.GetEventRecorderFor(config.OBClusterControllerName),
-	}).SetupWithManager(k8sManager)
-	Expect(err).NotTo(HaveOccurred())
+		err = (&OBClusterReconciler{
+			Client:   k8sManager.GetClient(),
+			Scheme:   k8sManager.GetScheme(),
+			Recorder: k8sManager.GetEventRecorderFor(config.OBClusterControllerName),
+		}).SetupWithManager(k8sManager)
+		Expect(err).NotTo(HaveOccurred())
 
-	err = (&OBZoneReconciler{
-		Client:   k8sManager.GetClient(),
-		Scheme:   k8sManager.GetScheme(),
-		Recorder: k8sManager.GetEventRecorderFor(config.OBZoneControllerName),
-	}).SetupWithManager(k8sManager)
-	Expect(err).NotTo(HaveOccurred())
+		err = (&OBZoneReconciler{
+			Client:   k8sManager.GetClient(),
+			Scheme:   k8sManager.GetScheme(),
+			Recorder: k8sManager.GetEventRecorderFor(config.OBZoneControllerName),
+		}).SetupWithManager(k8sManager)
+		Expect(err).NotTo(HaveOccurred())
 
-	err = (&OBServerReconciler{
-		Client:   k8sManager.GetClient(),
-		Scheme:   k8sManager.GetScheme(),
-		Recorder: k8sManager.GetEventRecorderFor(config.OBServerControllerName),
-	}).SetupWithManager(k8sManager)
-	Expect(err).NotTo(HaveOccurred())
+		err = (&OBServerReconciler{
+			Client:   k8sManager.GetClient(),
+			Scheme:   k8sManager.GetScheme(),
+			Recorder: k8sManager.GetEventRecorderFor(config.OBServerControllerName),
+		}).SetupWithManager(k8sManager)
+		Expect(err).NotTo(HaveOccurred())
 
-	err = (&OBParameterReconciler{
-		Client:   k8sManager.GetClient(),
-		Scheme:   k8sManager.GetScheme(),
-		Recorder: k8sManager.GetEventRecorderFor(config.OBParameterControllerName),
-	}).SetupWithManager(k8sManager)
-	Expect(err).NotTo(HaveOccurred())
+		err = (&OBParameterReconciler{
+			Client:   k8sManager.GetClient(),
+			Scheme:   k8sManager.GetScheme(),
+			Recorder: k8sManager.GetEventRecorderFor(config.OBParameterControllerName),
+		}).SetupWithManager(k8sManager)
+		Expect(err).NotTo(HaveOccurred())
 
-	err = (&OBTenantReconciler{
-		Client:   k8sManager.GetClient(),
-		Scheme:   k8sManager.GetScheme(),
-		Recorder: k8sManager.GetEventRecorderFor(config.OBTenantControllerName),
-	}).SetupWithManager(k8sManager)
-	Expect(err).NotTo(HaveOccurred())
+		err = (&OBTenantReconciler{
+			Client:   k8sManager.GetClient(),
+			Scheme:   k8sManager.GetScheme(),
+			Recorder: k8sManager.GetEventRecorderFor(config.OBTenantControllerName),
+		}).SetupWithManager(k8sManager)
+		Expect(err).NotTo(HaveOccurred())
 
-	err = (&OBUnitReconciler{
-		Client:   k8sManager.GetClient(),
-		Scheme:   k8sManager.GetScheme(),
-		Recorder: k8sManager.GetEventRecorderFor(config.OBUnitControllerName),
-	}).SetupWithManager(k8sManager)
-	Expect(err).NotTo(HaveOccurred())
+		err = (&OBUnitReconciler{
+			Client:   k8sManager.GetClient(),
+			Scheme:   k8sManager.GetScheme(),
+			Recorder: k8sManager.GetEventRecorderFor(config.OBUnitControllerName),
+		}).SetupWithManager(k8sManager)
+		Expect(err).NotTo(HaveOccurred())
 
-	err = (&OBClusterBackupReconciler{
-		Client:   k8sManager.GetClient(),
-		Scheme:   k8sManager.GetScheme(),
-		Recorder: k8sManager.GetEventRecorderFor(config.OBClusterBackupControllerName),
-	}).SetupWithManager(k8sManager)
-	Expect(err).NotTo(HaveOccurred())
+		err = (&OBClusterBackupReconciler{
+			Client:   k8sManager.GetClient(),
+			Scheme:   k8sManager.GetScheme(),
+			Recorder: k8sManager.GetEventRecorderFor(config.OBClusterBackupControllerName),
+		}).SetupWithManager(k8sManager)
+		Expect(err).NotTo(HaveOccurred())
 
-	err = (&OBTenantBackupReconciler{
-		Client:   k8sManager.GetClient(),
-		Scheme:   k8sManager.GetScheme(),
-		Recorder: k8sManager.GetEventRecorderFor(config.OBTenantBackupControllerName),
-	}).SetupWithManager(k8sManager)
-	Expect(err).NotTo(HaveOccurred())
+		err = (&OBTenantBackupReconciler{
+			Client:   k8sManager.GetClient(),
+			Scheme:   k8sManager.GetScheme(),
+			Recorder: k8sManager.GetEventRecorderFor(config.OBTenantBackupControllerName),
+		}).SetupWithManager(k8sManager)
+		Expect(err).NotTo(HaveOccurred())
 
-	err = (&OBClusterRestoreReconciler{
-		Client:   k8sManager.GetClient(),
-		Scheme:   k8sManager.GetScheme(),
-		Recorder: k8sManager.GetEventRecorderFor(config.OBClusterRestoreControllerName),
-	}).SetupWithManager(k8sManager)
-	Expect(err).NotTo(HaveOccurred())
+		err = (&OBClusterRestoreReconciler{
+			Client:   k8sManager.GetClient(),
+			Scheme:   k8sManager.GetScheme(),
+			Recorder: k8sManager.GetEventRecorderFor(config.OBClusterRestoreControllerName),
+		}).SetupWithManager(k8sManager)
+		Expect(err).NotTo(HaveOccurred())
 
-	err = (&OBTenantRestoreReconciler{
-		Client:   k8sManager.GetClient(),
-		Scheme:   k8sManager.GetScheme(),
-		Recorder: k8sManager.GetEventRecorderFor(config.OBTenantRestoreControllerName),
-	}).SetupWithManager(k8sManager)
-	Expect(err).NotTo(HaveOccurred())
+		err = (&OBTenantRestoreReconciler{
+			Client:   k8sManager.GetClient(),
+			Scheme:   k8sManager.GetScheme(),
+			Recorder: k8sManager.GetEventRecorderFor(config.OBTenantRestoreControllerName),
+		}).SetupWithManager(k8sManager)
+		Expect(err).NotTo(HaveOccurred())
 
-	go func() {
-		err = k8sManager.Start(ctrl.SetupSignalHandler())
-		Expect(err).ToNot(HaveOccurred())
-	}()
+		go func() {
+			err = k8sManager.Start(ctrl.SetupSignalHandler())
+			Expect(err).ToNot(HaveOccurred())
+		}()
+	}
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())

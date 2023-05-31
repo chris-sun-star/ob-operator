@@ -77,11 +77,11 @@ func (m *OBZoneManager) GetTaskFlow() (*task.TaskFlow, error) {
 		if obcluster.Status.Status == clusterstatus.New {
 			// created when create obcluster
 			m.Logger.Info("Create obzone when create obcluster")
-			taskFlow, err = task.GetRegistry().Get(flowname.CreateZoneForBootstrap)
+			taskFlow, err = task.GetRegistry().Get(flowname.PrepareOBZoneForBootstrap)
 		} else {
 			// created normally
 			m.Logger.Info("Create obzone when obcluster already exists")
-			taskFlow, err = task.GetRegistry().Get(flowname.CreateZone)
+			taskFlow, err = task.GetRegistry().Get(flowname.CreateOBZone)
 		}
 		if err != nil {
 			return nil, errors.Wrap(err, "Get create obzone task flow")

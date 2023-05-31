@@ -14,7 +14,7 @@ spec:
     singular: obclusterbackup
   scope: Namespaced
   versions:
-  - name: v2alpha1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: OBClusterBackup is the Schema for the obclusterbackups API
@@ -64,7 +64,7 @@ spec:
     singular: obclusterrestore
   scope: Namespaced
   versions:
-  - name: v2alpha1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: OBClusterRestore is the Schema for the obclusterrestores API
@@ -114,7 +114,7 @@ spec:
     singular: obcluster
   scope: Namespaced
   versions:
-  - name: v2alpha1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: OBCluster is the Schema for the obclusters API
@@ -1979,7 +1979,7 @@ spec:
     singular: obparameter
   scope: Namespaced
   versions:
-  - name: v2alpha1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: OBParameter is the Schema for the obparameters API
@@ -2103,7 +2103,7 @@ spec:
     singular: observer
   scope: Namespaced
   versions:
-  - name: v2alpha1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: OBServer is the Schema for the observers API
@@ -3927,7 +3927,7 @@ spec:
     singular: obtenantbackup
   scope: Namespaced
   versions:
-  - name: v2alpha1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: OBTenantBackup is the Schema for the obtenantbackups API
@@ -3977,7 +3977,7 @@ spec:
     singular: obtenantrestore
   scope: Namespaced
   versions:
-  - name: v2alpha1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: OBTenantRestore is the Schema for the obtenantrestores API
@@ -4027,7 +4027,7 @@ spec:
     singular: obtenant
   scope: Namespaced
   versions:
-  - name: v2alpha1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: OBTenant is the Schema for the obtenants API
@@ -4077,7 +4077,7 @@ spec:
     singular: obunit
   scope: Namespaced
   versions:
-  - name: v2alpha1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: OBUnit is the Schema for the obunits API
@@ -4127,7 +4127,7 @@ spec:
     singular: obzone
   scope: Namespaced
   versions:
-  - name: v2alpha1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: OBZone is the Schema for the obzones API

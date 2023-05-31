@@ -13,7 +13,7 @@ const (
 )
 
 const (
-	DefaultNamespace    = "oceanbase"
+	DefaultNamespace    = "default"
 	DefaultStorageClass = "local-path"
 	DefaultImage        = "oceanbasedev/oceanbase-cn:v4.1.0.0-100000192023032010"
 )
@@ -54,6 +54,13 @@ func newMinimalOBCluster(name string, zoneNum int, serverNum int) *v1alpha1.OBCl
 
 	}
 
+	userSecrets := &v1alpha1.OBUserSecrets{
+		Root:     "root-secret",
+		ProxyRO:  "proxyro-secret",
+		Monitor:  "monitor-secret",
+		Operator: "operator-secret",
+	}
+
 	obcluster := &v1alpha1.OBCluster{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "oceanbase.oceanbase.com/v1alpha1",
@@ -68,6 +75,7 @@ func newMinimalOBCluster(name string, zoneNum int, serverNum int) *v1alpha1.OBCl
 			ClusterId:        1,
 			OBServerTemplate: observerTemplate,
 			Topology:         topology,
+			UserSecrets:      userSecrets,
 		},
 	}
 	return obcluster
