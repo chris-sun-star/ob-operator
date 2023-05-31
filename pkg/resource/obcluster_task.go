@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v1alpha1 "github.com/oceanbase/ob-operator/api/v1alpha1"
@@ -45,11 +46,13 @@ func (m *OBClusterManager) FindTask(name string) (func() error, error) {
 	case taskname.CreateOBZone:
 		return m.CreateOBZone, nil
 	case taskname.WaitOBZoneBootstrapReady:
-		return m.WaitOBZoneBootstrapReady, nil
+		return m.generateWaitOBZoneStatusFunc(zonestatus.BootstrapReady), nil
 	case taskname.Bootstrap:
 		return m.Bootstrap, nil
 	case taskname.CreateUsers:
 		return m.CreateUsers, nil
+	case taskname.WaitOBZoneRunning:
+		return m.generateWaitOBZoneStatusFunc(zonestatus.Running), nil
 	case taskname.CreateOBParameter:
 		return m.CreateOBParameter, nil
 	default:
@@ -57,26 +60,29 @@ func (m *OBClusterManager) FindTask(name string) (func() error, error) {
 	}
 }
 
-func (m *OBClusterManager) WaitOBZoneBootstrapReady() error {
-	for i := 1; i < 300; i++ {
-		obcluster, err := m.getOBCluster()
-		if err != nil {
-			return errors.Wrap(err, "get obcluster failed")
-		}
-		allready := true
-		for _, obzoneStatus := range obcluster.Status.OBZoneStatus {
-			if obzoneStatus.Status != zonestatus.BootstrapReady {
-				m.Logger.Info("zone still not ready for bootstrap", "zone", obzoneStatus.Zone)
-				allready = false
-				break
+func (m *OBClusterManager) generateWaitOBZoneStatusFunc(status string) func() error {
+	f := func() error {
+		for i := 1; i < 300; i++ {
+			obcluster, err := m.getOBCluster()
+			if err != nil {
+				return errors.Wrap(err, "get obcluster failed")
 			}
+			allMatched := true
+			for _, obzoneStatus := range obcluster.Status.OBZoneStatus {
+				if obzoneStatus.Status != status {
+					m.Logger.Info("zone status still not matched", "zone", obzoneStatus.Zone, "status", status)
+					allMatched = false
+					break
+				}
+			}
+			if allMatched {
+				return nil
+			}
+			time.Sleep(time.Second)
 		}
-		if allready {
-			return nil
-		}
-		time.Sleep(time.Second)
+		return errors.New("zone status still not matched when timeout")
 	}
-	return errors.New("all server still not bootstrap ready when timeout")
+	return f
 }
 
 func (m *OBClusterManager) CreateOBZone() error {
@@ -120,8 +126,19 @@ func (m *OBClusterManager) CreateOBZone() error {
 	return nil
 }
 
-func (m *OBClusterManager) BootstrapEmpty() error {
-	return nil
+func (m *OBClusterManager) getOceanbaseOperationManager() (*operation.OceanbaseOperationManager, error) {
+	obzoneList, err := m.listOBZones()
+	if err != nil {
+		m.Logger.Error(err, "list obzones failed")
+		return nil, errors.Wrap(err, "list obzones")
+	}
+	m.Logger.Info("successfully get obzone list", "obzone list", obzoneList)
+	if len(obzoneList.Items) <= 0 {
+		return nil, errors.Wrap(err, "no obzone belongs to this cluster")
+	}
+	address := obzoneList.Items[0].Status.OBServerStatus[0].Server
+	p := connector.NewOceanbaseConnectProperties(address, 2881, "root", "sys", "root", "")
+	return operation.GetOceanbaseOperationManager(p)
 }
 
 func (m *OBClusterManager) Bootstrap() error {
@@ -167,7 +184,55 @@ func (m *OBClusterManager) CreateService() error {
 	return nil
 }
 
+// move to util package
+func (m *OBClusterManager) readPassword(secretName string) (string, error) {
+	secret := &corev1.Secret{}
+	err := m.Client.Get(m.Ctx, m.generateNamespacedName(m.OBCluster.Name), secret)
+	return string(secret.Data["password"]), err
+}
+
 func (m *OBClusterManager) CreateUsers() error {
+	err := m.createUser("operator", m.OBCluster.Spec.UserSecrets.Operator, "all")
+	if err != nil {
+		return errors.Wrap(err, "Create operator user")
+	}
+	err = m.createUser("monitor", m.OBCluster.Spec.UserSecrets.Monitor, "select")
+	if err != nil {
+		return errors.Wrap(err, "Create root user")
+	}
+	err = m.createUser("proxyro", m.OBCluster.Spec.UserSecrets.ProxyRO, "select")
+	if err != nil {
+		return errors.Wrap(err, "Create root user")
+	}
+	err = m.createUser("root", m.OBCluster.Spec.UserSecrets.Root, "all")
+	if err != nil {
+		return errors.Wrap(err, "Create root user")
+	}
+	return nil
+}
+
+func (m *OBClusterManager) createUser(userName, secretName, privilege string) error {
+	password, err := m.readPassword(secretName)
+	if err != nil {
+		return errors.Wrap(err, "Get password from secret failed")
+	}
+	oceanbaseOperationManager, err := m.getOceanbaseOperationManager()
+	if err != nil {
+		return errors.Wrap(err, "Get oceanbase operation manager")
+	}
+	err = oceanbaseOperationManager.CreateUser(userName)
+	if err != nil {
+		return errors.Wrap(err, "CreateUser")
+	}
+	err = oceanbaseOperationManager.SetUserPassword(userName, password)
+	if err != nil {
+		return errors.Wrap(err, "CreateUser")
+	}
+	object := "*.*"
+	err = oceanbaseOperationManager.GrantPrivilege(privilege, object, userName)
+	if err != nil {
+		return errors.Wrap(err, "GrantPrivilege")
+	}
 	return nil
 }
 

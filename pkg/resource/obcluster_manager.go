@@ -23,6 +23,7 @@ import (
 
 	v1alpha1 "github.com/oceanbase/ob-operator/api/v1alpha1"
 	clusterstatus "github.com/oceanbase/ob-operator/pkg/const/status/obcluster"
+	zonestatus "github.com/oceanbase/ob-operator/pkg/const/status/obzone"
 	"github.com/oceanbase/ob-operator/pkg/task"
 	flowname "github.com/oceanbase/ob-operator/pkg/task/const/flow/name"
 	taskname "github.com/oceanbase/ob-operator/pkg/task/const/task/name"
@@ -61,20 +62,25 @@ func (m *OBClusterManager) GetTaskFlow() (*task.TaskFlow, error) {
 		m.Logger.Info("get task flow from obcluster status")
 		return task.NewTaskFlow(m.OBCluster.Status.OperationContext), nil
 	}
+	// return task flow depends on status
+
 	// newly created cluster
+	var taskFlow *task.TaskFlow
+	var err error
 	m.Logger.Info("create task flow according to obcluster status")
-	if m.OBCluster.Status.Status == clusterstatus.New {
-		taskFlow, err := task.GetRegistry().Get(flowname.BootstrapOBCluster)
-		if err != nil {
-			return nil, errors.Wrap(err, "Get create obcluster task flow")
-		}
-		return taskFlow, nil
+	switch m.OBCluster.Status.Status {
+	// create obcluster, return taskflow to bootstrap obcluster
+	case clusterstatus.New:
+		taskFlow, err = task.GetRegistry().Get(flowname.BootstrapOBCluster)
+	// after obcluster bootstraped, return taskflow to maintain obcluster after bootstrap
+	case clusterstatus.Bootstraped:
+		taskFlow, err = task.GetRegistry().Get(flowname.MaintainOBClusterAfterBootstrap)
 	}
 	// scale observer
 	// scale obzone
 	// upgrade
 	// no need to execute task flow
-	return nil, nil
+	return taskFlow, err
 }
 
 func (m *OBClusterManager) UpdateStatus() error {
@@ -115,7 +121,7 @@ func (m *OBClusterManager) GetTaskFunc(name string) (func() error, error) {
 	case taskname.CreateOBZone:
 		return m.CreateOBZone, nil
 	case taskname.WaitOBZoneBootstrapReady:
-		return m.WaitOBZoneBootstrapReady, nil
+		return m.generateWaitOBZoneStatusFunc(zonestatus.BootstrapReady), nil
 	case taskname.Bootstrap:
 		return m.Bootstrap, nil
 	case taskname.CreateUsers:

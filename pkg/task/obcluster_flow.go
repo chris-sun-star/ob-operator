@@ -28,3 +28,13 @@ func BootstrapOBCluster() *TaskFlow {
 		},
 	}
 }
+
+func MaintainOBClusterAfterBootstrap() *TaskFlow {
+	return &TaskFlow{
+		OperationContext: &v1alpha1.OperationContext{
+			Name:         flowname.MaintainOBClusterAfterBootstrap,
+			Tasks:        []string{taskname.WaitOBZoneRunning, taskname.CreateOBClusterService, taskname.CreateOBParameter},
+			TargetStatus: clusterstatus.Bootstraped,
+		},
+	}
+}
