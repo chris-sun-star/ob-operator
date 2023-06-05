@@ -22,7 +22,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v1alpha1 "github.com/oceanbase/ob-operator/api/v1alpha1"
-	serverstatus "github.com/oceanbase/ob-operator/pkg/const/status/observer"
 )
 
 func (m *OBZoneManager) generateServerName() string {
@@ -39,26 +38,29 @@ func (m *OBZoneManager) StartZone() error {
 	return nil
 }
 
-func (m *OBZoneManager) WaitOBServerBootstrapReady() error {
-	for i := 1; i < 300; i++ {
-		obzone, err := m.getOBZone()
-		if err != nil {
-			return errors.Wrap(err, "get obzoen failed")
-		}
-		allready := true
-		for _, observerStatus := range obzone.Status.OBServerStatus {
-			if observerStatus.Status != serverstatus.BootstrapReady {
-				m.Logger.Info("server still not ready for bootstrap", "server ip", observerStatus.Server)
-				allready = false
-				break
+func (m *OBZoneManager) generateWaitOBServerStatusFunc(status string, timeoutSeconds int) func() error {
+	f := func() error {
+		for i := 1; i < timeoutSeconds; i++ {
+			obzone, err := m.getOBZone()
+			if err != nil {
+				return errors.Wrap(err, "get obzoen failed")
 			}
+			allMatched := true
+			for _, observerStatus := range obzone.Status.OBServerStatus {
+				if observerStatus.Status != status {
+					m.Logger.Info("server status still not matched", "server", observerStatus.Server, "status", status)
+					allMatched = false
+					break
+				}
+			}
+			if allMatched {
+				return nil
+			}
+			time.Sleep(time.Second)
 		}
-		if allready {
-			return nil
-		}
-		time.Sleep(time.Second)
+		return errors.New("all server still not bootstrap ready when timeout")
 	}
-	return errors.New("all server still not bootstrap ready when timeout")
+	return f
 }
 
 func (m *OBZoneManager) CreateOBServer() error {

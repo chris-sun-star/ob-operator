@@ -20,6 +20,7 @@ import (
 func init() {
 	// obcluster
 	GetRegistry().Register(flowname.BootstrapOBCluster, BootstrapOBCluster)
+	GetRegistry().Register(flowname.MaintainOBClusterAfterBootstrap, MaintainOBClusterAfterBootstrap)
 
 	// obzone
 	GetRegistry().Register(flowname.CreateOBZone, CreateOBZone)

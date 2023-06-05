@@ -73,7 +73,7 @@ func (m *OBClusterManager) GetTaskFlow() (*task.TaskFlow, error) {
 	case clusterstatus.New:
 		taskFlow, err = task.GetRegistry().Get(flowname.BootstrapOBCluster)
 	// after obcluster bootstraped, return taskflow to maintain obcluster after bootstrap
-	case clusterstatus.Bootstraped:
+	case clusterstatus.Bootstrapped:
 		taskFlow, err = task.GetRegistry().Get(flowname.MaintainOBClusterAfterBootstrap)
 	}
 	// scale observer
@@ -121,11 +121,15 @@ func (m *OBClusterManager) GetTaskFunc(name string) (func() error, error) {
 	case taskname.CreateOBZone:
 		return m.CreateOBZone, nil
 	case taskname.WaitOBZoneBootstrapReady:
-		return m.generateWaitOBZoneStatusFunc(zonestatus.BootstrapReady), nil
+		return m.generateWaitOBZoneStatusFunc(zonestatus.BootstrapReady, 300), nil
+	case taskname.WaitOBZoneRunning:
+		return m.generateWaitOBZoneStatusFunc(zonestatus.Running, 300), nil
 	case taskname.Bootstrap:
 		return m.Bootstrap, nil
 	case taskname.CreateUsers:
 		return m.CreateUsers, nil
+	case taskname.CreateOBClusterService:
+		return m.CreateService, nil
 	case taskname.CreateOBParameter:
 		return m.CreateOBParameter, nil
 	default:

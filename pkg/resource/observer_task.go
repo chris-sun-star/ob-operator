@@ -16,20 +16,20 @@ import (
 	"fmt"
 	"time"
 
+	clusterstatus "github.com/oceanbase/ob-operator/pkg/const/status/obcluster"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	v1alpha1 "github.com/oceanbase/ob-operator/api/v1alpha1"
-	util "github.com/oceanbase/ob-operator/pkg/util"
 )
 
 func (m *OBServerManager) WaitOBPodReady() error {
 	for i := 0; i < 60; i++ {
 		observer, err := m.getOBServer()
 		if err != nil {
-			return errors.Wrap(err, "get observer from K8s")
+			return errors.Wrap(err, "Get observer from K8s")
 		}
 		if observer.Status.Ready {
 			m.Logger.Info("Pod is ready")
@@ -44,31 +44,19 @@ func (m *OBServerManager) AddServer() error {
 	return nil
 }
 
-func (m *OBServerManager) generateOBServerStartArgs() map[string]interface{} {
-	observerStartArgs := make(map[string]interface{})
-	observerStartArgs["clusterName"] = m.OBServer.Spec.ClusterName
-	observerStartArgs["clusterId"] = m.OBServer.Spec.ClusterId
-	observerStartArgs["zoneName"] = m.OBServer.Spec.Zone
-	cpu, _ := m.OBServer.Spec.OBServerTemplate.Resource.Cpu.AsInt64()
-	memory, _ := m.OBServer.Spec.OBServerTemplate.Resource.Memory.AsInt64()
-	observerStartArgs["cpuLimit"] = cpu
-	observerStartArgs["memoryLimit"] = memory / 1073741824
-	observerStartArgs["version"] = "4"
-
-	//TODO no need to pass this parameter
-	observerStartArgs["rsList"] = fmt.Sprintf("%s:2881", m.OBServer.Status.PodIp)
-	return observerStartArgs
-}
-
-func (m *OBServerManager) StartOBServer() error {
-	url := fmt.Sprintf("http://%s:19001/api/ob/start", m.OBServer.Status.PodIp)
-	observerStartArgs := m.generateOBServerStartArgs()
-	code, resp := util.HTTPPOST(url, util.CovertToJSON(observerStartArgs))
-	m.Logger.Info("get resp", "resp", resp)
-	if code != 200 {
-		return errors.New("start observer failed")
+func (m *OBServerManager) WaitOBClusterBootstrapped() error {
+	for i := 0; i < 300; i++ {
+		obcluster, err := m.getOBCluster()
+		if err != nil {
+			return errors.Wrap(err, "Get obcluster from K8s")
+		}
+		if obcluster.Status.Status == clusterstatus.Bootstrapped {
+			m.Logger.Info("Obcluster bootstrapped")
+			return nil
+		}
+		time.Sleep(time.Second)
 	}
-	return nil
+	return errors.New("Timeout to wait obcluster bootstrapped")
 }
 
 func (m *OBServerManager) CreateOBPod() error {

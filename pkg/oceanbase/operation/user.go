@@ -13,6 +13,8 @@ See the Mulan PSL v2 for more details.
 package operation
 
 import (
+	"fmt"
+
 	"github.com/oceanbase/ob-operator/pkg/oceanbase/const/sql"
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
@@ -37,7 +39,7 @@ func (m *OceanbaseOperationManager) SetUserPassword(userName, password string) e
 }
 
 func (m *OceanbaseOperationManager) GrantPrivilege(privilege, object, userName string) error {
-	err := m.ExecWithDefaultTimeout(sql.GrantPrivilege, privilege, object, userName)
+	err := m.ExecWithDefaultTimeout(fmt.Sprintf(sql.GrantPrivilege, privilege, object), userName)
 	if err != nil {
 		klog.Errorf("Got exception when grant privilege user: %v", err)
 		return errors.Wrap(err, "Grant privilege to user")

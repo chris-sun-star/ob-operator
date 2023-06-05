@@ -50,8 +50,8 @@ func (m *OBServerManager) GetTaskFunc(name string) (func() error, error) {
 		return m.CreateOBPod, nil
 	case taskname.WaitOBPodReady:
 		return m.WaitOBPodReady, nil
-	case taskname.StartOBServer:
-		return m.StartOBServer, nil
+	case taskname.WaitOBClusterBootstrapped:
+		return m.WaitOBClusterBootstrapped, nil
 	case taskname.AddServer:
 		return m.AddServer, nil
 	default:
@@ -132,6 +132,9 @@ func (m *OBServerManager) GetTaskFlow() (*task.TaskFlow, error) {
 			return nil, errors.Wrap(err, "Get create observer task flow")
 		}
 		return taskFlow, nil
+	}
+	if m.OBServer.Status.Status == serverstatus.BootstrapReady {
+		return task.GetRegistry().Get(flowname.MaintainOBServerAfterBootstrap)
 	}
 	// scale observer
 	// upgrade

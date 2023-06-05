@@ -23,8 +23,8 @@ func BootstrapOBCluster() *TaskFlow {
 	return &TaskFlow{
 		OperationContext: &v1alpha1.OperationContext{
 			Name:         flowname.BootstrapOBCluster,
-			Tasks:        []string{taskname.CreateOBZone, taskname.WaitOBZoneBootstrapReady, taskname.Bootstrap, taskname.CreateUsers},
-			TargetStatus: clusterstatus.Bootstraped,
+			Tasks:        []string{taskname.CreateOBZone, taskname.WaitOBZoneBootstrapReady, taskname.Bootstrap},
+			TargetStatus: clusterstatus.Bootstrapped,
 		},
 	}
 }
@@ -33,8 +33,8 @@ func MaintainOBClusterAfterBootstrap() *TaskFlow {
 	return &TaskFlow{
 		OperationContext: &v1alpha1.OperationContext{
 			Name:         flowname.MaintainOBClusterAfterBootstrap,
-			Tasks:        []string{taskname.WaitOBZoneRunning, taskname.CreateOBClusterService, taskname.CreateOBParameter},
-			TargetStatus: clusterstatus.Bootstraped,
+			Tasks:        []string{taskname.WaitOBZoneRunning, taskname.CreateUsers, taskname.CreateOBClusterService, taskname.CreateOBParameter},
+			TargetStatus: clusterstatus.Running,
 		},
 	}
 }

@@ -33,8 +33,8 @@ func MaintainOBServerAfterBootstrap() *TaskFlow {
 	return &TaskFlow{
 		OperationContext: &v1alpha1.OperationContext{
 			Name:         flowname.PrepareOBServerForBootstrap,
-			Tasks:        []string{taskname.CreateOBPVC, taskname.CreateOBPod, taskname.WaitOBPodReady},
-			TargetStatus: serverstatus.BootstrapReady,
+			Tasks:        []string{taskname.WaitOBClusterBootstrapped, taskname.AddServer},
+			TargetStatus: serverstatus.Running,
 		},
 	}
 }

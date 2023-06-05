@@ -36,9 +36,10 @@ const (
 
 // observer tasks
 const (
-	CreateOBPVC    = "create observer pvc"
-	CreateOBPod    = "create observer pod"
-	WaitOBPodReady = "wait observer pod ready"
-	StartOBServer  = "start observer"
-	AddServer      = "add observer"
+	WaitOBClusterBootstrapped = "wait obcluster bootstrapped"
+	CreateOBPVC               = "create observer pvc"
+	CreateOBPod               = "create observer pod"
+	WaitOBPodReady            = "wait observer pod ready"
+	StartOBServer             = "start observer"
+	AddServer                 = "add observer"
 )

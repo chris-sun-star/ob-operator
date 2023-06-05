@@ -33,8 +33,8 @@ func MaintainOBZoneAfterBootstrap() *TaskFlow {
 	return &TaskFlow{
 		OperationContext: &v1alpha1.OperationContext{
 			Name:         flowname.MaintainOBZoneAfterBootstrap,
-			Tasks:        []string{taskname.CreateOBServer, taskname.WaitOBServerBootstrapReady},
-			TargetStatus: zonestatus.BootstrapReady,
+			Tasks:        []string{taskname.WaitOBServerRunning},
+			TargetStatus: zonestatus.Running,
 		},
 	}
 }

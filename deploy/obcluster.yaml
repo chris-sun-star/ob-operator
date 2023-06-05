@@ -8,7 +8,7 @@ spec:
   clusterId: 1
   userSecrets:
     root: test-user-root
-    proxyro: test-user-proxy
+    proxyro: test-user-proxyro
     monitor: test-user-monitor
     operator: test-user-operator
   topology:

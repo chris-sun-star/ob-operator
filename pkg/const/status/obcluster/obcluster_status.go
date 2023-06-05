@@ -13,7 +13,7 @@ See the Mulan PSL v2 for more details.
 package obcluster
 
 const (
-	New         = "new"
-	Running     = "running"
-	Bootstraped = "bootstraped"
+	New          = "new"
+	Running      = "running"
+	Bootstrapped = "bootstrapped"
 )

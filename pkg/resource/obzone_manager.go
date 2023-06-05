@@ -24,6 +24,7 @@ import (
 
 	v1alpha1 "github.com/oceanbase/ob-operator/api/v1alpha1"
 	clusterstatus "github.com/oceanbase/ob-operator/pkg/const/status/obcluster"
+	serverstatus "github.com/oceanbase/ob-operator/pkg/const/status/observer"
 	zonestatus "github.com/oceanbase/ob-operator/pkg/const/status/obzone"
 	"github.com/oceanbase/ob-operator/pkg/task"
 	flowname "github.com/oceanbase/ob-operator/pkg/task/const/flow/name"
@@ -88,6 +89,9 @@ func (m *OBZoneManager) GetTaskFlow() (*task.TaskFlow, error) {
 		}
 		return taskFlow, nil
 	}
+	if m.OBZone.Status.Status == zonestatus.BootstrapReady {
+		return task.GetRegistry().Get(flowname.MaintainOBZoneAfterBootstrap)
+	}
 	// scale observer
 	// upgrade
 
@@ -133,7 +137,9 @@ func (m *OBZoneManager) GetTaskFunc(name string) (func() error, error) {
 	case taskname.CreateOBServer:
 		return m.CreateOBServer, nil
 	case taskname.WaitOBServerBootstrapReady:
-		return m.WaitOBServerBootstrapReady, nil
+		return m.generateWaitOBServerStatusFunc(serverstatus.BootstrapReady, 300), nil
+	case taskname.WaitOBServerRunning:
+		return m.generateWaitOBServerStatusFunc(serverstatus.Running, 300), nil
 	case taskname.AddZone:
 		return m.AddZone, nil
 	default:
