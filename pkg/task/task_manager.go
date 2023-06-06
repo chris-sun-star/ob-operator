@@ -13,6 +13,7 @@ See the Mulan PSL v2 for more details.
 package task
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/google/uuid"
 	taskstatus "github.com/oceanbase/ob-operator/pkg/task/const/task/status"
 	"github.com/pkg/errors"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var taskManager *TaskManager
@@ -27,8 +29,10 @@ var taskManagerOnce sync.Once
 
 func GetTaskManager() *TaskManager {
 	taskManagerOnce.Do(func() {
+		logger := log.FromContext(context.TODO())
 		taskManager = &TaskManager{
 			ResultMap: make(map[string]chan *TaskResult),
+			Logger:    &logger,
 		}
 	})
 	return taskManager
@@ -52,7 +56,7 @@ func (m *TaskManager) Submit(f func() error) string {
 	go func() {
 		err := f()
 		if err != nil {
-			// m.Logger.Error(err, "Run task got error", "taskId", TaskId)
+			m.Logger.Error(err, "Run task got error", "taskId", TaskId)
 			retCh <- &TaskResult{
 				Status: taskstatus.Failed,
 				Error:  err,

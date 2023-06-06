@@ -13,14 +13,14 @@ spec:
     operator: test-user-operator
   topology:
     - zone: zone1
-      replica: 1
+      replica: 2
       nodeSelector:
         ob.zone: zone1
   observer:
     image: oceanbasedev/oceanbase-cn:v4.1.0.0-100000192023032010
     resource:
-      cpu: 8
-      memory: 30Gi
+      cpu: 2
+      memory: 10Gi
     storage:
       dataStorage:
         storageClass: local-path

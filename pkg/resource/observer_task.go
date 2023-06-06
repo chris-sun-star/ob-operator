@@ -17,6 +17,7 @@ import (
 	"time"
 
 	clusterstatus "github.com/oceanbase/ob-operator/pkg/const/status/obcluster"
+	"github.com/oceanbase/ob-operator/pkg/oceanbase/model"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,7 +42,27 @@ func (m *OBServerManager) WaitOBPodReady() error {
 }
 
 func (m *OBServerManager) AddServer() error {
-	return nil
+	obcluster, err := m.getOBCluster()
+	if err != nil {
+		return errors.Wrap(err, "Get obcluster from K8s")
+	}
+	oceanbaseOperationManager, err := GetOceanbaseOperationManagerFromOBCluster(m.Client, obcluster)
+	if err != nil {
+		m.Logger.Error(err, "Get oceanbase operation manager")
+		return errors.Wrap(err, "Get oceanbase operation manager")
+	}
+	serverInfo := &model.ServerInfo{
+		Ip:   m.OBServer.Status.PodIp,
+		Port: 2882,
+	}
+	_, err = oceanbaseOperationManager.GetServer(serverInfo)
+	if err != nil {
+		m.Logger.Error(err, "Get observer failed, observer not in obcluster")
+	} else {
+		m.Logger.Info("Observer already exists in obcluster")
+		return nil
+	}
+	return oceanbaseOperationManager.AddServer(serverInfo)
 }
 
 func (m *OBServerManager) WaitOBClusterBootstrapped() error {

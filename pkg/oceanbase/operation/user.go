@@ -17,13 +17,12 @@ import (
 
 	"github.com/oceanbase/ob-operator/pkg/oceanbase/const/sql"
 	"github.com/pkg/errors"
-	"k8s.io/klog/v2"
 )
 
 func (m *OceanbaseOperationManager) CreateUser(userName string) error {
 	err := m.ExecWithDefaultTimeout(sql.CreateUser, userName)
 	if err != nil {
-		klog.Errorf("Got exception when create user: %v", err)
+		m.Logger.Error(err, "Got exception when create user")
 		return errors.Wrap(err, "Create user")
 	}
 	return nil
@@ -32,7 +31,7 @@ func (m *OceanbaseOperationManager) CreateUser(userName string) error {
 func (m *OceanbaseOperationManager) SetUserPassword(userName, password string) error {
 	err := m.ExecWithDefaultTimeout(sql.SetUserPassword, userName, password)
 	if err != nil {
-		klog.Errorf("Got exception when set user password: %v", err)
+		m.Logger.Error(err, "Got exception when set user password")
 		return errors.Wrap(err, "Set user password")
 	}
 	return nil
@@ -41,7 +40,7 @@ func (m *OceanbaseOperationManager) SetUserPassword(userName, password string) e
 func (m *OceanbaseOperationManager) GrantPrivilege(privilege, object, userName string) error {
 	err := m.ExecWithDefaultTimeout(fmt.Sprintf(sql.GrantPrivilege, privilege, object), userName)
 	if err != nil {
-		klog.Errorf("Got exception when grant privilege user: %v", err)
+		m.Logger.Error(err, "Got exception when grant privilege user")
 		return errors.Wrap(err, "Grant privilege to user")
 	}
 	return nil

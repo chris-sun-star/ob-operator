@@ -40,5 +40,11 @@ func MaintainOBServerAfterBootstrap() *TaskFlow {
 }
 
 func CreateOBServer() *TaskFlow {
-	return nil
+	return &TaskFlow{
+		OperationContext: &v1alpha1.OperationContext{
+			Name:         flowname.CreateOBServer,
+			Tasks:        []string{taskname.CreateOBPVC, taskname.CreateOBPod, taskname.WaitOBPodReady, taskname.AddServer},
+			TargetStatus: serverstatus.Running,
+		},
+	}
 }
