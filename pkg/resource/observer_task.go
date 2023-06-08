@@ -16,6 +16,10 @@ import (
 	"fmt"
 	"time"
 
+	obagentconst "github.com/oceanbase/ob-operator/pkg/const/obagent"
+	oceanbaseconst "github.com/oceanbase/ob-operator/pkg/const/oceanbase"
+	podconst "github.com/oceanbase/ob-operator/pkg/const/pod"
+	secretconst "github.com/oceanbase/ob-operator/pkg/const/secret"
 	clusterstatus "github.com/oceanbase/ob-operator/pkg/const/status/obcluster"
 	"github.com/oceanbase/ob-operator/pkg/oceanbase/model"
 	"github.com/oceanbase/ob-operator/pkg/oceanbase/operation"
@@ -28,7 +32,7 @@ import (
 )
 
 func (m *OBServerManager) WaitOBPodReady() error {
-	for i := 0; i < 300; i++ {
+	for i := 0; i < podconst.ReadyTimeoutSeconds; i++ {
 		observer, err := m.getOBServer()
 		if err != nil {
 			return errors.Wrap(err, "Get observer from K8s")
@@ -58,7 +62,7 @@ func (m *OBServerManager) AddServer() error {
 	}
 	serverInfo := &model.ServerInfo{
 		Ip:   m.OBServer.Status.PodIp,
-		Port: 2882,
+		Port: oceanbaseconst.RpcPort,
 	}
 	_, err = oceanbaseOperationManager.GetServer(serverInfo)
 	if err != nil {
@@ -71,7 +75,7 @@ func (m *OBServerManager) AddServer() error {
 }
 
 func (m *OBServerManager) WaitOBClusterBootstrapped() error {
-	for i := 0; i < 300; i++ {
+	for i := 0; i < oceanbaseconst.BootstrapTimeoutSeconds; i++ {
 		obcluster, err := m.getOBCluster()
 		if err != nil {
 			return errors.Wrap(err, "Get obcluster from K8s")
@@ -142,14 +146,14 @@ func (m *OBServerManager) CreateOBPVC() error {
 	ownerReferenceList = append(ownerReferenceList, ownerReference)
 
 	objectMeta := metav1.ObjectMeta{
-		Name:            fmt.Sprintf("%s-data-file", m.OBServer.Name),
+		Name:            fmt.Sprintf("%s-%s", m.OBServer.Name, oceanbaseconst.DataVolumeSuffix),
 		Namespace:       m.OBServer.Namespace,
 		OwnerReferences: ownerReferenceList,
 		Labels:          m.OBServer.Labels,
 	}
 	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: objectMeta,
-		Spec:       m.generatePVCSpec(fmt.Sprintf("%s-data-file", m.OBServer.Name), m.OBServer.Spec.OBServerTemplate.Storage.DataStorage),
+		Spec:       m.generatePVCSpec(fmt.Sprintf("%s-%s", m.OBServer.Name, oceanbaseconst.DataVolumeSuffix), m.OBServer.Spec.OBServerTemplate.Storage.DataStorage),
 	}
 	err := m.Client.Create(m.Ctx, pvc)
 	if err != nil {
@@ -157,14 +161,14 @@ func (m *OBServerManager) CreateOBPVC() error {
 	}
 
 	objectMeta = metav1.ObjectMeta{
-		Name:            fmt.Sprintf("%s-data-log", m.OBServer.Name),
+		Name:            fmt.Sprintf("%s-%s", m.OBServer.Name, oceanbaseconst.ClogVolumeSuffix),
 		Namespace:       m.OBServer.Namespace,
 		OwnerReferences: ownerReferenceList,
 		Labels:          m.OBServer.Labels,
 	}
 	pvc = &corev1.PersistentVolumeClaim{
 		ObjectMeta: objectMeta,
-		Spec:       m.generatePVCSpec(fmt.Sprintf("%s-log-file", m.OBServer.Name), m.OBServer.Spec.OBServerTemplate.Storage.RedoLogStorage),
+		Spec:       m.generatePVCSpec(fmt.Sprintf("%s-%s", m.OBServer.Name, oceanbaseconst.ClogVolumeSuffix), m.OBServer.Spec.OBServerTemplate.Storage.RedoLogStorage),
 	}
 	err = m.Client.Create(m.Ctx, pvc)
 	if err != nil {
@@ -172,14 +176,14 @@ func (m *OBServerManager) CreateOBPVC() error {
 	}
 
 	objectMeta = metav1.ObjectMeta{
-		Name:            fmt.Sprintf("%s-log", m.OBServer.Name),
+		Name:            fmt.Sprintf("%s-%s", m.OBServer.Name, oceanbaseconst.LogVolumeSuffix),
 		Namespace:       m.OBServer.Namespace,
 		OwnerReferences: ownerReferenceList,
 		Labels:          m.OBServer.Labels,
 	}
 	pvc = &corev1.PersistentVolumeClaim{
 		ObjectMeta: objectMeta,
-		Spec:       m.generatePVCSpec(fmt.Sprintf("%s-log", m.OBServer.Name), m.OBServer.Spec.OBServerTemplate.Storage.LogStorage),
+		Spec:       m.generatePVCSpec(fmt.Sprintf("%s-%s", m.OBServer.Name, oceanbaseconst.LogVolumeSuffix), m.OBServer.Spec.OBServerTemplate.Storage.LogStorage),
 	}
 	err = m.Client.Create(m.Ctx, pvc)
 	if err != nil {
@@ -188,14 +192,14 @@ func (m *OBServerManager) CreateOBPVC() error {
 
 	if m.OBServer.Spec.MonitorTemplate != nil {
 		objectMeta = metav1.ObjectMeta{
-			Name:            fmt.Sprintf("%s-monitor-conf", m.OBServer.Name),
+			Name:            fmt.Sprintf("%s-%s", m.OBServer.Name, obagentconst.ConfigVolumeSuffix),
 			Namespace:       m.OBServer.Namespace,
 			OwnerReferences: ownerReferenceList,
 			Labels:          m.OBServer.Labels,
 		}
 		pvc = &corev1.PersistentVolumeClaim{
 			ObjectMeta: objectMeta,
-			Spec:       m.generatePVCSpec(fmt.Sprintf("%s-monitor-conf", m.OBServer.Name), m.OBServer.Spec.MonitorTemplate.Storage.ConfigStorage),
+			Spec:       m.generatePVCSpec(fmt.Sprintf("%s-%s", m.OBServer.Name, obagentconst.ConfigVolumeSuffix), m.OBServer.Spec.MonitorTemplate.Storage.ConfigStorage),
 		}
 		err = m.Client.Create(m.Ctx, pvc)
 		if err != nil {
@@ -212,23 +216,23 @@ func (m *OBServerManager) createOBPodSpec(obcluster *v1alpha1.OBCluster) corev1.
 
 	// TODO, add monitor container
 	volumeDataFile := corev1.Volume{}
-	volumeDataFile.Name = fmt.Sprintf("%s-data-file", m.OBServer.Name)
+	volumeDataFile.Name = fmt.Sprintf("%s-%s", m.OBServer.Name, oceanbaseconst.DataVolumeSuffix)
 	volumeDataFileSource := &corev1.PersistentVolumeClaimVolumeSource{
-		ClaimName: fmt.Sprintf("%s-data-file", m.OBServer.Name),
+		ClaimName: fmt.Sprintf("%s-%s", m.OBServer.Name, oceanbaseconst.DataVolumeSuffix),
 	}
 	volumeDataFile.VolumeSource.PersistentVolumeClaim = volumeDataFileSource
 
 	volumeDataLog := corev1.Volume{}
-	volumeDataLog.Name = fmt.Sprintf("%s-data-log", m.OBServer.Name)
+	volumeDataLog.Name = fmt.Sprintf("%s-%s", m.OBServer.Name, oceanbaseconst.ClogVolumeSuffix)
 	volumeDataLogSource := &corev1.PersistentVolumeClaimVolumeSource{
-		ClaimName: fmt.Sprintf("%s-data-log", m.OBServer.Name),
+		ClaimName: fmt.Sprintf("%s-%s", m.OBServer.Name, oceanbaseconst.ClogVolumeSuffix),
 	}
 	volumeDataLog.VolumeSource.PersistentVolumeClaim = volumeDataLogSource
 
 	volumeLog := corev1.Volume{}
-	volumeLog.Name = fmt.Sprintf("%s-log", m.OBServer.Name)
+	volumeLog.Name = fmt.Sprintf("%s-%s", m.OBServer.Name, oceanbaseconst.LogVolumeSuffix)
 	volumeLogSource := &corev1.PersistentVolumeClaimVolumeSource{
-		ClaimName: fmt.Sprintf("%s-log", m.OBServer.Name),
+		ClaimName: fmt.Sprintf("%s-%s", m.OBServer.Name, oceanbaseconst.LogVolumeSuffix),
 	}
 	volumeLog.VolumeSource.PersistentVolumeClaim = volumeLogSource
 
@@ -246,9 +250,9 @@ func (m *OBServerManager) createOBPodSpec(obcluster *v1alpha1.OBCluster) corev1.
 		containers = append(containers, monitorContainer)
 
 		volumeMonitorConf := corev1.Volume{}
-		volumeMonitorConf.Name = fmt.Sprintf("%s-monitor-conf", m.OBServer.Name)
+		volumeMonitorConf.Name = fmt.Sprintf("%s-%s", m.OBServer.Name, obagentconst.ConfigVolumeSuffix)
 		volumeMonitorConfSource := &corev1.PersistentVolumeClaimVolumeSource{
-			ClaimName: fmt.Sprintf("%s-monitor-conf", m.OBServer.Name),
+			ClaimName: fmt.Sprintf("%s-%s", m.OBServer.Name, obagentconst.ConfigVolumeSuffix),
 		}
 		volumeMonitorConf.VolumeSource.PersistentVolumeClaim = volumeMonitorConfSource
 		volumes = append(volumes, volumeMonitorConf)
@@ -265,11 +269,16 @@ func (m *OBServerManager) createOBPodSpec(obcluster *v1alpha1.OBCluster) corev1.
 func (m *OBServerManager) createMonitorContainer(obcluster *v1alpha1.OBCluster) corev1.Container {
 	// port info
 	ports := make([]corev1.ContainerPort, 0)
-	monagentPort := corev1.ContainerPort{}
-	monagentPort.Name = "monagent"
-	monagentPort.ContainerPort = 8088
-	monagentPort.Protocol = corev1.ProtocolTCP
-	ports = append(ports, monagentPort)
+	httpPort := corev1.ContainerPort{}
+	httpPort.Name = obagentconst.HttpPortName
+	httpPort.ContainerPort = obagentconst.HttpPort
+	httpPort.Protocol = corev1.ProtocolTCP
+	pprofPort := corev1.ContainerPort{}
+	pprofPort.Name = obagentconst.PprofPortName
+	pprofPort.ContainerPort = obagentconst.PprofPort
+	pprofPort.Protocol = corev1.ProtocolTCP
+	ports = append(ports, httpPort)
+	ports = append(ports, pprofPort)
 
 	// resource info
 	monagentResource := corev1.ResourceList{}
@@ -281,48 +290,48 @@ func (m *OBServerManager) createMonitorContainer(obcluster *v1alpha1.OBCluster) 
 
 	// volume mounts
 	volumeMountMonitorConf := corev1.VolumeMount{}
-	volumeMountMonitorConf.Name = fmt.Sprintf("%s-monitor-conf", m.OBServer.Name)
-	volumeMountMonitorConf.MountPath = "/home/admin/obagent/conf"
+	volumeMountMonitorConf.Name = fmt.Sprintf("%s-%s", m.OBServer.Name, obagentconst.ConfigVolumeSuffix)
+	volumeMountMonitorConf.MountPath = obagentconst.ConfigPath
 	volumeMounts := make([]corev1.VolumeMount, 0)
 	volumeMounts = append(volumeMounts, volumeMountMonitorConf)
 
 	readinessProbeHTTP := corev1.HTTPGetAction{}
-	readinessProbeHTTP.Port = intstr.FromInt(8088)
-	readinessProbeHTTP.Path = "/metrics/stat"
+	readinessProbeHTTP.Port = intstr.FromInt(obagentconst.HttpPort)
+	readinessProbeHTTP.Path = obagentconst.StatUrl
 	readinessProbe := corev1.Probe{}
 	readinessProbe.ProbeHandler.HTTPGet = &readinessProbeHTTP
-	readinessProbe.PeriodSeconds = 2
-	readinessProbe.InitialDelaySeconds = 5
+	readinessProbe.PeriodSeconds = obagentconst.ProbeCheckPeriodSeconds
+	readinessProbe.InitialDelaySeconds = obagentconst.ProbeCheckDelaySeconds
 
 	env := make([]corev1.EnvVar, 0)
 	envOBModuleStatus := corev1.EnvVar{
-		Name:  "OB_MONITOR_STATUS",
-		Value: "active",
+		Name:  obagentconst.EnvOBMonitorStatus,
+		Value: obagentconst.ActiveStatus,
 	}
 	envClusterName := corev1.EnvVar{
-		Name:  "CLUSTER_NAME",
+		Name:  obagentconst.EnvClusterName,
 		Value: m.OBServer.Spec.ClusterName,
 	}
 	envClusterId := corev1.EnvVar{
-		Name:  "CLUSTER_ID",
+		Name:  obagentconst.EnvClusterId,
 		Value: fmt.Sprintf("%d", m.OBServer.Spec.ClusterId),
 	}
 	envZoneName := corev1.EnvVar{
-		Name:  "ZONE_NAME",
+		Name:  obagentconst.EnvZoneName,
 		Value: m.OBServer.Spec.Zone,
 	}
 	envMonitorUser := corev1.EnvVar{
-		Name:  "MONITOR_USER",
-		Value: "monitor",
+		Name:  obagentconst.EnvMonitorUser,
+		Value: obagentconst.MonitorUser,
 	}
 	envMonitorPassword := corev1.EnvVar{
-		Name: "MONITOR_PASSWORD",
+		Name: obagentconst.EnvMonitorPASSWORD,
 		ValueFrom: &corev1.EnvVarSource{
 			SecretKeyRef: &corev1.SecretKeySelector{
 				LocalObjectReference: corev1.LocalObjectReference{
 					Name: obcluster.Spec.UserSecrets.Monitor,
 				},
-				Key: "password",
+				Key: secretconst.PasswordKeyName,
 			},
 		},
 	}
@@ -334,14 +343,14 @@ func (m *OBServerManager) createMonitorContainer(obcluster *v1alpha1.OBCluster) 
 	env = append(env, envMonitorPassword)
 
 	container := corev1.Container{
-		Name:            "monagent",
+		Name:            obagentconst.ContainerName,
 		Image:           m.OBServer.Spec.MonitorTemplate.Image,
 		ImagePullPolicy: "IfNotPresent",
 		Ports:           ports,
 		Resources:       resources,
 		VolumeMounts:    volumeMounts,
 		ReadinessProbe:  &readinessProbe,
-		WorkingDir:      "/home/admin/obagent",
+		WorkingDir:      obagentconst.InstallPath,
 		Env:             env,
 	}
 	return container
@@ -351,19 +360,14 @@ func (m *OBServerManager) createMonitorContainer(obcluster *v1alpha1.OBCluster) 
 func (m *OBServerManager) createOBServerContainer() corev1.Container {
 	// port info
 	ports := make([]corev1.ContainerPort, 0)
-	cablePort := corev1.ContainerPort{}
-	cablePort.Name = "cable"
-	cablePort.ContainerPort = 19001
-	cablePort.Protocol = corev1.ProtocolTCP
 	mysqlPort := corev1.ContainerPort{}
-	mysqlPort.Name = "mysql"
-	mysqlPort.ContainerPort = 2881
+	mysqlPort.Name = oceanbaseconst.SqlPortName
+	mysqlPort.ContainerPort = oceanbaseconst.SqlPort
 	mysqlPort.Protocol = corev1.ProtocolTCP
 	rpcPort := corev1.ContainerPort{}
-	rpcPort.Name = "rpc"
-	rpcPort.ContainerPort = 2882
+	rpcPort.Name = oceanbaseconst.RpcPortName
+	rpcPort.ContainerPort = oceanbaseconst.RpcPort
 	rpcPort.Protocol = corev1.ProtocolTCP
-	ports = append(ports, cablePort)
 	ports = append(ports, mysqlPort)
 	ports = append(ports, rpcPort)
 
@@ -378,14 +382,14 @@ func (m *OBServerManager) createOBServerContainer() corev1.Container {
 
 	// volume mounts
 	volumeMountDataFile := corev1.VolumeMount{}
-	volumeMountDataFile.Name = fmt.Sprintf("%s-data-file", m.OBServer.Name)
-	volumeMountDataFile.MountPath = "/home/admin/data-file"
+	volumeMountDataFile.Name = fmt.Sprintf("%s-%s", m.OBServer.Name, oceanbaseconst.DataVolumeSuffix)
+	volumeMountDataFile.MountPath = oceanbaseconst.DataPath
 	volumeMountDataLog := corev1.VolumeMount{}
-	volumeMountDataLog.Name = fmt.Sprintf("%s-data-log", m.OBServer.Name)
-	volumeMountDataLog.MountPath = "/home/admin/data-log"
+	volumeMountDataLog.Name = fmt.Sprintf("%s-%s", m.OBServer.Name, oceanbaseconst.ClogVolumeSuffix)
+	volumeMountDataLog.MountPath = oceanbaseconst.ClogPath
 	volumeMountLog := corev1.VolumeMount{}
-	volumeMountLog.Name = fmt.Sprintf("%s-log", m.OBServer.Name)
-	volumeMountLog.MountPath = "/home/admin/log"
+	volumeMountLog.Name = fmt.Sprintf("%s-%s", m.OBServer.Name, oceanbaseconst.LogVolumeSuffix)
+	volumeMountLog.MountPath = oceanbaseconst.LogPath
 
 	volumeMounts := make([]corev1.VolumeMount, 0)
 	volumeMounts = append(volumeMounts, volumeMountDataFile)
@@ -395,28 +399,28 @@ func (m *OBServerManager) createOBServerContainer() corev1.Container {
 	if m.OBServer.Spec.BackupVolume != nil {
 		volumeMountBackup := corev1.VolumeMount{}
 		volumeMountBackup.Name = fmt.Sprintf(m.OBServer.Spec.BackupVolume.Volume.Name)
-		volumeMountBackup.MountPath = "/ob-backup"
+		volumeMountBackup.MountPath = oceanbaseconst.BackupPath
 		volumeMounts = append(volumeMounts, volumeMountBackup)
 	}
 
 	readinessProbeTCP := corev1.TCPSocketAction{}
-	readinessProbeTCP.Port = intstr.FromInt(2881)
+	readinessProbeTCP.Port = intstr.FromInt(oceanbaseconst.SqlPort)
 	readinessProbe := corev1.Probe{}
 	readinessProbe.ProbeHandler.TCPSocket = &readinessProbeTCP
-	readinessProbe.PeriodSeconds = 2
-	readinessProbe.InitialDelaySeconds = 5
+	readinessProbe.PeriodSeconds = oceanbaseconst.ProbeCheckPeriodSeconds
+	readinessProbe.InitialDelaySeconds = oceanbaseconst.ProbeCheckDelaySeconds
 
-	makeLogDirCmd := "mkdir -p /home/admin/log/log && ln -sf /home/admin/log/log /home/admin/oceanbase/log"
-	makeStoreDirCmd := "mkdir -p /home/admin/oceanbase/store"
-	makeCLogDirCmd := "mkdir -p /home/admin/data-log/clog && ln -sf /home/admin/data-log/clog /home/admin/oceanbase/store/clog"
-	makeILogDirCmd := "mkdir -p /home/admin/data-log/ilog && ln -sf /home/admin/data-log/ilog /home/admin/oceanbase/store/ilog"
-	makeSLogDirCmd := "mkdir -p /home/admin/data-file/slog && ln -sf /home/admin/data-file/slog /home/admin/oceanbase/store/slog"
-	makeEtcDirCmd := "mkdir -p /home/admin/data-file/etc && ln -sf /home/admin/data-file/etc /home/admin/oceanbase/store/etc"
-	makeSortDirCmd := "mkdir -p /home/admin/data-file/sort_dir && ln -sf /home/admin/data-file/sort_dir /home/admin/oceanbase/store/sort_dir"
-	makeSstableDirCmd := "mkdir -p /home/admin/data-file/sstable && ln -sf /home/admin/data-file/sstable /home/admin/oceanbase/store/sstable"
+	makeLogDirCmd := fmt.Sprintf("mkdir -p %s/log && ln -sf %s/log %s/log", oceanbaseconst.LogPath, oceanbaseconst.LogPath, oceanbaseconst.InstallPath)
+	makeStoreDirCmd := fmt.Sprintf("mkdir -p %s/store", oceanbaseconst.InstallPath)
+	makeCLogDirCmd := fmt.Sprintf("mkdir -p %s/clog && ln -sf %s/clog %s/store/clog", oceanbaseconst.ClogPath, oceanbaseconst.ClogPath, oceanbaseconst.InstallPath)
+	makeILogDirCmd := fmt.Sprintf("mkdir -p %s/ilog && ln -sf %s/ilog %s/store/ilog", oceanbaseconst.ClogPath, oceanbaseconst.ClogPath, oceanbaseconst.InstallPath)
+	makeSLogDirCmd := fmt.Sprintf("mkdir -p %s/slog && ln -sf %s/slog %s/store/slog", oceanbaseconst.DataPath, oceanbaseconst.DataPath, oceanbaseconst.InstallPath)
+	makeEtcDirCmd := fmt.Sprintf("mkdir -p %s/etc && ln -sf %s/etc %s/store/etc", oceanbaseconst.DataPath, oceanbaseconst.DataPath, oceanbaseconst.InstallPath)
+	makeSortDirCmd := fmt.Sprintf("mkdir -p %s/sort_dir && ln -sf %s/sort_dir %s/store/sort_dir", oceanbaseconst.DataPath, oceanbaseconst.DataPath, oceanbaseconst.InstallPath)
+	makeSstableDirCmd := fmt.Sprintf("mkdir -p %s/sstable && ln -sf %s/sstable %s/store/sstable", oceanbaseconst.DataPath, oceanbaseconst.DataPath, oceanbaseconst.InstallPath)
 
 	// TODO this config is only for small quota, should calculate based on resource
-	optStr := "cpu_count=16,memory_limit=9G,system_memory=1G,__min_full_resource_pool_memory=1073741824,datafile_size=40G,log_disk_size=40G,net_thread_count=2,stack_size=512K,cache_wash_threshold=1G,schema_history_expire_time=1d,enable_separate_sys_clog=false,enable_merge_by_turn=false,enable_syslog_recycle=true,enable_syslog_wf=false,max_syslog_file_count=4"
+	optStr := "cpu_count=16,memory_limit=8G,system_memory=1G,__min_full_resource_pool_memory=1073741824,datafile_size=40G,log_disk_size=40G,net_thread_count=2,stack_size=512K,cache_wash_threshold=1G,schema_history_expire_time=1d,enable_separate_sys_clog=false,enable_merge_by_turn=false,enable_syslog_recycle=true,enable_syslog_wf=false,max_syslog_file_count=4"
 
 	startObserverCmd := fmt.Sprintf("chown -R root:root /home/admin/oceanbase && /home/admin/oceanbase/bin/observer --nodaemon --appname %s --cluster_id %d --zone %s --devname eth0 -p 2881 -P 2882 -d /home/admin/oceanbase/store/ -l info -o config_additional_dir=/home/admin/oceanbase/store/etc,%s", m.OBServer.Spec.ClusterName, m.OBServer.Spec.ClusterId, m.OBServer.Spec.Zone, optStr)
 
@@ -426,6 +430,7 @@ func (m *OBServerManager) createOBServerContainer() corev1.Container {
 		fmt.Sprintf(" %s && %s && %s && %s && %s && %s && %s && %s && %s ", makeLogDirCmd, makeStoreDirCmd, makeCLogDirCmd, makeILogDirCmd, makeSLogDirCmd, makeEtcDirCmd, makeSortDirCmd, makeSstableDirCmd, startObserverCmd),
 	}
 
+	// TODO make a new image take environment variables as commandline option
 	env := make([]corev1.EnvVar, 0)
 	envLib := corev1.EnvVar{
 		Name:  "LD_LIBRARY_PATH",
@@ -434,14 +439,14 @@ func (m *OBServerManager) createOBServerContainer() corev1.Container {
 	env = append(env, envLib)
 
 	container := corev1.Container{
-		Name:            "observer",
+		Name:            oceanbaseconst.ContainerName,
 		Image:           m.OBServer.Spec.OBServerTemplate.Image,
 		ImagePullPolicy: "IfNotPresent",
 		Ports:           ports,
 		Resources:       resources,
 		VolumeMounts:    volumeMounts,
 		ReadinessProbe:  &readinessProbe,
-		WorkingDir:      "/home/admin/oceanbase",
+		WorkingDir:      oceanbaseconst.InstallPath,
 		Env:             env,
 		Command:         cmds,
 	}
