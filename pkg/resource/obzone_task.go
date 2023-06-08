@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	oceanbaseconst "github.com/oceanbase/ob-operator/pkg/const/oceanbase"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -76,10 +77,10 @@ func (m *OBZoneManager) CreateOBServer() error {
 	for i := 0; i < m.OBZone.Spec.Topology.Replica; i++ {
 		serverName := m.generateServerName()
 		labels := make(map[string]string)
-		cluster, _ := m.OBZone.Labels["reference-cluster"]
-		labels["reference-uid"] = string(m.OBZone.GetUID())
-		labels["reference-zone"] = m.OBZone.Name
-		labels["reference-cluster"] = cluster
+		cluster, _ := m.OBZone.Labels[oceanbaseconst.LabelRefOBCluster]
+		labels[oceanbaseconst.LabelRefUID] = string(m.OBZone.GetUID())
+		labels[oceanbaseconst.LabelRefOBZone] = m.OBZone.Name
+		labels[oceanbaseconst.LabelRefOBCluster] = cluster
 		observer := &v1alpha1.OBServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            serverName,

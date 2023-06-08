@@ -16,6 +16,7 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	oceanbaseconst "github.com/oceanbase/ob-operator/pkg/const/oceanbase"
 	"github.com/pkg/errors"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -120,9 +121,9 @@ func (m *OBClusterManager) GetTaskFunc(name string) (func() error, error) {
 	case taskname.CreateOBZone:
 		return m.CreateOBZone, nil
 	case taskname.WaitOBZoneBootstrapReady:
-		return m.generateWaitOBZoneStatusFunc(zonestatus.BootstrapReady, 300), nil
+		return m.generateWaitOBZoneStatusFunc(zonestatus.BootstrapReady, oceanbaseconst.DefaultStateWaitTimeout), nil
 	case taskname.WaitOBZoneRunning:
-		return m.generateWaitOBZoneStatusFunc(zonestatus.Running, 300), nil
+		return m.generateWaitOBZoneStatusFunc(zonestatus.Running, oceanbaseconst.DefaultStateWaitTimeout), nil
 	case taskname.Bootstrap:
 		return m.Bootstrap, nil
 	case taskname.CreateUsers:
@@ -140,7 +141,7 @@ func (m *OBClusterManager) listOBZones() (*v1alpha1.OBZoneList, error) {
 	// this label always exists
 	obzoneList := &v1alpha1.OBZoneList{}
 	err := m.Client.List(m.Ctx, obzoneList, client.MatchingLabels{
-		"reference-cluster": m.OBCluster.Name,
+		oceanbaseconst.LabelRefOBCluster: m.OBCluster.Name,
 	}, client.InNamespace(m.OBCluster.Namespace))
 	if err != nil {
 		return nil, errors.Wrap(err, "get obzone list")

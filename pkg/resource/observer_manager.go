@@ -15,6 +15,7 @@ package resource
 import (
 	"context"
 
+	oceanbaseconst "github.com/oceanbase/ob-operator/pkg/const/oceanbase"
 	corev1 "k8s.io/api/core/v1"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -172,7 +173,7 @@ func (m *OBServerManager) getPod() (*corev1.Pod, error) {
 
 func (m *OBServerManager) getOBCluster() (*v1alpha1.OBCluster, error) {
 	// this label always exists
-	clusterName, _ := m.OBServer.Labels["reference-cluster"]
+	clusterName, _ := m.OBServer.Labels[oceanbaseconst.LabelRefOBCluster]
 	obcluster := &v1alpha1.OBCluster{}
 	err := m.Client.Get(m.Ctx, m.generateNamespacedName(clusterName), obcluster)
 	if err != nil {
@@ -194,7 +195,7 @@ func (m *OBServerManager) getOBServer() (*v1alpha1.OBServer, error) {
 
 func (m *OBServerManager) getOBZone() (*v1alpha1.OBZone, error) {
 	// this label always exists
-	zoneName, _ := m.OBServer.Labels["reference-zone"]
+	zoneName, _ := m.OBServer.Labels[oceanbaseconst.LabelRefOBZone]
 	obzone := &v1alpha1.OBZone{}
 	err := m.Client.Get(m.Ctx, m.generateNamespacedName(zoneName), obzone)
 	if err != nil {

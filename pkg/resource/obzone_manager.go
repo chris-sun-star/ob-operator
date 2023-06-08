@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v1alpha1 "github.com/oceanbase/ob-operator/api/v1alpha1"
+	oceanbaseconst "github.com/oceanbase/ob-operator/pkg/const/oceanbase"
 	clusterstatus "github.com/oceanbase/ob-operator/pkg/const/status/obcluster"
 	serverstatus "github.com/oceanbase/ob-operator/pkg/const/status/observer"
 	zonestatus "github.com/oceanbase/ob-operator/pkg/const/status/obzone"
@@ -136,9 +137,9 @@ func (m *OBZoneManager) GetTaskFunc(name string) (func() error, error) {
 	case taskname.CreateOBServer:
 		return m.CreateOBServer, nil
 	case taskname.WaitOBServerBootstrapReady:
-		return m.generateWaitOBServerStatusFunc(serverstatus.BootstrapReady, 300), nil
+		return m.generateWaitOBServerStatusFunc(serverstatus.BootstrapReady, oceanbaseconst.DefaultStateWaitTimeout), nil
 	case taskname.WaitOBServerRunning:
-		return m.generateWaitOBServerStatusFunc(serverstatus.Running, 300), nil
+		return m.generateWaitOBServerStatusFunc(serverstatus.Running, oceanbaseconst.DefaultStateWaitTimeout), nil
 	case taskname.AddZone:
 		return m.AddZone, nil
 	default:
@@ -150,7 +151,7 @@ func (m *OBZoneManager) listOBServers() (*v1alpha1.OBServerList, error) {
 	// this label always exists
 	observerList := &v1alpha1.OBServerList{}
 	err := m.Client.List(m.Ctx, observerList, client.MatchingLabels{
-		"reference-zone": m.OBZone.Name,
+		oceanbaseconst.LabelRefOBZone: m.OBZone.Name,
 	}, client.InNamespace(m.OBZone.Namespace))
 	if err != nil {
 		return nil, errors.Wrap(err, "get observers")
@@ -177,7 +178,7 @@ func (m *OBZoneManager) getOBZone() (*v1alpha1.OBZone, error) {
 
 func (m *OBZoneManager) getOBCluster() (*v1alpha1.OBCluster, error) {
 	// this label always exists
-	clusterName, _ := m.OBZone.Labels["reference-cluster"]
+	clusterName, _ := m.OBZone.Labels[oceanbaseconst.LabelRefOBCluster]
 	obcluster := &v1alpha1.OBCluster{}
 	err := m.Client.Get(m.Ctx, m.generateNamespacedName(clusterName), obcluster)
 	if err != nil {

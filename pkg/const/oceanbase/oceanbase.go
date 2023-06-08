@@ -2,6 +2,7 @@ package oceanbase
 
 const (
 	BootstrapTimeoutSeconds = 300
+	DefaultStateWaitTimeout = 300
 )
 
 const (
@@ -36,4 +37,22 @@ const (
 	RootUser     = "root"
 	ProxyUser    = "proxyro"
 	OperatorUser = "operator"
+)
+
+const (
+	SysTenant       = "sys"
+	DefaultDatabase = "oceanbase"
+	DefaultRegion   = "default"
+)
+
+const (
+	LabelRefOBCluster = "ref-obcluster"
+	LabelRefOBZone    = "ref-obzone"
+	LabelRefOBServer  = "ref-observer"
+	LabelRefUID       = "ref-uid"
+)
+
+const (
+	AllPrivilege    = "all"
+	SelectPrivilege = "select"
 )
