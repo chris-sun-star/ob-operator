@@ -17,7 +17,6 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -147,11 +146,4 @@ func (m *OBClusterManager) listOBZones() (*v1alpha1.OBZoneList, error) {
 		return nil, errors.Wrap(err, "get obzone list")
 	}
 	return obzoneList, nil
-}
-
-func (m *OBClusterManager) generateNamespacedName(name string) types.NamespacedName {
-	var namespacedName types.NamespacedName
-	namespacedName.Namespace = m.OBCluster.Namespace
-	namespacedName.Name = name
-	return namespacedName
 }

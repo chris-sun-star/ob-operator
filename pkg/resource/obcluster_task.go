@@ -17,8 +17,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	v1alpha1 "github.com/oceanbase/ob-operator/api/v1alpha1"
 	"github.com/oceanbase/ob-operator/pkg/oceanbase/connector"
@@ -28,7 +28,10 @@ import (
 
 func (m *OBClusterManager) getOBCluster() (*v1alpha1.OBCluster, error) {
 	obcluster := &v1alpha1.OBCluster{}
-	err := m.Client.Get(m.Ctx, m.generateNamespacedName(m.OBCluster.Name), obcluster)
+	err := m.Client.Get(m.Ctx, types.NamespacedName{
+		Namespace: m.OBCluster.Namespace,
+		Name:      m.OBCluster.Name,
+	}, obcluster)
 	if err != nil {
 		return nil, errors.Wrap(err, "get obcluster")
 	}
@@ -106,18 +109,7 @@ func (m *OBClusterManager) CreateOBZone() error {
 }
 
 func (m *OBClusterManager) getOceanbaseOperationManager() (*operation.OceanbaseOperationManager, error) {
-	obzoneList, err := m.listOBZones()
-	if err != nil {
-		m.Logger.Error(err, "list obzones failed")
-		return nil, errors.Wrap(err, "list obzones")
-	}
-	m.Logger.Info("successfully get obzone list", "obzone list", obzoneList)
-	if len(obzoneList.Items) <= 0 {
-		return nil, errors.Wrap(err, "no obzone belongs to this cluster")
-	}
-	address := obzoneList.Items[0].Status.OBServerStatus[0].Server
-	p := connector.NewOceanbaseConnectProperties(address, 2881, "root", "sys", "", "oceanbase")
-	return operation.GetOceanbaseOperationManager(p)
+	return GetOceanbaseOperationManagerFromOBCluster(m.Client, m.OBCluster)
 }
 
 func (m *OBClusterManager) Bootstrap() error {
@@ -131,6 +123,7 @@ func (m *OBClusterManager) Bootstrap() error {
 		return errors.Wrap(err, "no obzone belongs to this cluster")
 	}
 	address := obzoneList.Items[0].Status.OBServerStatus[0].Server
+	// only bootstrap create connector like this
 	p := connector.NewOceanbaseConnectProperties(address, 2881, "root", "sys", "", "")
 	manager, err := operation.GetOceanbaseOperationManager(p)
 	if err != nil {
@@ -163,17 +156,6 @@ func (m *OBClusterManager) CreateService() error {
 	return nil
 }
 
-// move to util package
-func (m *OBClusterManager) readPassword(secretName string) (string, error) {
-	m.Logger.Info("begin get password", "secret", secretName)
-	secret := &corev1.Secret{}
-	err := m.Client.Get(m.Ctx, m.generateNamespacedName(secretName), secret)
-	if err != nil {
-		m.Logger.Error(err, "Get password from secret failed", "secret", secretName)
-	}
-	return string(secret.Data["password"]), err
-}
-
 func (m *OBClusterManager) CreateUsers() error {
 	err := m.createUser("operator", m.OBCluster.Spec.UserSecrets.Operator, "all")
 	if err != nil {
@@ -196,7 +178,7 @@ func (m *OBClusterManager) CreateUsers() error {
 
 func (m *OBClusterManager) createUser(userName, secretName, privilege string) error {
 	m.Logger.Info("begin create user", "username", userName)
-	password, err := m.readPassword(secretName)
+	password, err := ReadPassword(m.Client, m.OBCluster.Namespace, secretName)
 	if err != nil {
 		return errors.Wrap(err, "Get password from secret failed")
 	}

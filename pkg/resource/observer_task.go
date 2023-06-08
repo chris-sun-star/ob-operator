@@ -18,6 +18,7 @@ import (
 
 	clusterstatus "github.com/oceanbase/ob-operator/pkg/const/status/obcluster"
 	"github.com/oceanbase/ob-operator/pkg/oceanbase/model"
+	"github.com/oceanbase/ob-operator/pkg/oceanbase/operation"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,12 +42,16 @@ func (m *OBServerManager) WaitOBPodReady() error {
 	return errors.New("Timeout to wait pod ready")
 }
 
-func (m *OBServerManager) AddServer() error {
+func (m *OBServerManager) getOceanbaseOperationManager() (*operation.OceanbaseOperationManager, error) {
 	obcluster, err := m.getOBCluster()
 	if err != nil {
-		return errors.Wrap(err, "Get obcluster from K8s")
+		return nil, errors.Wrap(err, "Get obcluster from K8s")
 	}
-	oceanbaseOperationManager, err := GetOceanbaseOperationManagerFromOBCluster(m.Client, obcluster)
+	return GetOceanbaseOperationManagerFromOBCluster(m.Client, obcluster)
+}
+
+func (m *OBServerManager) AddServer() error {
+	oceanbaseOperationManager, err := m.getOceanbaseOperationManager()
 	if err != nil {
 		m.Logger.Error(err, "Get oceanbase operation manager")
 		return errors.Wrap(err, "Get oceanbase operation manager")
