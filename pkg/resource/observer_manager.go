@@ -55,7 +55,7 @@ func (m *OBServerManager) GetTaskFunc(name string) (func() error, error) {
 	case taskname.AddServer:
 		return m.AddServer, nil
 	default:
-		return nil, errors.New("Can not find an function for task")
+		return nil, errors.Errorf("Can not find an function for task %s", name)
 	}
 }
 

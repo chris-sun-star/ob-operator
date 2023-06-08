@@ -23,11 +23,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	v1alpha1 "github.com/oceanbase/ob-operator/api/v1alpha1"
+	"github.com/oceanbase/ob-operator/api/v1alpha1"
 )
 
 func (m *OBServerManager) WaitOBPodReady() error {
-	for i := 0; i < 60; i++ {
+	for i := 0; i < 300; i++ {
 		observer, err := m.getOBServer()
 		if err != nil {
 			return errors.Wrap(err, "Get observer from K8s")
@@ -82,6 +82,10 @@ func (m *OBServerManager) WaitOBClusterBootstrapped() error {
 
 func (m *OBServerManager) CreateOBPod() error {
 	m.Logger.Info("create observer pod")
+	obcluster, err := m.getOBCluster()
+	if err != nil {
+		return errors.Wrap(err, "Get obcluster from K8s")
+	}
 	ownerReferenceList := make([]metav1.OwnerReference, 0)
 	ownerReference := metav1.OwnerReference{
 		APIVersion: m.OBServer.APIVersion,
@@ -90,7 +94,7 @@ func (m *OBServerManager) CreateOBPod() error {
 		UID:        m.OBServer.GetUID(),
 	}
 	ownerReferenceList = append(ownerReferenceList, ownerReference)
-	observerPodSpec := m.createOBServerPodSpec()
+	observerPodSpec := m.createOBPodSpec(obcluster)
 	// create pod
 	observerPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -101,7 +105,7 @@ func (m *OBServerManager) CreateOBPod() error {
 		},
 		Spec: observerPodSpec,
 	}
-	err := m.Client.Create(m.Ctx, observerPod)
+	err = m.Client.Create(m.Ctx, observerPod)
 	if err != nil {
 		m.Logger.Error(err, "failed to create pod")
 		return errors.Wrap(err, "failed to create pod")
@@ -176,10 +180,27 @@ func (m *OBServerManager) CreateOBPVC() error {
 	if err != nil {
 		return errors.Wrap(err, "Create pvc of log")
 	}
+
+	if m.OBServer.Spec.MonitorTemplate != nil {
+		objectMeta = metav1.ObjectMeta{
+			Name:            fmt.Sprintf("%s-monitor-conf", m.OBServer.Name),
+			Namespace:       m.OBServer.Namespace,
+			OwnerReferences: ownerReferenceList,
+			Labels:          m.OBServer.Labels,
+		}
+		pvc = &corev1.PersistentVolumeClaim{
+			ObjectMeta: objectMeta,
+			Spec:       m.generatePVCSpec(fmt.Sprintf("%s-monitor-conf", m.OBServer.Name), m.OBServer.Spec.MonitorTemplate.Storage.ConfigStorage),
+		}
+		err = m.Client.Create(m.Ctx, pvc)
+		if err != nil {
+			return errors.Wrap(err, "Create pvc of monitor log")
+		}
+	}
 	return nil
 }
 
-func (m *OBServerManager) createOBServerPodSpec() corev1.PodSpec {
+func (m *OBServerManager) createOBPodSpec(obcluster *v1alpha1.OBCluster) corev1.PodSpec {
 	containers := make([]corev1.Container, 0)
 	observerContainer := m.createOBServerContainer()
 	containers = append(containers, observerContainer)
@@ -211,11 +232,114 @@ func (m *OBServerManager) createOBServerPodSpec() corev1.PodSpec {
 	volumes = append(volumes, volumeDataLog)
 	volumes = append(volumes, volumeLog)
 
+	if m.OBServer.Spec.BackupVolume != nil {
+		volumes = append(volumes, *m.OBServer.Spec.BackupVolume.Volume)
+	}
+
+	if m.OBServer.Spec.MonitorTemplate != nil {
+		monitorContainer := m.createMonitorContainer(obcluster)
+		containers = append(containers, monitorContainer)
+
+		volumeMonitorConf := corev1.Volume{}
+		volumeMonitorConf.Name = fmt.Sprintf("%s-monitor-conf", m.OBServer.Name)
+		volumeMonitorConfSource := &corev1.PersistentVolumeClaimVolumeSource{
+			ClaimName: fmt.Sprintf("%s-monitor-conf", m.OBServer.Name),
+		}
+		volumeMonitorConf.VolumeSource.PersistentVolumeClaim = volumeMonitorConfSource
+		volumes = append(volumes, volumeMonitorConf)
+	}
+
 	podSpec := corev1.PodSpec{
-		Volumes:    volumes,
-		Containers: containers,
+		Volumes:      volumes,
+		Containers:   containers,
+		NodeSelector: m.OBServer.Spec.NodeSelector,
 	}
 	return podSpec
+}
+
+func (m *OBServerManager) createMonitorContainer(obcluster *v1alpha1.OBCluster) corev1.Container {
+	// port info
+	ports := make([]corev1.ContainerPort, 0)
+	monagentPort := corev1.ContainerPort{}
+	monagentPort.Name = "monagent"
+	monagentPort.ContainerPort = 8088
+	monagentPort.Protocol = corev1.ProtocolTCP
+	ports = append(ports, monagentPort)
+
+	// resource info
+	monagentResource := corev1.ResourceList{}
+	monagentResource["cpu"] = m.OBServer.Spec.MonitorTemplate.Resource.Cpu
+	monagentResource["memory"] = m.OBServer.Spec.MonitorTemplate.Resource.Memory
+	resources := corev1.ResourceRequirements{
+		Limits: monagentResource,
+	}
+
+	// volume mounts
+	volumeMountMonitorConf := corev1.VolumeMount{}
+	volumeMountMonitorConf.Name = fmt.Sprintf("%s-monitor-conf", m.OBServer.Name)
+	volumeMountMonitorConf.MountPath = "/home/admin/obagent/conf"
+	volumeMounts := make([]corev1.VolumeMount, 0)
+	volumeMounts = append(volumeMounts, volumeMountMonitorConf)
+
+	readinessProbeHTTP := corev1.HTTPGetAction{}
+	readinessProbeHTTP.Port = intstr.FromInt(8088)
+	readinessProbeHTTP.Path = "/metrics/stat"
+	readinessProbe := corev1.Probe{}
+	readinessProbe.ProbeHandler.HTTPGet = &readinessProbeHTTP
+	readinessProbe.PeriodSeconds = 2
+	readinessProbe.InitialDelaySeconds = 5
+
+	env := make([]corev1.EnvVar, 0)
+	envOBModuleStatus := corev1.EnvVar{
+		Name:  "OB_MONITOR_STATUS",
+		Value: "active",
+	}
+	envClusterName := corev1.EnvVar{
+		Name:  "CLUSTER_NAME",
+		Value: m.OBServer.Spec.ClusterName,
+	}
+	envClusterId := corev1.EnvVar{
+		Name:  "CLUSTER_ID",
+		Value: fmt.Sprintf("%d", m.OBServer.Spec.ClusterId),
+	}
+	envZoneName := corev1.EnvVar{
+		Name:  "ZONE_NAME",
+		Value: m.OBServer.Spec.Zone,
+	}
+	envMonitorUser := corev1.EnvVar{
+		Name:  "MONITOR_USER",
+		Value: "monitor",
+	}
+	envMonitorPassword := corev1.EnvVar{
+		Name: "MONITOR_PASSWORD",
+		ValueFrom: &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: obcluster.Spec.UserSecrets.Monitor,
+				},
+				Key: "password",
+			},
+		},
+	}
+	env = append(env, envOBModuleStatus)
+	env = append(env, envClusterName)
+	env = append(env, envClusterId)
+	env = append(env, envZoneName)
+	env = append(env, envMonitorUser)
+	env = append(env, envMonitorPassword)
+
+	container := corev1.Container{
+		Name:            "monagent",
+		Image:           m.OBServer.Spec.MonitorTemplate.Image,
+		ImagePullPolicy: "IfNotPresent",
+		Ports:           ports,
+		Resources:       resources,
+		VolumeMounts:    volumeMounts,
+		ReadinessProbe:  &readinessProbe,
+		WorkingDir:      "/home/admin/obagent",
+		Env:             env,
+	}
+	return container
 }
 
 // TODO move hardcoded values to another file
@@ -262,6 +386,13 @@ func (m *OBServerManager) createOBServerContainer() corev1.Container {
 	volumeMounts = append(volumeMounts, volumeMountDataFile)
 	volumeMounts = append(volumeMounts, volumeMountDataLog)
 	volumeMounts = append(volumeMounts, volumeMountLog)
+
+	if m.OBServer.Spec.BackupVolume != nil {
+		volumeMountBackup := corev1.VolumeMount{}
+		volumeMountBackup.Name = fmt.Sprintf(m.OBServer.Spec.BackupVolume.Volume.Name)
+		volumeMountBackup.MountPath = "/ob-backup"
+		volumeMounts = append(volumeMounts, volumeMountBackup)
+	}
 
 	readinessProbeTCP := corev1.TCPSocketAction{}
 	readinessProbeTCP.Port = intstr.FromInt(2881)

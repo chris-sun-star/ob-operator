@@ -14,7 +14,6 @@ package resource
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -143,7 +142,7 @@ func (m *OBZoneManager) GetTaskFunc(name string) (func() error, error) {
 	case taskname.AddZone:
 		return m.AddZone, nil
 	default:
-		return nil, errors.New(fmt.Sprintf("Can not find an function for %s", name))
+		return nil, errors.Errorf("Can not find an function for %s", name)
 	}
 }
 

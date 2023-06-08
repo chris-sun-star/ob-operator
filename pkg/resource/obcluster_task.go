@@ -14,7 +14,6 @@ package resource
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -172,7 +171,7 @@ func (m *OBClusterManager) readPassword(secretName string) (string, error) {
 	if err != nil {
 		m.Logger.Error(err, "Get password from secret failed", "secret", secretName)
 	}
-	return strings.TrimSuffix(string(secret.Data["password"]), "\n"), err
+	return string(secret.Data["password"]), err
 }
 
 func (m *OBClusterManager) CreateUsers() error {

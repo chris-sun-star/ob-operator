@@ -14,7 +14,6 @@ package task
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/go-logr/logr"
@@ -75,7 +74,7 @@ func (m *TaskManager) GetTaskResult(taskId string) (*TaskResult, error) {
 	retCh, exists := m.ResultMap[taskId]
 	if !exists {
 		// m.Logger.Info("Query a task id that's not exists", "task id", taskId)
-		return nil, errors.New(fmt.Sprintf("Task %s not exists", taskId))
+		return nil, errors.Errorf("Task %s not exists", taskId)
 	}
 	select {
 	case result := <-retCh:
@@ -88,7 +87,7 @@ func (m *TaskManager) GetTaskResult(taskId string) (*TaskResult, error) {
 func (m *TaskManager) CleanTaskResult(taskId string) error {
 	retCh, exists := m.ResultMap[taskId]
 	if !exists {
-		return errors.New("Task not exists")
+		return errors.Errorf("Task %s not exists", taskId)
 		// m.Logger.Error(err, "Task not exists", "task id", taskId)
 	}
 	close(retCh)
