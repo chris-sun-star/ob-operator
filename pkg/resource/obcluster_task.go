@@ -162,7 +162,7 @@ func (m *OBClusterManager) CreateUsers() error {
 	if err != nil {
 		return errors.Wrap(err, "Create root user")
 	}
-	err = m.createUser(oceanbaseconst.ProxyUser, m.OBCluster.Spec.UserSecrets.ProxyRO, oceanbaseconst.ProxyUser)
+	err = m.createUser(oceanbaseconst.ProxyUser, m.OBCluster.Spec.UserSecrets.ProxyRO, oceanbaseconst.SelectPrivilege)
 	if err != nil {
 		return errors.Wrap(err, "Create root user")
 	}
