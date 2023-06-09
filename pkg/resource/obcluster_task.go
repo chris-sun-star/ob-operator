@@ -80,6 +80,17 @@ func (m *OBClusterManager) CreateOBZone() error {
 	ownerReferenceList = append(ownerReferenceList, ownerReference)
 	for _, zone := range m.OBCluster.Spec.Topology {
 		zoneName := m.generateZoneName(zone.Zone)
+		zoneExists := false
+		for _, zoneStatus := range m.OBCluster.Status.OBZoneStatus {
+			if zoneName == zoneStatus.Zone {
+				zoneExists = true
+				break
+			}
+		}
+		if zoneExists {
+			m.Logger.Info("Zone already exists", "zone", zoneName)
+			continue
+		}
 		labels := make(map[string]string)
 		labels[oceanbaseconst.LabelRefUID] = string(m.OBCluster.GetUID())
 		labels[oceanbaseconst.LabelRefOBCluster] = m.OBCluster.Name

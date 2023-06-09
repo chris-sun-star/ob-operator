@@ -75,6 +75,8 @@ func (m *OBClusterManager) GetTaskFlow() (*task.TaskFlow, error) {
 	// after obcluster bootstraped, return taskflow to maintain obcluster after bootstrap
 	case clusterstatus.Bootstrapped:
 		taskFlow, err = task.GetRegistry().Get(flowname.MaintainOBClusterAfterBootstrap)
+	case clusterstatus.AddOBZone:
+		taskFlow, err = task.GetRegistry().Get(flowname.AddOBZone)
 	}
 	// scale observer
 	// scale obzone
@@ -97,6 +99,24 @@ func (m *OBClusterManager) UpdateStatus() error {
 		})
 	}
 	m.OBCluster.Status.OBZoneStatus = obzoneReplicaStatusList
+	// compare spec and set status
+	if m.OBCluster.Status.Status != clusterstatus.Running {
+		m.Logger.Info("OBCluster status is not running, skip compare")
+	} else {
+		// check topology
+		if len(m.OBCluster.Spec.Topology) > len(obzoneList.Items) {
+			m.Logger.Info("Compare topology need add zone")
+			m.OBCluster.Status.Status = clusterstatus.AddOBZone
+		} else if len(m.OBCluster.Spec.Topology) > len(obzoneList.Items) {
+			m.Logger.Info("Compare topology need delete zone")
+			m.OBCluster.Status.Status = clusterstatus.DeleteOBZone
+		} else {
+			// check observer
+		}
+		// check version
+		// check resource
+		// TODO resource change require pod restart, currently
+	}
 	m.Logger.Info("update obcluster status", "status", m.OBCluster.Status)
 	m.Logger.Info("update obcluster status", "operation context", m.OBCluster.Status.OperationContext)
 	err = m.Client.Status().Update(m.Ctx, m.OBCluster)

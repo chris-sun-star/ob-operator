@@ -43,7 +43,7 @@ func CreateOBZone() *TaskFlow {
 	return &TaskFlow{
 		OperationContext: &v1alpha1.OperationContext{
 			Name:         flowname.CreateOBZone,
-			Tasks:        []string{taskname.AddZone, taskname.CreateOBServer, taskname.StartZone},
+			Tasks:        []string{taskname.AddZone, taskname.CreateOBServer, taskname.WaitOBServerRunning, taskname.StartZone},
 			TargetStatus: zonestatus.Running,
 		},
 	}

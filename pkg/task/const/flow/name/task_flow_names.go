@@ -16,6 +16,8 @@ package flow
 const (
 	BootstrapOBCluster              = "bootstrap obcluster"
 	MaintainOBClusterAfterBootstrap = "maintain obcluster after bootstrap"
+	AddOBZone                       = "add obzone"
+	DeleteOBZone                    = "delete obzone"
 )
 
 // obzone flows
