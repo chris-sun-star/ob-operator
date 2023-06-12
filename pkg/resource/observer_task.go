@@ -57,7 +57,7 @@ func (m *OBServerManager) getOceanbaseOperationManager() (*operation.OceanbaseOp
 func (m *OBServerManager) AddServer() error {
 	oceanbaseOperationManager, err := m.getOceanbaseOperationManager()
 	if err != nil {
-		m.Logger.Error(err, "Get oceanbase operation manager")
+		m.Logger.Error(err, "Get oceanbase operation manager failed")
 		return errors.Wrap(err, "Get oceanbase operation manager")
 	}
 	serverInfo := &model.ServerInfo{

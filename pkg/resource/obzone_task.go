@@ -19,11 +19,20 @@ import (
 
 	"github.com/google/uuid"
 	oceanbaseconst "github.com/oceanbase/ob-operator/pkg/const/oceanbase"
+	"github.com/oceanbase/ob-operator/pkg/oceanbase/operation"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v1alpha1 "github.com/oceanbase/ob-operator/api/v1alpha1"
 )
+
+func (m *OBZoneManager) getOceanbaseOperationManager() (*operation.OceanbaseOperationManager, error) {
+	obcluster, err := m.getOBCluster()
+	if err != nil {
+		return nil, errors.Wrap(err, "Get obcluster from K8s")
+	}
+	return GetOceanbaseOperationManagerFromOBCluster(m.Client, obcluster)
+}
 
 func (m *OBZoneManager) generateServerName() string {
 	parts := strings.Split(uuid.New().String(), "-")
@@ -32,11 +41,21 @@ func (m *OBZoneManager) generateServerName() string {
 }
 
 func (m *OBZoneManager) AddZone() error {
-	return nil
+	oceanbaseOperationManager, err := m.getOceanbaseOperationManager()
+	if err != nil {
+		m.Logger.Error(err, "Get oceanbase operation manager failed")
+		return errors.Wrap(err, "Get oceanbase operation manager")
+	}
+	return oceanbaseOperationManager.AddZone(m.OBZone.Spec.Topology.Zone)
 }
 
 func (m *OBZoneManager) StartZone() error {
-	return nil
+	oceanbaseOperationManager, err := m.getOceanbaseOperationManager()
+	if err != nil {
+		m.Logger.Error(err, "Get oceanbase operation manager failed")
+		return errors.Wrap(err, "Get oceanbase operation manager")
+	}
+	return oceanbaseOperationManager.StartZone(m.OBZone.Spec.Topology.Zone)
 }
 
 func (m *OBZoneManager) generateWaitOBServerStatusFunc(status string, timeoutSeconds int) func() error {

@@ -142,6 +142,8 @@ func (m *OBZoneManager) GetTaskFunc(name string) (func() error, error) {
 		return m.generateWaitOBServerStatusFunc(serverstatus.Running, oceanbaseconst.DefaultStateWaitTimeout), nil
 	case taskname.AddZone:
 		return m.AddZone, nil
+	case taskname.StartZone:
+		return m.StartZone, nil
 	default:
 		return nil, errors.Errorf("Can not find an function for %s", name)
 	}
