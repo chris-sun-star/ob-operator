@@ -37,6 +37,8 @@ func InitApp() {
 	status.Readiness = false
 	status.ObserverStarted = false
 
+	RecoverIfPossible()
+
 	log.Info("init http server")
 	server.CableServer.Init()
 	go server.CableServer.Run()
