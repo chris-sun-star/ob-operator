@@ -13,8 +13,6 @@ See the Mulan PSL v2 for more details.
 package converter
 
 import (
-	"strconv"
-
 	cloudv1 "github.com/oceanbase/ob-operator/apis/cloud/v1"
 	"github.com/oceanbase/ob-operator/pkg/controllers/observer/model"
 )
@@ -22,10 +20,12 @@ import (
 func JudgeRootserviceStatusByObj(rsList []model.AllVirtualCoreMeta, rs cloudv1.RootService) bool {
 	for _, cluster := range rs.Status.Topology {
 		for _, zone := range cluster.Zone {
-			var nodeIsExists bool
-			nodeIsExists = false
+			nodeIsExists := false
+			if zone.ServerIP == "" {
+				continue
+			}
 			for _, node := range rsList {
-				if node.SvrIP == zone.ServerIP && strconv.FormatInt(node.Role, 10) == zone.Status {
+				if node.SvrIP == zone.ServerIP && node.Role == zone.Role {
 					nodeIsExists = true
 					break
 				}

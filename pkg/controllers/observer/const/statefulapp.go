@@ -14,9 +14,10 @@ package observerconst
 
 // StatefulApp
 const (
-	ImgOb         = "observer"
-	ImgObagent    = "obagent"
-	ImgPullPolicy = "Always"
+	ImgOb               = "observer"
+	ImgObagent          = "obagent"
+	ImgPullPolicy       = "IfNotPresent"
+	ImgPullPolicyAlways = "Always"
 
 	DatafileStorageName = "data-file"
 	DatafileStoragePath = "/home/admin/data_file"
@@ -24,6 +25,11 @@ const (
 	DatalogStoragePath  = "/home/admin/data_log"
 	LogStorageName      = "log"
 	LogStoragePath      = "/home/admin/log"
+	EtcStorageName      = "etc"
+	EtcStoragePath      = "/home/admin/etc"
+
+	BackupName = "backup"
+	BackupPath = "/ob-backup"
 
 	CableReadinessPeriod = 2
 

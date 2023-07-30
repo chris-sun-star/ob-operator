@@ -14,6 +14,7 @@ package converter
 
 import (
 	"fmt"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -80,11 +81,18 @@ func GenerateObContainer(obClusterSpec cloudv1.OBClusterSpec) corev1.Container {
 	volumeMountLog := corev1.VolumeMount{}
 	volumeMountLog.Name = observerconst.LogStorageName
 	volumeMountLog.MountPath = observerconst.LogStoragePath
+
 	volumeMounts := make([]corev1.VolumeMount, 0)
 	volumeMounts = append(volumeMounts, volumeMountDataFile)
 	volumeMounts = append(volumeMounts, volumeMountDataLog)
 	volumeMounts = append(volumeMounts, volumeMountLog)
 
+	if obClusterSpec.Resources.Volume != nil {
+		volumeMountBackup := corev1.VolumeMount{}
+		volumeMountBackup.Name = obClusterSpec.Resources.Volume.Name
+		volumeMountBackup.MountPath = observerconst.BackupPath
+		volumeMounts = append(volumeMounts, volumeMountBackup)
+	}
 	readinessProbeHTTP := corev1.HTTPGetAction{}
 	readinessProbeHTTP.Port = intstr.FromInt(observerconst.CablePort)
 	readinessProbeHTTP.Path = observerconst.CableReadinessUrl
@@ -174,9 +182,13 @@ func GeneratePodSpec(obClusterSpec cloudv1.OBClusterSpec) corev1.PodSpec {
 	volumes = append(volumes, volumeLog)
 	volumes = append(volumes, volumeObagentConfFile)
 
+	if obClusterSpec.Resources.Volume != nil {
+		volumes = append(volumes, *obClusterSpec.Resources.Volume)
+	}
+
 	podSpec := corev1.PodSpec{
-		Containers: containers,
 		Volumes:    volumes,
+		Containers: containers,
 	}
 	return podSpec
 }
@@ -188,7 +200,8 @@ func GenerateStorageSpec(obClusterSpec cloudv1.OBClusterSpec) []cloudv1.StorageT
 		storageTemplate.Name = storageSpec.Name
 		requestsResources := corev1.ResourceList{}
 		requestsResources["storage"] = storageSpec.Size
-		storageTemplate.PVC.StorageClassName = &(storageSpec.StorageClassName)
+		storageClassName := storageSpec.StorageClassName
+		storageTemplate.PVC.StorageClassName = &(storageClassName)
 		accessModes := make([]corev1.PersistentVolumeAccessMode, 0)
 		accessModes = append(accessModes, corev1.ReadWriteOnce)
 		storageTemplate.PVC.AccessModes = accessModes
@@ -279,5 +292,14 @@ func UpdateZoneForStatefulApp(clusterList []cloudv1.Cluster, statefulApp cloudv1
 	cluster := GetClusterSpecFromOBTopology(clusterList)
 	zoneList := cluster.Zone
 	statefulApp.Spec.Subsets = zoneList
+	return statefulApp
+}
+
+func UpdateStatefulAppImage(statefulApp cloudv1.StatefulApp, image string) cloudv1.StatefulApp {
+	for index, container := range statefulApp.Spec.PodTemplate.Containers {
+		if container.Name == observerconst.ImgOb {
+			statefulApp.Spec.PodTemplate.Containers[index].Image = image
+		}
+	}
 	return statefulApp
 }
