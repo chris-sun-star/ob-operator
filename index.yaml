@@ -10,5 +10,5 @@ entries:
     type: application
     urls:
     - https://github.com/oceanbase/ob-operator/releases/download/ob-operator-1.1.0/ob-operator-1.1.0.tgz
-    version: 1.1.0
+    version: 1.2.0
 generated: "2022-11-21T15:05:54.806129385Z"
