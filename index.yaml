@@ -3,22 +3,12 @@ entries:
   ob-operator:
   - apiVersion: v2
     appVersion: 1.16.0
-    created: "2022-11-16T12:40:44.374802233Z"
+    created: "2022-11-21T15:05:55.062935304Z"
     description: A Helm chart for OB-Operator
-    digest: ceac461563651ef815517a0175fceebc230595b9da6250a0f63740028971fcb2
+    digest: 21b573dab3d02e533537eca4351147b95f7876fc279937dcce4a1a0b9f10d6dc
     name: ob-operator
     type: application
     urls:
-    - https://github.com/chris-sun-star/ob-operator/releases/download/ob-operator-1.2.0/ob-operator-1.2.0.tgz
-    version: 1.2.0
-  - apiVersion: v2
-    appVersion: 1.16.0
-    created: "2022-12-07T07:14:25.082080701Z"
-    description: A Helm chart for OB-Operator
-    digest: da9b50b4c037c4498187b9fda019450d56cebe268587534fd6c45504604a2944
-    name: ob-operator
-    type: application
-    urls:
-    - https://github.com/chris-sun-star/ob-operator/releases/download/ob-operator-1.1.0/ob-operator-1.1.0.tgz
+    - https://github.com/oceanbase/ob-operator/releases/download/ob-operator-1.1.0/ob-operator-1.1.0.tgz
     version: 1.1.0
-generated: "2022-11-16T12:40:44.078883155Z"
+generated: "2022-11-21T15:05:54.806129385Z"
