@@ -22,11 +22,11 @@ jobs:
       - name: Wait for k3s to be ready
         run: |
           for i in {1..10}; do
-            kubectl get nodes && break || sleep 10;
+            k3s kubectl get nodes && break || sleep 10;
           done
 
       - name: Deploy to k3s
         run: |
-          kubectl apply -f deploy/cert-manager.yaml
-          kubectl apply -f deploy/operator.yaml
+          k3s kubectl apply -f deploy/cert-manager.yaml
+          k3s kubectl apply -f deploy/operator.yaml
 
