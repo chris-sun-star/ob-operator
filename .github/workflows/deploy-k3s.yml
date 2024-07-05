@@ -1,0 +1,32 @@
+name: Setup k3s
+
+on:
+  push:
+    tags: 
+      - "k3s*"
+
+jobs:
+  setup-k3s:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install k3s
+        run: |
+          curl -sfL https://get.k3s.io | sh -
+          export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+          echo 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' >> $GITHUB_ENV
+
+      - name: Wait for k3s to be ready
+        run: |
+          for i in {1..10}; do
+            kubectl get nodes && break || sleep 10;
+          done
+
+      - name: Deploy to k3s
+        run: |
+          kubectl apply -f deploy/cert-manager.yaml
+          kubectl apply -f deploy/operator.yaml
+
