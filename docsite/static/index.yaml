@@ -2,6 +2,16 @@ apiVersion: v1
 entries:
   ob-operator:
   - apiVersion: v2
+    appVersion: 2.2.2
+    created: "2024-07-24T08:39:13.799019053Z"
+    description: A Helm chart for OB-Operator
+    digest: 1923b80bd3f429b43ccea6c1b975b70373f15e77b2e37794b56fbec176977852
+    name: ob-operator
+    type: application
+    urls:
+    - https://github.com/chris-sun-star/ob-operator/releases/download/ob-operator-2.2.2/ob-operator-2.2.2.tgz
+    version: 2.2.2
+  - apiVersion: v2
     appVersion: 2.2.1
     created: "2024-05-15T03:55:18.45019789Z"
     description: A Helm chart for OB-Operator
@@ -93,6 +103,16 @@ entries:
     - https://github.com/oceanbase/ob-operator/releases/download/oceanbase-cluster-4.3.0-sp.1-100000242024032211/oceanbase-cluster-4.3.0-sp.1-100000242024032211.tgz
     version: 4.3.0-sp.1-100000242024032211
   - apiVersion: v2
+    appVersion: 4.2.3.1-101000032024061316
+    created: "2024-07-24T08:39:13.925015278Z"
+    description: A Helm chart for Kubernetes to deploy OceanBase cluster
+    digest: d1c12d8d9825fb96e78065119990ca0821e73628baed54d561714575ba6a1199
+    name: oceanbase-cluster
+    type: application
+    urls:
+    - https://github.com/chris-sun-star/ob-operator/releases/download/oceanbase-cluster-4.2.3-sp.1-101000032024061316/oceanbase-cluster-4.2.3-sp.1-101000032024061316.tgz
+    version: 4.2.3-sp.1-101000032024061316
+  - apiVersion: v2
     appVersion: 4.2.1.6-106000012024042515
     created: "2024-05-20T04:00:41.424991735Z"
     description: A Helm chart for Kubernetes to deploy OceanBase cluster
@@ -124,6 +144,16 @@ entries:
     version: 4.2.1-sp.1-101010012023111012
   oceanbase-dashboard:
   - apiVersion: v2
+    appVersion: 0.3.0
+    created: "2024-07-24T08:39:14.052747621Z"
+    description: A Helm chart for OceanBase dashboard
+    digest: d6f2d5f00de55105529034988b6cd10accde0efd359d7ecedceb7b42b5b9d898
+    name: oceanbase-dashboard
+    type: application
+    urls:
+    - https://github.com/chris-sun-star/ob-operator/releases/download/oceanbase-dashboard-0.3.0/oceanbase-dashboard-0.3.0.tgz
+    version: 0.3.0
+  - apiVersion: v2
     appVersion: 0.2.1
     created: "2024-04-25T12:43:20.075309091Z"
     description: A Helm chart for OceanBase dashboard
@@ -153,4 +183,4 @@ entries:
     urls:
     - https://github.com/oceanbase/ob-operator/releases/download/oceanbase-dashboard-0.1.0/oceanbase-dashboard-0.1.0.tgz
     version: 0.1.0
-generated: "2024-06-03T13:19:58.459290037Z"
+generated: "2024-07-24T08:39:14.052854952Z"
