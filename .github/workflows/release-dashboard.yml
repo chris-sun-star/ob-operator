@@ -64,3 +64,5 @@ jobs:
           build-args: |
             VERSION=${{ steps.set_version_vars.outputs.version }}
             COMMIT_HASH=${{ github.sha }}
+          build-args: |
+            VERSION=${{ steps.set_version_vars.outputs.version }}

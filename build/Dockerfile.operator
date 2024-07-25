@@ -11,7 +11,7 @@ COPY . .
 RUN make operator
 
 # start build docker image
-FROM registry.access.redhat.com/ubi8/ubi:8.10
+FROM registry.access.redhat.com/ubi9/ubi:9.8
 ARG VERSION
 LABEL name="oceanbase-operator" \
       vendor="OceanBase" \
