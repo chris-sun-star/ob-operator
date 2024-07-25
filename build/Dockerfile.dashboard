@@ -6,8 +6,8 @@ RUN yarn
 RUN yarn build
 
 FROM golang:1.22 as builder-be
-ARG GOPROXY=https://goproxy.io,direct
-ARG GOSUMDB=sum.golang.org
+ARG GOPROXY
+ARG GOSUMDB
 ARG COMMIT_HASH=unknown
 WORKDIR /workspace
 COPY . .
