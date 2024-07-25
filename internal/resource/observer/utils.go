@@ -297,6 +297,7 @@ func (m *OBServerManager) createOBPodSpec(obcluster *v1alpha1.OBCluster) corev1.
 		Tolerations:        m.OBServer.Spec.Tolerations,
 		ServiceAccountName: m.OBServer.Spec.ServiceAccount,
 		SchedulerName:      resourceutils.GetSchedulerName(m.OBServer.Spec.OBServerTemplate.PodFields),
+		SecurityContext:    resourceutils.GetDefaultSecurityContext(),
 	}
 	podFields := m.OBServer.Spec.OBServerTemplate.PodFields
 	if podFields != nil {

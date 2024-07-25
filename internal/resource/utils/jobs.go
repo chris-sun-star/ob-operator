@@ -79,10 +79,11 @@ func RunJob(ctx context.Context, c client.Client, logger *logr.Logger, namespace
 		Spec: batchv1.JobSpec{
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
-					Containers:    []corev1.Container{container},
-					RestartPolicy: corev1.RestartPolicyNever,
-					Volumes:       volumes,
-					SchedulerName: GetSchedulerName(podFields),
+					Containers:      []corev1.Container{container},
+					RestartPolicy:   corev1.RestartPolicyNever,
+					Volumes:         volumes,
+					SchedulerName:   GetSchedulerName(podFields),
+					SecurityContext: GetDefaultSecurityContext(),
 				},
 			},
 			BackoffLimit:            &backoffLimit,
@@ -203,8 +204,9 @@ func ExecuteUpgradeScript(ctx context.Context, c client.Client, logger *logr.Log
 		Spec: batchv1.JobSpec{
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
-					Containers:    []corev1.Container{container},
-					RestartPolicy: corev1.RestartPolicyNever,
+					Containers:      []corev1.Container{container},
+					RestartPolicy:   corev1.RestartPolicyNever,
+					SecurityContext: GetDefaultSecurityContext(),
 				},
 			},
 			BackoffLimit:            &backoffLimit,
