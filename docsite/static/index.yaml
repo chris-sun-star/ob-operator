@@ -124,6 +124,16 @@ entries:
     version: 4.2.1-sp.1-101010012023111012
   oceanbase-dashboard:
   - apiVersion: v2
+    appVersion: 0.3.0
+    created: "2024-07-25T05:46:58.536748136Z"
+    description: A Helm chart for OceanBase dashboard
+    digest: 203e581ce512b3af2c68a1f3d147f70f6314127ccd348933aa1bf97759a41cd1
+    name: oceanbase-dashboard
+    type: application
+    urls:
+    - https://github.com/chris-sun-star/ob-operator/releases/download/oceanbase-dashboard-0.3.0/oceanbase-dashboard-0.3.0.tgz
+    version: 0.3.0
+  - apiVersion: v2
     appVersion: 0.2.1
     created: "2024-04-25T12:43:20.075309091Z"
     description: A Helm chart for OceanBase dashboard
@@ -153,4 +163,4 @@ entries:
     urls:
     - https://github.com/oceanbase/ob-operator/releases/download/oceanbase-dashboard-0.1.0/oceanbase-dashboard-0.1.0.tgz
     version: 0.1.0
-generated: "2024-06-03T13:19:58.459290037Z"
+generated: "2024-07-25T05:46:58.536807988Z"
