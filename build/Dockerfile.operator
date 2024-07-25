@@ -12,7 +12,17 @@ RUN GO11MODULE=ON CGO_ENABLED=0 GOOS=linux go build ${RACE} -o manager cmd/opera
 
 # start build docker image
 FROM registry.access.redhat.com/ubi8/ubi:8.10
+ARG VERSION
+LABEL name="ob-operator" \
+      vendor="OceanBase" \
+      version=${VERSION} \
+      release="1" \
+      summary="OceanBase operator" \
+      description="Kubernetes operator for OceanBase" \
+      maintainer="OceanBase"
 WORKDIR /
+RUN mkdir -p /licenses
+COPY LICENSE /licenses
 COPY --from=builder /workspace/manager .
 RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 USER 65534:65534

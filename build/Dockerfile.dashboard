@@ -15,7 +15,17 @@ RUN make dashboard-dep-install dashboard-build
 
 # start build docker image
 FROM registry.access.redhat.com/ubi8/ubi:8.10
+ARG VERSION
+LABEL name="oceanbase-dashboard" \
+      vendor="OceanBase" \
+      version=${VERSION} \
+      release="1" \
+      summary="OceanBase dashboard" \
+      description="Kubernetes dashboard for OceanBase" \
+      maintainer="OceanBase"
 WORKDIR /opt
+RUN mkdir -p /licenses
+COPY LICENSE /licenses
 COPY --from=builder-be /workspace/bin/oceanbase-dashboard .
 COPY --from=builder-fe /workspace/dist ./ui/dist
 RUN yum update -y && yum install -y procps-ng && yum clean all
