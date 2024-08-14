@@ -13,7 +13,7 @@ RUN GO11MODULE=ON CGO_ENABLED=0 GOOS=linux go build ${RACE} -o manager cmd/opera
 # start build docker image
 FROM registry.access.redhat.com/ubi8/ubi:8.10
 ARG VERSION
-LABEL name="ob-operator" \
+LABEL name="oceanbase-operator" \
       vendor="OceanBase" \
       version=${VERSION} \
       release="1" \
