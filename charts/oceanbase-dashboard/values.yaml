@@ -32,7 +32,7 @@ cleanup:
 
 inspection:
   obdiag:
-    image: "oceanbase/obdiag:latest"
+    image: "oceanbase/obdiag:3.6.0"
   oceanbaseHelper:
     image: "oceanbase/oceanbase-helper:latest"
 
