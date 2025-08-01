@@ -66,7 +66,10 @@ export const OBTerminal: React.FC<ITerminal> = (props) => {
           term.write(event.data);
         };
 
-        ws.onclose = function () {
+        ws.onclose = function (event) {
+          if (event.code === 3000) {
+            return;
+          }
           devLog('Connection closed.');
           if (userClosed.current) {
             term.write('\r\nConnection closed.\r\n');

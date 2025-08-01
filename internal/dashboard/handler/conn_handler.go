@@ -93,6 +93,11 @@ func (w wsWrapper) Write(p []byte) (int, error) {
 
 func (w wsWrapper) Close() error {
 	w.cancel()
+	// send close message to client
+	err := w.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(3000, "Normal closure"))
+	if err != nil {
+		log.Println("write close message error: ", err)
+	}
 	return w.conn.Close()
 }
 
