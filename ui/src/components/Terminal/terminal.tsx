@@ -20,6 +20,7 @@ export const OBTerminal: React.FC<ITerminal> = (props) => {
   const { terminalId, onClose } = props;
   const ref = React.useRef<HTMLDivElement>(null);
   const [ws, setWs] = React.useState<WebSocket | null>(null);
+  const userClosed = React.useRef(false);
 
   React.useEffect(() => {
     if (ref.current) {
@@ -67,7 +68,10 @@ export const OBTerminal: React.FC<ITerminal> = (props) => {
 
         ws.onclose = function () {
           devLog('Connection closed.');
-          term.write('\r\nConnection closed.\r\n');
+          if (userClosed.current) {
+            term.write('\r\nConnection closed.\r\n');
+          }
+          setWs(null);
         };
 
         ws.onerror = function (evt) {
@@ -100,6 +104,7 @@ export const OBTerminal: React.FC<ITerminal> = (props) => {
                 }),
                 okType: 'danger',
                 onOk: () => {
+                  userClosed.current = true;
                   ws.close();
                   onClose();
                   setWs(null);
