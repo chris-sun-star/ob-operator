@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -17,18 +19,17 @@ import (
 func main() {
 	log.Println("SQL Data Collector starting...")
 
-	// Read database credentials from environment variables.
+	// Read configuration from environment variables.
 	obUser := os.Getenv("OB_USER")
 	obPassword := os.Getenv("OB_PASSWORD")
 	obHost := os.Getenv("OB_HOST")
 	obPortStr := os.Getenv("OB_PORT")
+	obTenant := os.Getenv("OB_TENANT")
 
-	if obUser == "" {
-		log.Fatal("Environment variable OB_USER is not set.")
+	if obUser == "" || obPassword == "" || obTenant == "" {
+		log.Fatal("OB_USER, OB_PASSWORD, and OB_TENANT environment variables must be set.")
 	}
-	if obPassword == "" {
-		log.Fatal("Environment variable OB_PASSWORD is not set.")
-	}
+
 	if obHost == "" {
 		obHost = "127.0.0.1"
 	}
@@ -41,25 +42,18 @@ func main() {
 		log.Fatalf("Invalid OB_PORT: %v", err)
 	}
 
-	// Create a new OceanBase data source
+	// Create a new OceanBase data source for the sys tenant.
 	ds := connector.NewOceanBaseDataSource(obHost, obPort, obUser, "sys", obPassword, "oceanbase")
 
 	// Create a new connector
 	conn := database.NewConnector(ds)
-
 	if err := conn.Init(); err != nil {
 		log.Fatalf("Failed to initialize connector: %v", err)
 	}
 
 	// Create a new operation manager
 	manager := operation.NewOceanbaseOperationManager(conn)
-
-	config := &Config{
-		BatchSize: 1000,
-		Interval:  30 * time.Second,
-	}
-
-	duckDBPath := "sql_audit.duckdb"
+	defer manager.Close()
 
 	// Set up a context that is canceled on interruption signals.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -71,12 +65,43 @@ func main() {
 		cancel()
 	}()
 
+	// Wait for the tenant to be created.
+	var obTenantID int64
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("Collector stopped during tenant discovery.")
+			return
+		default:
+		}
+
+		id, err := getTenantIDByName(ctx, manager, obTenant)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				log.Printf("Tenant '%s' not found, retrying in 10 seconds...", obTenant)
+				time.Sleep(10 * time.Second)
+				continue
+			}
+			log.Fatalf("Failed to get tenant ID: %v", err)
+		}
+		obTenantID = id
+		log.Printf("Found tenant '%s' with ID %d", obTenant, obTenantID)
+		break
+	}
+
+	config := &Config{
+		BatchSize: 1000,
+		Interval:  30 * time.Second,
+	}
+
+	duckDBPath := fmt.Sprintf("sql_audit_tenant_%s.duckdb", obTenant)
+
 	// Initialize the OceanBase collector.
-	collector, err := NewCollector(config, manager)
+	collector, err := NewCollector(config, manager, obTenantID)
 	if err != nil {
 		log.Fatalf("Failed to create collector: %v", err)
 	}
-	defer collector.Close()
+	// defer collector.Close() // The manager's close is already deferred
 
 	// Initialize the DuckDB manager.
 	duckdbManager, err := NewDuckDBManager(duckDBPath)

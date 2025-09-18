@@ -23,20 +23,22 @@ type Config struct {
 type Collector struct {
 	manager      *operation.OceanbaseOperationManager
 	config       *Config
+	tenantID     int64
 	requestIdMap sync.Map
 }
 
-// Tenant represents an OceanBase tenant.
+// Tenant represents an OceanBase tenant, used for discovery.
 type Tenant struct {
 	ID   int64  `db:"tenant_id"`
 	Name string `db:"tenant_name"`
 }
 
 // NewCollector creates a new Collector instance.
-func NewCollector(config *Config, manager *operation.OceanbaseOperationManager) (*Collector, error) {
+func NewCollector(config *Config, manager *operation.OceanbaseOperationManager, tenantID int64) (*Collector, error) {
 	return &Collector{
 		manager: manager,
 		config:  config,
+		tenantID: tenantID,
 	}, nil
 }
 
@@ -45,42 +47,45 @@ func (c *Collector) Close() error {
 	return c.manager.Close()
 }
 
-// Collect performs a single collection cycle.
+// getTenantIDByName queries the cluster for a tenant's ID based on its name.
+func getTenantIDByName(ctx context.Context, manager *operation.OceanbaseOperationManager, tenantName string) (int64, error) {
+	var tenant Tenant
+	err := manager.QueryRow(ctx, &tenant, "SELECT tenant_id FROM __all_tenant WHERE tenant_name = ?", tenantName)
+	if err != nil {
+		return 0, err
+	}
+	return tenant.ID, nil
+}
+
+// Collect performs a single collection cycle for the configured tenant.
 func (c *Collector) Collect(ctx context.Context) ([]SqlAuditResult, error) {
 	log.Println("Starting SQL audit collection...")
 
-	servers, err := c.listServers(ctx)
+	servers, err := c.manager.ListServers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list servers: %w", err)
 	}
 
-	tenants, err := c.listTenants(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list tenants: %w", err)
-	}
-
-	log.Printf("Discovered %d servers and %d tenants.", len(servers), len(tenants))
+	log.Printf("Discovered %d servers for tenant %d.", len(servers), c.tenantID)
 
 	var allResults []SqlAuditResult
 	var wg sync.WaitGroup
-	resultChan := make(chan []SqlAuditResult, len(servers)*len(tenants))
+	resultChan := make(chan []SqlAuditResult, len(servers))
 
 	for _, server := range servers {
-		for _, tenant := range tenants {
-			wg.Add(1)
-			go func(s model.OBServer, t Tenant) {
-				defer wg.Done()
-				log.Printf("Collecting for server %s, tenant %d (%s)", s.Ip, t.ID, t.Name)
-				results, err := c.collectForTarget(ctx, s.Ip, t.ID)
-				if err != nil {
-					log.Printf("Failed to collect for server %s, tenant %d: %v", s.Ip, t.ID, err)
-					return
-				}
-				if len(results) > 0 {
-					resultChan <- results
-				}
-			}(server, tenant)
-		}
+		wg.Add(1)
+		go func(s model.OBServer) {
+			defer wg.Done()
+			log.Printf("Collecting for server %s, tenant %d", s.Ip, c.tenantID)
+			results, err := c.collectForTarget(ctx, s.Ip, c.tenantID)
+			if err != nil {
+				log.Printf("Failed to collect for server %s, tenant %d: %v", s.Ip, c.tenantID, err)
+				return
+			}
+			if len(results) > 0 {
+				resultChan <- results
+			}
+		}(server)
 	}
 
 	wg.Wait()
@@ -92,19 +97,6 @@ func (c *Collector) Collect(ctx context.Context) ([]SqlAuditResult, error) {
 
 	log.Printf("Collection finished. Aggregated %d SQL statements in total.", len(allResults))
 	return allResults, nil
-}
-
-func (c *Collector) listServers(ctx context.Context) ([]model.OBServer, error) {
-	return c.manager.ListServers(ctx)
-}
-
-func (c *Collector) listTenants(ctx context.Context) ([]Tenant, error) {
-	var tenants []Tenant
-	err := c.manager.QueryList(ctx, &tenants, "SELECT tenant_id, tenant_name FROM __all_tenant")
-	if err != nil {
-		return nil, err
-	}
-	return tenants, nil
 }
 
 func (c *Collector) collectForTarget(ctx context.Context, svrIP string, tenantID int64) ([]SqlAuditResult, error) {
