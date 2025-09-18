@@ -42,7 +42,7 @@ func main() {
 		log.Fatalf("Invalid OB_PORT: %v", err)
 	}
 
-	// Create a new OceanBase data source for the sys tenant.
+	// Create a new OceanBase data source for the sys tenant to discover the target tenant ID.
 	ds := connector.NewOceanBaseDataSource(obHost, obPort, obUser, "sys", obPassword, "oceanbase")
 
 	// Create a new connector
@@ -65,29 +65,12 @@ func main() {
 		cancel()
 	}()
 
-	// Wait for the tenant to be created.
-	var obTenantID int64
-	for {
-		select {
-		case <-ctx.Done():
-			log.Println("Collector stopped during tenant discovery.")
-			return
-		default:
-		}
-
-		id, err := getTenantIDByName(ctx, manager, obTenant)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				log.Printf("Tenant '%s' not found, retrying in 10 seconds...", obTenant)
-				time.Sleep(10 * time.Second)
-				continue
-			}
-			log.Fatalf("Failed to get tenant ID: %v", err)
-		}
-		obTenantID = id
-		log.Printf("Found tenant '%s' with ID %d", obTenant, obTenantID)
-		break
+	// Get the tenant ID for the specified tenant name.
+	obTenantID, err := getTenantIDByName(ctx, manager, obTenant)
+	if err != nil {
+		log.Fatalf("Failed to get tenant ID for tenant %s: %v", obTenant, err)
 	}
+	log.Printf("Found tenant '%s' with ID %d", obTenant, obTenantID)
 
 	config := &Config{
 		BatchSize: 1000,
@@ -101,7 +84,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create collector: %v", err)
 	}
-	// defer collector.Close() // The manager's close is already deferred
 
 	// Initialize the DuckDB manager.
 	duckdbManager, err := NewDuckDBManager(duckDBPath)
@@ -142,4 +124,17 @@ func runCollection(ctx context.Context, coll *Collector, mgr *DuckDBManager) {
 			log.Printf("Error inserting data into DuckDB: %v", err)
 		}
 	}
+}
+
+// getTenantIDByName queries the cluster for a tenant's ID based on its name.
+func getTenantIDByName(ctx context.Context, manager *operation.OceanbaseOperationManager, tenantName string) (int64, error) {
+	var tenant Tenant
+	err := manager.QueryRow(ctx, &tenant, "SELECT tenant_id FROM __all_tenant WHERE tenant_name = ?", tenantName)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, fmt.Errorf("tenant '%s' not found", tenantName)
+		}
+		return 0, err
+	}
+	return tenant.ID, nil
 }

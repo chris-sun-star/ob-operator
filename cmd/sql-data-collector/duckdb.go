@@ -41,80 +41,39 @@ func (m *DuckDBManager) Close() error {
 }
 
 func (m *DuckDBManager) createTable() error {
-	// The schema is based on the SqlAuditResult struct.
-	// Using appropriate DuckDB data types.
 	query := `
 	CREATE TABLE IF NOT EXISTS sql_audit_stats (
 		CollectTime BIGINT,
-		SqlId VARCHAR,
-		FormatSqlId VARCHAR,
+		SvrIp VARCHAR,
 		TenantId UBIGINT,
-		EffectiveTenantId UBIGINT,
-		TenantName VARCHAR,
 		UserId BIGINT,
-		UserName VARCHAR,
 		DbId UBIGINT,
-		DbName VARCHAR,
-		QuerySql VARCHAR,
-		PlanId BIGINT,
-		TraceId VARCHAR,
+		SqlId VARCHAR,
 		MaxRequestId BIGINT,
-		MinRequestId BIGINT,
-		MaxRequestTime BIGINT,
 		MinRequestTime BIGINT,
-		MaxCpuTime BIGINT,
-		MaxElapsedTime BIGINT,
+		MaxRequestTime BIGINT,
 		Executions BIGINT,
 		AffectedRows BIGINT,
 		ReturnRows BIGINT,
-		PartitionCount BIGINT,
 		FailCount BIGINT,
-		RetCode4012Count BIGINT,
-		RetCode4013Count BIGINT,
-		RetCode5001Count BIGINT,
-		RetCode5024Count BIGINT,
-		RetCode5167Count BIGINT,
-		RetCode5217Count BIGINT,
-		RetCode6002Count BIGINT,
-		Event0WaitTime BIGINT,
-		Event1WaitTime BIGINT,
-		Event2WaitTime BIGINT,
-		Event3WaitTime BIGINT,
-		TotalWaitTimeMicro BIGINT,
-		TotalWaits BIGINT,
-		RpcCount BIGINT,
-		PlanTypeLocalCount BIGINT,
-		PlanTypeRemoteCount BIGINT,
-		PlanTypeDistCount BIGINT,
-		InnerSqlCount BIGINT,
-		ExecutorRpcCount BIGINT,
-		MissPlanCount BIGINT,
 		ElapsedTime BIGINT,
+		MaxElapsedTime BIGINT,
+		CpuTime BIGINT,
+		MaxCpuTime BIGINT,
 		NetTime BIGINT,
 		NetWaitTime BIGINT,
 		QueueTime BIGINT,
 		DecodeTime BIGINT,
 		GetPlanTime BIGINT,
 		ExecuteTime BIGINT,
-		CpuTime BIGINT,
 		ApplicationWaitTime BIGINT,
 		ConcurrencyWaitTime BIGINT,
 		UserIoWaitTime BIGINT,
 		ScheduleTime BIGINT,
-		RowCacheHit BIGINT,
-		BloomFilterCacheHit BIGINT,
-		BlockCacheHit BIGINT,
-		BlockIndexCacheHit BIGINT,
-		DiskReads BIGINT,
-		RetryCount BIGINT,
-		TableScan BIGINT,
-		ConsistencyLevelStrong BIGINT,
-		ConsistencyLevelWeak BIGINT,
+		RpcCount BIGINT,
+		MissPlanCount BIGINT,
 		MemstoreReadRowCount BIGINT,
-		SSStoreReadRowCount BIGINT,
-		ExpectedWorkerCount BIGINT,
-		UsedWorkerCount BIGINT,
-		MemoryUsed BIGINT
+		SSStoreReadRowCount BIGINT
 	);`
 
 	_, err := m.db.Exec(query)
@@ -133,7 +92,6 @@ func (m *DuckDBManager) InsertBatch(results []SqlAuditResult) error {
 	}
 	defer conn.Close()
 
-	// Use conn.Raw to get access to the underlying driver.Conn
 	err = conn.Raw(func(driverConn interface{}) error {
 		dc, ok := driverConn.(driver.Conn)
 		if !ok {
@@ -148,22 +106,13 @@ func (m *DuckDBManager) InsertBatch(results []SqlAuditResult) error {
 
 		for _, res := range results {
 			err := appender.AppendRow(
-				res.CollectTime, res.SqlId, res.FormatSqlId, res.TenantId, res.EffectiveTenantId,
-				res.TenantName, res.UserId, res.UserName, res.DbId, res.DbName, res.QuerySql,
-				res.PlanId, res.TraceId, res.MaxRequestId, res.MinRequestId, res.MaxRequestTime,
-				res.MinRequestTime, res.MaxCpuTime, res.MaxElapsedTime, res.Executions, res.AffectedRows,
-				res.ReturnRows, res.PartitionCount, res.FailCount, res.RetCode4012Count, res.RetCode4013Count,
-				res.RetCode5001Count, res.RetCode5024Count, res.RetCode5167Count, res.RetCode5217Count,
-				res.RetCode6002Count, res.Event0WaitTime, res.Event1WaitTime, res.Event2WaitTime,
-				res.Event3WaitTime, res.TotalWaitTimeMicro, res.TotalWaits, res.RpcCount,
-				res.PlanTypeLocalCount, res.PlanTypeRemoteCount, res.PlanTypeDistCount, res.InnerSqlCount,
-				res.ExecutorRpcCount, res.MissPlanCount, res.ElapsedTime, res.NetTime, res.NetWaitTime,
-				res.QueueTime, res.DecodeTime, res.GetPlanTime, res.ExecuteTime, res.CpuTime,
-				res.ApplicationWaitTime, res.ConcurrencyWaitTime, res.UserIoWaitTime, res.ScheduleTime,
-				res.RowCacheHit, res.BloomFilterCacheHit, res.BlockCacheHit, res.BlockIndexCacheHit,
-				res.DiskReads, res.RetryCount, res.TableScan, res.ConsistencyLevelStrong,
-				res.ConsistencyLevelWeak, res.MemstoreReadRowCount, res.SSStoreReadRowCount,
-				res.ExpectedWorkerCount, res.UsedWorkerCount, res.MemoryUsed,
+				res.CollectTime, res.SvrIp, res.TenantId, res.UserId, res.DbId, res.SqlId,
+				res.MaxRequestId, res.MinRequestTime, res.MaxRequestTime, res.Executions,
+				res.AffectedRows, res.ReturnRows, res.FailCount, res.ElapsedTime, res.MaxElapsedTime,
+				res.CpuTime, res.MaxCpuTime, res.NetTime, res.NetWaitTime, res.QueueTime, res.DecodeTime,
+				res.GetPlanTime, res.ExecuteTime, res.ApplicationWaitTime, res.ConcurrencyWaitTime,
+				res.UserIoWaitTime, res.ScheduleTime, res.RpcCount, res.MissPlanCount,
+				res.MemstoreReadRowCount, res.SSStoreReadRowCount,
 			)
 			if err != nil {
 				return fmt.Errorf("error appending row: %w", err)
