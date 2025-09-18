@@ -2,26 +2,22 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"sync"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/model"
 	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/operation"
 )
 
 // Config holds the configuration for the collector.
 type Config struct {
-	Interval  time.Duration `yaml:"interval"`
-	BatchSize int64         `yaml:"batchSize"`
+	Interval time.Duration `yaml:"interval"`
 }
 
 // Collector manages the data collection from OceanBase.
 type Collector struct {
-	manager      *operation.OceanbaseOperationManager
 	config       *Config
 	tenantID     int64
 	requestIdMap sync.Map
@@ -33,49 +29,66 @@ type Tenant struct {
 	Name string `db:"tenant_name"`
 }
 
-// NewCollector creates a new Collector instance.
-func NewCollector(config *Config, manager *operation.OceanbaseOperationManager, tenantID int64) (*Collector, error) {
-	return &Collector{
-		manager:  manager,
-		config:   config,
-		tenantID: tenantID,
-	}, nil
+// ObserverStat holds the latest request_id for an observer.
+type ObserverStat struct {
+	SvrIP        string `db:"svr_ip"`
+	MaxRequestId int64  `db:"max_request_id"`
 }
 
-// Close is a no-op since the manager's lifecycle is handled in main.
-func (c *Collector) Close() error {
-	return nil
+// NewCollector creates a new Collector instance.
+func NewCollector(config *Config, tenantID int64) *Collector {
+	return &Collector{
+		config:   config,
+		tenantID: tenantID,
+	}
 }
 
 // Collect performs a single collection cycle for the configured tenant.
-func (c *Collector) Collect(ctx context.Context) ([]SqlAuditResult, error) {
+func (c *Collector) Collect(ctx context.Context, manager *operation.OceanbaseOperationManager) ([]SqlAuditResult, error) {
 	log.Println("Starting SQL audit collection...")
 
-	servers, err := c.manager.ListServers(ctx)
+	observerStats, err := c.getObserverStats(ctx, manager)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list servers: %w", err)
+		return nil, fmt.Errorf("failed to get observer stats: %w", err)
 	}
 
-	log.Printf("Discovered %d servers for tenant %d.", len(servers), c.tenantID)
+	log.Printf("Found %d observers with data for tenant %d.", len(observerStats), c.tenantID)
 
 	var allResults []SqlAuditResult
 	var wg sync.WaitGroup
-	resultChan := make(chan []SqlAuditResult, len(servers))
+	resultChan := make(chan []SqlAuditResult, len(observerStats))
 
-	for _, server := range servers {
-		wg.Add(1)
-		go func(s model.OBServer) {
-			defer wg.Done()
-			log.Printf("Collecting for server %s, tenant %d", s.Ip, c.tenantID)
-			results, err := c.collectAndAggregate(ctx, s.Ip, c.tenantID)
-			if err != nil {
-				log.Printf("Failed to collect for server %s, tenant %d: %v", s.Ip, c.tenantID, err)
-				return
-			}
-			if len(results) > 0 {
-				resultChan <- results
-			}
-		}(server)
+	for _, stat := range observerStats {
+		key := fmt.Sprintf("%s-%d", stat.SvrIP, c.tenantID)
+		lastMaxRequestId, _ := c.requestIdMap.Load(key)
+		if lastMaxRequestId == nil {
+			lastMaxRequestId = int64(0)
+		}
+
+		if stat.MaxRequestId != lastMaxRequestId.(int64) {
+			wg.Add(1)
+			go func(s ObserverStat) {
+				defer wg.Done()
+				startId := lastMaxRequestId.(int64) + 1
+				// Handle observer restart
+				if s.MaxRequestId < lastMaxRequestId.(int64) {
+					log.Printf("Observer restart detected for %s. Resetting start request_id.", key)
+					startId = 0 // Reset to collect from the beginning
+				}
+
+				log.Printf("Collecting for server %s, tenant %d", s.SvrIP, c.tenantID)
+				results, err := c.collectAndAggregate(ctx, manager, s.SvrIP, c.tenantID, startId, s.MaxRequestId)
+				if err != nil {
+					log.Printf("Failed to collect for server %s, tenant %d: %v", s.SvrIP, c.tenantID, err)
+					return
+				}
+				if len(results) > 0 {
+					resultChan <- results
+				}
+			}(stat)
+		} else {
+			log.Printf("No new data for server %s, tenant %d. Skipping.", stat.SvrIP, c.tenantID)
+		}
 	}
 
 	wg.Wait()
@@ -89,39 +102,24 @@ func (c *Collector) Collect(ctx context.Context) ([]SqlAuditResult, error) {
 	return allResults, nil
 }
 
-func (c *Collector) collectAndAggregate(ctx context.Context, svrIP string, tenantID int64) ([]SqlAuditResult, error) {
+func (c *Collector) getObserverStats(ctx context.Context, manager *operation.OceanbaseOperationManager) ([]ObserverStat, error) {
+	var stats []ObserverStat
+	query := fmt.Sprintf(selectObserverStats, globalSqlAuditTableName)
+	err := manager.Connector.GetClient().SelectContext(ctx, &stats, query, c.tenantID)
+	if err != nil {
+		return nil, err
+	}
+	return stats, nil
+}
+
+func (c *Collector) collectAndAggregate(ctx context.Context, manager *operation.OceanbaseOperationManager, svrIP string, tenantID int64, startRequestId, maxRequestId int64) ([]SqlAuditResult, error) {
 	key := fmt.Sprintf("%s-%d", svrIP, tenantID)
 
-	maxRequestId, minRequestId, err := c.getMaxMinRequestID(ctx, svrIP, tenantID)
-	if err != nil {
-		return nil, fmt.Errorf("could not get max/min request_id: %w", err)
-	}
-
-	lastStartRequestId, _ := c.requestIdMap.Load(key)
-	if lastStartRequestId == nil {
-		lastStartRequestId = int64(0)
-	}
-	startRequestId := lastStartRequestId.(int64) + 1
-
-	if startRequestId == 1 { // First run for this target
-		startRequestId = minRequestId
-	}
-
-	if maxRequestId > 0 && maxRequestId < (startRequestId-1) {
-		log.Printf("Request ID reset for %s. Max ID (%d) < Start ID (%d). Resetting to min ID (%d).", key, maxRequestId, startRequestId, minRequestId)
-		startRequestId = minRequestId
-	}
-
-	if maxRequestId <= lastStartRequestId.(int64) {
-		log.Printf("No new data for %s.", key)
-		return nil, nil
-	}
-
 	var results []SqlAuditResult
-	query := fmt.Sprintf(aggregatedSqlAuditQuery, globalSqlAuditTableName)
+	query := fmt.Sprintf(aggregatedSqlAuditQuery, time.Now().UnixMicro(), globalSqlAuditTableName)
 	args := []interface{}{svrIP, tenantID, startRequestId, maxRequestId}
 
-	err = c.manager.Connector.GetClient().SelectContext(ctx, &results, query, args...)
+	err := manager.Connector.GetClient().SelectContext(ctx, &results, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query aggregated sql audit: %w", err)
 	}
@@ -138,22 +136,6 @@ func (c *Collector) collectAndAggregate(ctx context.Context, svrIP string, tenan
 	}
 
 	return results, nil
-}
-
-func (c *Collector) getMaxMinRequestID(ctx context.Context, svrIP string, tenantID int64) (max int64, min int64, err error) {
-	endTime := time.Now()
-	startTime := endTime.Add(c.config.Interval * -2)
-
-	query := fmt.Sprintf(selectMaxMinRequestId, globalSqlAuditTableName)
-	row := c.manager.Connector.GetClient().QueryRowxContext(ctx, query, svrIP, tenantID, startTime.UnixMicro(), endTime.UnixMicro())
-	err = row.Scan(&max, &min)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return 0, 0, nil
-		}
-		return 0, 0, err
-	}
-	return max, min, nil
 }
 
 // --- Data Structures ---
@@ -199,11 +181,11 @@ const (
 )
 
 const (
-	selectMaxMinRequestId = `SELECT IFNULL(MAX(request_id), 0), IFNULL(MIN(request_id), 0) FROM %s WHERE svr_ip = ? AND tenant_id = ? AND request_time >= ? AND request_time < ?`
+	selectObserverStats = `SELECT svr_ip, MAX(request_id) as max_request_id FROM %s WHERE tenant_id = ? GROUP BY svr_ip`
 
 	aggregatedSqlAuditQuery = `
     SELECT
-        time_to_usec(now()) AS collect_time,
+        %d AS collect_time,
         svr_ip,
         tenant_id,
         user_id,

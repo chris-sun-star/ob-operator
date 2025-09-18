@@ -7,53 +7,97 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
-	"github.com/oceanbase/ob-operator/pkg/database"
-	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/connector"
+	"github.com/go-logr/logr"
+	"github.com/oceanbase/ob-operator/api/v1alpha1"
+	"github.com/oceanbase/ob-operator/internal/resource/utils"
 	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/operation"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
+// ConnectionManager handles the connection to the OceanBase cluster.
+type ConnectionManager struct {
+	k8sClient          client.Client
+	logger             logr.Logger
+	obcluster          *v1alpha1.OBCluster
+	cachedConnection   *operation.OceanbaseOperationManager
+	mu                 sync.Mutex
+}
+
+// NewConnectionManager creates a new ConnectionManager.
+func NewConnectionManager(k8sClient client.Client, logger logr.Logger, obcluster *v1alpha1.OBCluster) *ConnectionManager {
+	return &ConnectionManager{
+		k8sClient: k8sClient,
+		logger:    logger,
+		obcluster: obcluster,
+	}
+}
+
+// GetConnection returns a valid OceanBaseOperationManager, handling reconnection if necessary.
+func (cm *ConnectionManager) GetConnection(ctx context.Context) (*operation.OceanbaseOperationManager, error) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	if cm.cachedConnection != nil && cm.cachedConnection.Connector.IsAlive() {
+		log.Println("Using cached connection.")
+		return cm.cachedConnection, nil
+	}
+
+	log.Println("Cached connection is not alive, creating a new one...")
+	if cm.cachedConnection != nil {
+		cm.cachedConnection.Close()
+	}
+
+	manager, err := utils.GetSysOperationClient(cm.k8sClient, &cm.logger, cm.obcluster)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get OceanBase operation manager: %w", err)
+	}
+
+	cm.cachedConnection = manager
+	log.Println("Successfully created a new connection.")
+	return cm.cachedConnection, nil
+}
+
+// Close closes the cached connection.
+func (cm *ConnectionManager) Close() {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	if cm.cachedConnection != nil {
+		cm.cachedConnection.Close()
+	}
+}
+
 func main() {
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	log.Println("SQL Data Collector starting...")
 
 	// Read configuration from environment variables.
-	obUser := os.Getenv("OB_USER")
-	obPassword := os.Getenv("OB_PASSWORD")
-	obHost := os.Getenv("OB_HOST")
-	obPortStr := os.Getenv("OB_PORT")
+	obClusterName := os.Getenv("OB_CLUSTER_NAME")
+	obClusterNamespace := os.Getenv("OB_CLUSTER_NAMESPACE")
 	obTenant := os.Getenv("OB_TENANT")
 
-	if obUser == "" || obPassword == "" || obTenant == "" {
-		log.Fatal("OB_USER, OB_PASSWORD, and OB_TENANT environment variables must be set.")
+	if obClusterName == "" || obClusterNamespace == "" || obTenant == "" {
+		log.Fatal("OB_CLUSTER_NAME, OB_CLUSTER_NAMESPACE, and OB_TENANT environment variables must be set.")
 	}
 
-	if obHost == "" {
-		obHost = "127.0.0.1"
-	}
-	if obPortStr == "" {
-		obPortStr = "2881"
-	}
-
-	obPort, err := strconv.ParseInt(obPortStr, 10, 64)
+	// Create a Kubernetes client.
+	k8sConfig, err := config.GetConfig()
 	if err != nil {
-		log.Fatalf("Invalid OB_PORT: %v", err)
+		log.Fatalf("Failed to get Kubernetes config: %v", err)
 	}
-
-	// Create a new OceanBase data source for the sys tenant to discover the target tenant ID.
-	ds := connector.NewOceanBaseDataSource(obHost, obPort, obUser, "sys", obPassword, "oceanbase")
-
-	// Create a new connector
-	conn := database.NewConnector(ds)
-	if err := conn.Init(); err != nil {
-		log.Fatalf("Failed to initialize connector: %v", err)
+	v1alpha1.AddToScheme(scheme.Scheme)
+	k8sClient, err := client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
+	if err != nil {
+		log.Fatalf("Failed to create Kubernetes client: %v", err)
 	}
-
-	// Create a new operation manager
-	manager := operation.NewOceanbaseOperationManager(conn)
-	defer manager.Close()
 
 	// Set up a context that is canceled on interruption signals.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -65,25 +109,37 @@ func main() {
 		cancel()
 	}()
 
-	// Get the tenant ID for the specified tenant name.
-	obTenantID, err := getTenantIDByName(ctx, manager, obTenant)
+	// Get the OBCluster resource.
+	obcluster := &v1alpha1.OBCluster{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Name: obClusterName, Namespace: obClusterNamespace}, obcluster); err != nil {
+		log.Fatalf("Failed to get OBCluster resource: %v", err)
+	}
+
+	// Create the connection manager.
+	logger := logf.Log.WithName("collector")
+	connManager := NewConnectionManager(k8sClient, logger, obcluster)
+	defer connManager.Close()
+
+	// Get an initial connection to retrieve the tenant ID.
+	initialManager, err := connManager.GetConnection(ctx)
+	if err != nil {
+		log.Fatalf("Failed to get initial OceanBase connection: %v", err)
+	}
+
+	obTenantID, err := getTenantIDByName(ctx, initialManager, obTenant)
 	if err != nil {
 		log.Fatalf("Failed to get tenant ID for tenant %s: %v", obTenant, err)
 	}
 	log.Printf("Found tenant '%s' with ID %d", obTenant, obTenantID)
 
 	config := &Config{
-		BatchSize: 1000,
-		Interval:  30 * time.Second,
+		Interval: 30 * time.Second,
 	}
 
 	duckDBPath := fmt.Sprintf("sql_audit_tenant_%s.duckdb", obTenant)
 
 	// Initialize the OceanBase collector.
-	collector, err := NewCollector(config, manager, obTenantID)
-	if err != nil {
-		log.Fatalf("Failed to create collector: %v", err)
-	}
+	collector := NewCollector(config, obTenantID)
 
 	// Initialize the DuckDB manager.
 	duckdbManager, err := NewDuckDBManager(duckDBPath)
@@ -97,12 +153,12 @@ func main() {
 	defer ticker.Stop()
 
 	// Run a collection immediately at startup.
-	runCollection(ctx, collector, duckdbManager)
+	runCollection(ctx, connManager, collector, duckdbManager)
 
 	for {
 		select {
 		case <-ticker.C:
-			runCollection(ctx, collector, duckdbManager)
+			runCollection(ctx, connManager, collector, duckdbManager)
 		case <-ctx.Done():
 			log.Println("Collector stopped.")
 			return
@@ -111,16 +167,24 @@ func main() {
 }
 
 // runCollection performs one full collection and insertion cycle.
-func runCollection(ctx context.Context, coll *Collector, mgr *DuckDBManager) {
+func runCollection(ctx context.Context, connMgr *ConnectionManager, coll *Collector, duckdbMgr *DuckDBManager) {
 	log.Println("Running collection cycle...")
-	results, err := coll.Collect(ctx)
+
+	// Get a valid connection for this cycle.
+	manager, err := connMgr.GetConnection(ctx)
+	if err != nil {
+		log.Printf("Error getting connection: %v", err)
+		return
+	}
+
+	results, err := coll.Collect(ctx, manager)
 	if err != nil {
 		log.Printf("Error during collection: %v", err)
 		return
 	}
 
 	if len(results) > 0 {
-		if err := mgr.InsertBatch(results); err != nil {
+		if err := duckdbMgr.InsertBatch(results); err != nil {
 			log.Printf("Error inserting data into DuckDB: %v", err)
 		}
 	}
