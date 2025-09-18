@@ -1,4 +1,3 @@
-
 package main
 
 import (
@@ -10,107 +9,147 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/model"
+	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/operation"
 )
 
 // Config holds the configuration for the collector.
 type Config struct {
-	DSN       string        `yaml:"dsn"`
 	BatchSize int64         `yaml:"batchSize"`
 	Interval  time.Duration `yaml:"interval"`
 }
 
 // Collector manages the data collection from OceanBase.
 type Collector struct {
-	db           *sql.DB
+	manager      *operation.OceanbaseOperationManager
 	config       *Config
 	requestIdMap sync.Map
 }
 
+// Tenant represents an OceanBase tenant.
+type Tenant struct {
+	ID   int64  `db:"tenant_id"`
+	Name string `db:"tenant_name"`
+}
+
 // NewCollector creates a new Collector instance.
-func NewCollector(config *Config) (*Collector, error) {
-	db, err := sql.Open("mysql", config.DSN)
-	if err != nil {
-		return nil, err
-	}
-	if err := db.Ping(); err != nil {
-		return nil, err
-	}
+func NewCollector(config *Config, manager *operation.OceanbaseOperationManager) (*Collector, error) {
 	return &Collector{
-		db:     db,
-		config: config,
+		manager: manager,
+		config:  config,
 	}, nil
 }
 
 // Close closes the database connection.
 func (c *Collector) Close() error {
-	return c.db.Close()
+	return c.manager.Close()
 }
 
 // Collect performs a single collection cycle.
 func (c *Collector) Collect(ctx context.Context) ([]SqlAuditResult, error) {
 	log.Println("Starting SQL audit collection...")
-	results, err := c.doCollect(ctx)
+
+	servers, err := c.listServers(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("collection failed: %w", err)
+		return nil, fmt.Errorf("failed to list servers: %w", err)
 	}
-	log.Printf("Collection finished. Aggregated %d SQL statements.", len(results))
-	return results, nil
+
+	tenants, err := c.listTenants(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tenants: %w", err)
+	}
+
+	log.Printf("Discovered %d servers and %d tenants.", len(servers), len(tenants))
+
+	var allResults []SqlAuditResult
+	var wg sync.WaitGroup
+	resultChan := make(chan []SqlAuditResult, len(servers)*len(tenants))
+
+	for _, server := range servers {
+		for _, tenant := range tenants {
+			wg.Add(1)
+			go func(s model.OBServer, t Tenant) {
+				defer wg.Done()
+				log.Printf("Collecting for server %s, tenant %d (%s)", s.Ip, t.ID, t.Name)
+				results, err := c.collectForTarget(ctx, s.Ip, t.ID)
+				if err != nil {
+					log.Printf("Failed to collect for server %s, tenant %d: %v", s.Ip, t.ID, err)
+					return
+				}
+				if len(results) > 0 {
+					resultChan <- results
+				}
+			}(server, tenant)
+		}
+	}
+
+	wg.Wait()
+	close(resultChan)
+
+	for res := range resultChan {
+		allResults = append(allResults, res...)
+	}
+
+	log.Printf("Collection finished. Aggregated %d SQL statements in total.", len(allResults))
+	return allResults, nil
 }
 
-func (c *Collector) doCollect(ctx context.Context) ([]SqlAuditResult, error) {
-	// In this simplified version, we collect for all tenants at once.
-	// The original had per-tenant collection logic which can be added back if needed.
+func (c *Collector) listServers(ctx context.Context) ([]model.OBServer, error) {
+	return c.manager.ListServers(ctx)
+}
 
-	// 1. Get the max and min request_id to define the collection window.
-	maxRequestId, minRequestId, err := c.getMaxMinRequestID(ctx)
+func (c *Collector) listTenants(ctx context.Context) ([]Tenant, error) {
+	var tenants []Tenant
+	err := c.manager.QueryList(ctx, &tenants, "SELECT tenant_id, tenant_name FROM __all_tenant")
+	if err != nil {
+		return nil, err
+	}
+	return tenants, nil
+}
+
+func (c *Collector) collectForTarget(ctx context.Context, svrIP string, tenantID int64) ([]SqlAuditResult, error) {
+	key := fmt.Sprintf("%s-%d", svrIP, tenantID)
+
+	maxRequestId, minRequestId, err := c.getMaxMinRequestID(ctx, svrIP, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("could not get max/min request_id: %w", err)
 	}
 
-	// 2. Determine the starting request_id for this collection cycle.
-	lastStartRequestId, _ := c.requestIdMap.Load("all_tenants")
+	lastStartRequestId, _ := c.requestIdMap.Load(key)
 	if lastStartRequestId == nil {
 		lastStartRequestId = int64(0)
 	}
 	startRequestId := lastStartRequestId.(int64) + 1
 
-	if startRequestId == 1 { // First run
+	if startRequestId == 1 { // First run for this target
 		startRequestId = minRequestId
 	}
 
-	// Handle observer restarts where request_id might reset.
 	if maxRequestId > 0 && maxRequestId < (startRequestId-1) {
-		log.Printf("Request ID reset detected. Max ID (%d) < Start ID (%d). Resetting to min ID (%d).", maxRequestId, startRequestId, minRequestId)
+		log.Printf("Request ID reset for %s. Max ID (%d) < Start ID (%d). Resetting to min ID (%d).", key, maxRequestId, startRequestId, minRequestId)
 		startRequestId = minRequestId
 	}
 
 	if maxRequestId <= lastStartRequestId.(int64) {
-		log.Println("No new SQL audit data to collect.")
+		log.Printf("No new data for %s.", key)
 		return nil, nil
 	}
 
-	log.Printf("Collecting SQL audit data from request_id %d to %d", startRequestId, maxRequestId)
-
-	// 3. Query the raw data.
-	rows, err := c.querySqlAuditRaw(ctx, startRequestId, maxRequestId)
+	rows, err := c.querySqlAuditRaw(ctx, svrIP, tenantID, startRequestId, maxRequestId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query sql audit raw: %w", err)
 	}
 	defer rows.Close()
 
-	// 4. Parse and aggregate the results.
 	aggregatedResults, newMaxRequestId, err := c.parseSqlAuditResults(ctx, rows)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse sql audit results: %w", err)
 	}
 
-	// 5. Store the new max request_id for the next cycle.
 	if newMaxRequestId > 0 {
-		c.requestIdMap.Store("all_tenants", newMaxRequestId)
-		log.Printf("Updated max request_id to %d for next cycle.", newMaxRequestId)
+		c.requestIdMap.Store(key, newMaxRequestId)
 	}
 
-	// 6. Convert map to slice
 	finalResults := make([]SqlAuditResult, 0, len(aggregatedResults))
 	for _, result := range aggregatedResults {
 		finalResults = append(finalResults, result)
@@ -119,14 +158,12 @@ func (c *Collector) doCollect(ctx context.Context) ([]SqlAuditResult, error) {
 	return finalResults, nil
 }
 
-func (c *Collector) getMaxMinRequestID(ctx context.Context) (max int64, min int64, err error) {
-	// Simplified query to get the min/max request_id in the last 2 intervals.
-	// This helps define a reasonable window to avoid collecting very old data on the first run.
+func (c *Collector) getMaxMinRequestID(ctx context.Context, svrIP string, tenantID int64) (max int64, min int64, err error) {
 	endTime := time.Now()
 	startTime := endTime.Add(c.config.Interval * -2)
 
-	query := fmt.Sprintf(selectMaxMinRequestId, sqlAuditTableNameForObVersion4)
-	err = c.db.QueryRowContext(ctx, query, startTime.UnixNano()/1000, endTime.UnixNano()/1000).Scan(&max, &min)
+	query := fmt.Sprintf(selectMaxMinRequestId, globalSqlAuditTableName)
+	err = c.manager.Connector.GetClient().QueryRowxContext(ctx, query, svrIP, tenantID, startTime.UnixNano()/1000, endTime.UnixNano()/1000).Scan(&max, &min)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return 0, 0, nil
@@ -136,21 +173,18 @@ func (c *Collector) getMaxMinRequestID(ctx context.Context) (max int64, min int6
 	return max, min, nil
 }
 
-func (c *Collector) querySqlAuditRaw(ctx context.Context, minRequestId int64, maxRequestId int64) (*sql.Rows, error) {
-	query := fmt.Sprintf(sqlAuditRawQuery, sqlAuditTableNameForObVersion4)
-	args := []interface{}{minRequestId, maxRequestId, c.config.BatchSize}
-	return c.db.QueryContext(ctx, query, args...)
+func (c *Collector) querySqlAuditRaw(ctx context.Context, svrIP string, tenantID int64, minRequestId int64, maxRequestId int64) (*sql.Rows, error) {
+	query := fmt.Sprintf(sqlAuditRawQuery, globalSqlAuditTableName)
+	args := []interface{}{svrIP, tenantID, minRequestId, maxRequestId, c.config.BatchSize}
+	return c.manager.Connector.GetClient().QueryContext(ctx, query, args...)
 }
 
 func (c *Collector) parseSqlAuditResults(ctx context.Context, rows *sql.Rows) (map[SqlAuditKey]SqlAuditResult, int64, error) {
 	aggregatedResults := make(map[SqlAuditKey]SqlAuditResult)
 	var innerMaxRequestId int64 = 0
-	var rowCount int64 = 0
 
 	for rows.Next() {
-		rowCount++
 		rawResult := &SqlAuditRawResult{}
-		// The number of columns must match the `sqlAuditRawQuery`
 		err := rows.Scan(
 			&rawResult.SvrIp, &rawResult.SqlId, &rawResult.TenantId, &rawResult.TenantName,
 			&rawResult.UserId, &rawResult.UserName, &rawResult.DbId, &rawResult.DbName,
@@ -172,7 +206,6 @@ func (c *Collector) parseSqlAuditResults(ctx context.Context, rows *sql.Rows) (m
 			&rawResult.ScheduleTime, &rawResult.RowCacheHit, &rawResult.BloomFilterCacheHit, &rawResult.BlockCacheHit,
 			&rawResult.DiskReads, &rawResult.RetryCount, &rawResult.TableScan, &rawResult.MemstoreReadRowCount,
 			&rawResult.SSStoreReadRowCount, &rawResult.QuerySql,
-			// Extended columns for OB 4.0+
 			&rawResult.BlockIndexCacheHit, &rawResult.ExpectedWorkerCount, &rawResult.UsedWorkerCount,
 			&rawResult.MemoryUsed, &rawResult.TransactionHash, &rawResult.EffectiveTenantId,
 			&rawResult.ParamsValue, &rawResult.FltTraceId, &rawResult.FormatSqlId, &rawResult.PlanHash,
@@ -184,12 +217,10 @@ func (c *Collector) parseSqlAuditResults(ctx context.Context, rows *sql.Rows) (m
 
 		innerMaxRequestId = rawResult.RequestId
 
-		// Basic validation
 		if len(rawResult.SqlId) == 0 || len(rawResult.TenantName) == 0 {
 			continue
 		}
 
-		// Key for aggregation
 		auditKey := SqlAuditKey{
 			TenantId: rawResult.TenantId,
 			UserId:   rawResult.UserId,
@@ -199,7 +230,6 @@ func (c *Collector) parseSqlAuditResults(ctx context.Context, rows *sql.Rows) (m
 
 		convertedResult := convertToSqlAuditResult(rawResult)
 
-		// Aggregate
 		if existing, found := aggregatedResults[auditKey]; found {
 			aggregatedResults[auditKey] = aggregateGroupBySqlId(&existing, &convertedResult)
 		} else {
@@ -214,7 +244,7 @@ func (c *Collector) parseSqlAuditResults(ctx context.Context, rows *sql.Rows) (m
 	return aggregatedResults, innerMaxRequestId, nil
 }
 
-// --- Data Structures (from ocp-agent) ---
+// --- Data Structures ---
 
 type SqlAuditKey struct {
 	TenantId uint64
@@ -385,16 +415,15 @@ type SqlAuditRawResult struct {
 	PlanHash               int64
 }
 
-// --- Constants ---
+// --- SQL Constants ---
 
 const (
-	sqlAuditTableNameForObVersion4 = "V$OB_SQL_AUDIT"
+	globalSqlAuditTableName = "gv$ob_sql_audit"
 )
 
 const (
-	selectMaxMinRequestId = "SELECT IFNULL(MAX(request_id), 0), IFNULL(MIN(request_id), 0) FROM %s WHERE (request_time + elapsed_time) >= ? AND (request_time + elapsed_time) < ?"
+	selectMaxMinRequestId = `SELECT IFNULL(MAX(request_id), 0), IFNULL(MIN(request_id), 0) FROM %s WHERE svr_ip = ? AND tenant_id = ? AND (request_time + elapsed_time) >= ? AND (request_time + elapsed_time) < ?`
 
-	// This query is for OceanBase 4.0+
 	sqlAuditRawQuery = `
     SELECT
         svr_ip, sql_id, tenant_id, tenant_name, user_id, user_name, db_id, db_name,
@@ -431,6 +460,6 @@ const (
 		0 as block_index_cache_hit, expected_worker_count, used_worker_count, request_memory_used,
 		tx_id as transaction_hash, effective_tenant_id, params_value, flt_trace_id, format_sql_id, plan_hash
     FROM %s
-    WHERE request_id >= ? AND request_id <= ?
+    WHERE svr_ip = ? AND tenant_id = ? AND request_id >= ? AND request_id <= ?
     LIMIT ?`
 )

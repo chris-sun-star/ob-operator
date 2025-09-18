@@ -2,12 +2,16 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
+
+	"github.com/oceanbase/ob-operator/pkg/database"
+	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/connector"
+	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/operation"
 )
 
 func main() {
@@ -16,6 +20,8 @@ func main() {
 	// Read database credentials from environment variables.
 	obUser := os.Getenv("OB_USER")
 	obPassword := os.Getenv("OB_PASSWORD")
+	obHost := os.Getenv("OB_HOST")
+	obPortStr := os.Getenv("OB_PORT")
 
 	if obUser == "" {
 		log.Fatal("Environment variable OB_USER is not set.")
@@ -23,12 +29,32 @@ func main() {
 	if obPassword == "" {
 		log.Fatal("Environment variable OB_PASSWORD is not set.")
 	}
+	if obHost == "" {
+		obHost = "127.0.0.1"
+	}
+	if obPortStr == "" {
+		obPortStr = "2881"
+	}
 
-	// TODO: The host and port should be discovered dynamically for all observers.
-	dsn := fmt.Sprintf("%s:%s@tcp(127.0.0.1:2881)/oceanbase?parseTime=true", obUser, obPassword)
+	obPort, err := strconv.ParseInt(obPortStr, 10, 64)
+	if err != nil {
+		log.Fatalf("Invalid OB_PORT: %v", err)
+	}
+
+	// Create a new OceanBase data source
+	ds := connector.NewOceanBaseDataSource(obHost, obPort, obUser, "sys", obPassword, "oceanbase")
+
+	// Create a new connector
+	conn := database.NewConnector(ds)
+
+	if err := conn.Init(); err != nil {
+		log.Fatalf("Failed to initialize connector: %v", err)
+	}
+
+	// Create a new operation manager
+	manager := operation.NewOceanbaseOperationManager(conn)
 
 	config := &Config{
-		DSN:      dsn,
 		BatchSize: 1000,
 		Interval:  30 * time.Second,
 	}
@@ -46,7 +72,7 @@ func main() {
 	}()
 
 	// Initialize the OceanBase collector.
-	collector, err := NewCollector(config)
+	collector, err := NewCollector(config, manager)
 	if err != nil {
 		log.Fatalf("Failed to create collector: %v", err)
 	}
