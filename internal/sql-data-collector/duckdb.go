@@ -1,4 +1,4 @@
-package main
+package sqldatacollector
 
 import (
 	"context"

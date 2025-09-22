@@ -14,6 +14,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/oceanbase/ob-operator/api/v1alpha1"
 	"github.com/oceanbase/ob-operator/internal/resource/utils"
+	"github.com/oceanbase/ob-operator/internal/sql-data-collector"
 	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/operation"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -132,17 +133,17 @@ func main() {
 	}
 	log.Printf("Found tenant '%s' with ID %d", obTenant, obTenantID)
 
-	config := &Config{
+	config := &sqldatacollector.Config{
 		Interval: 30 * time.Second,
 	}
 
 	duckDBPath := fmt.Sprintf("sql_audit_tenant_%s.duckdb", obTenant)
 
 	// Initialize the OceanBase collector.
-	collector := NewCollector(config, obTenantID)
+	collector := sqldatacollector.NewCollector(config, obTenantID)
 
 	// Initialize the DuckDB manager.
-	duckdbManager, err := NewDuckDBManager(duckDBPath)
+	duckdbManager, err := sqldatacollector.NewDuckDBManager(duckDBPath)
 	if err != nil {
 		log.Fatalf("Failed to create DuckDB manager: %v", err)
 	}
@@ -167,7 +168,7 @@ func main() {
 }
 
 // runCollection performs one full collection and insertion cycle.
-func runCollection(ctx context.Context, connMgr *ConnectionManager, coll *Collector, duckdbMgr *DuckDBManager) {
+func runCollection(ctx context.Context, connMgr *ConnectionManager, coll *sqldatacollector.Collector, duckdbMgr *sqldatacollector.DuckDBManager) {
 	log.Println("Running collection cycle...")
 
 	// Get a valid connection for this cycle.
@@ -192,7 +193,7 @@ func runCollection(ctx context.Context, connMgr *ConnectionManager, coll *Collec
 
 // getTenantIDByName queries the cluster for a tenant's ID based on its name.
 func getTenantIDByName(ctx context.Context, manager *operation.OceanbaseOperationManager, tenantName string) (int64, error) {
-	var tenant Tenant
+	var tenant sqldatacollector.Tenant
 	err := manager.QueryRow(ctx, &tenant, "SELECT tenant_id FROM __all_tenant WHERE tenant_name = ?", tenantName)
 	if err != nil {
 		if err == sql.ErrNoRows {
