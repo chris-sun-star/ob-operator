@@ -2,8 +2,6 @@ module github.com/oceanbase/ob-operator
 
 go 1.24
 
-toolchain go1.24.4
-
 require (
 	github.com/casbin/casbin/v2 v2.97.0
 	github.com/deckarep/golang-set v1.8.0
