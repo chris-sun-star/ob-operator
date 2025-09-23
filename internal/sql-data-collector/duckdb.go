@@ -22,14 +22,13 @@ func NewDuckDBManager(path string) (*DuckDBManager, error) {
 
 	_, err = db.Exec(`
         CREATE TABLE IF NOT EXISTS sql_audit (
-            -- Grouping Keys
+            -- Grouping Keys (14 columns)
             svr_ip VARCHAR, tenant_id BIGINT, tenant_name VARCHAR, user_id BIGINT, user_name VARCHAR,
             db_id BIGINT, db_name VARCHAR, sql_id VARCHAR, query_sql TEXT, plan_id BIGINT,
             client_ip VARCHAR, event VARCHAR, plan_type BIGINT, consistency_level BIGINT,
 
-            -- Aggregated Values
+            -- Aggregated Values (54 columns)
             executions BIGINT, min_request_time BIGINT, max_request_time BIGINT,
-
             elapsed_time_sum BIGINT, elapsed_time_max BIGINT, elapsed_time_min BIGINT,
             execute_time_sum BIGINT, execute_time_max BIGINT, execute_time_min BIGINT,
             queue_time_sum BIGINT, queue_time_max BIGINT, queue_time_min BIGINT,
@@ -44,6 +43,11 @@ func NewDuckDBManager(path string) (*DuckDBManager, error) {
             ssstore_read_row_count_sum BIGINT, ssstore_read_row_count_max BIGINT, ssstore_read_row_count_min BIGINT,
             request_memory_used_sum BIGINT, request_memory_used_max BIGINT, request_memory_used_min BIGINT,
             fail_count_sum BIGINT,
+			ret_code_4012_count_sum BIGINT, ret_code_4013_count_sum BIGINT, ret_code_5001_count_sum BIGINT,
+			ret_code_5024_count_sum BIGINT, ret_code_5167_count_sum BIGINT, ret_code_5217_count_sum BIGINT,
+			ret_code_6002_count_sum BIGINT,
+			event_0_wait_time_sum BIGINT, event_1_wait_time_sum BIGINT, event_2_wait_time_sum BIGINT,
+			event_3_wait_time_sum BIGINT,
 
             PRIMARY KEY (sql_id, svr_ip, min_request_time)
         )
@@ -59,7 +63,6 @@ func NewDuckDBManager(path string) (*DuckDBManager, error) {
 func (m *DuckDBManager) GetLastRequestIDs() (map[string]uint64, error) {
 	rows, err := m.db.Query("SELECT svr_ip, MAX(max_request_time) FROM sql_audit GROUP BY svr_ip")
 	if err != nil {
-		// If the table doesn't exist yet on the very first run, return an empty map.
 		if strings.Contains(err.Error(), "does not exist") {
 			return make(map[string]uint64), nil
 		}
@@ -86,7 +89,7 @@ func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
-	stmt, err := txn.Prepare(`INSERT OR IGNORE INTO sql_audit VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+	stmt, err := txn.Prepare(`INSERT OR IGNORE INTO sql_audit VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -94,9 +97,9 @@ func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
 
 	for _, r := range results {
 		_, err := stmt.Exec(
-			// Grouping Keys
+			// Grouping Keys (14)
 			r.SvrIP, r.TenantId, r.TenantName, r.UserId, r.UserName, r.DbId, r.DBName, r.SqlId, r.QuerySql, r.PlanId, r.ClientIp, r.Event, r.PlanType, r.ConsistencyLevel,
-			// Aggregated Values
+			// Aggregated Values (54)
 			r.Executions, r.MinRequestTime, r.MaxRequestTime,
 			r.ElapsedTimeSum, r.ElapsedTimeMax, r.ElapsedTimeMin,
 			r.ExecuteTimeSum, r.ExecuteTimeMax, r.ExecuteTimeMin,
@@ -112,6 +115,9 @@ func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
 			r.SSStoreReadRowCountSum, r.SSStoreReadRowCountMax, r.SSStoreReadRowCountMin,
 			r.RequestMemoryUsedSum, r.RequestMemoryUsedMax, r.RequestMemoryUsedMin,
 			r.FailCountSum,
+			r.RetCode4012CountSum, r.RetCode4013CountSum, r.RetCode5001CountSum, r.RetCode5024CountSum,
+			r.RetCode5167CountSum, r.RetCode5217CountSum, r.RetCode6002CountSum,
+			r.Event0WaitTimeSum, r.Event1WaitTimeSum, r.Event2WaitTimeSum, r.Event3WaitTimeSum,
 		)
 		if err != nil {
 			txn.Rollback()

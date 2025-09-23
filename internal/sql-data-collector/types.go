@@ -76,6 +76,19 @@ type SQLAudit struct {
 	RequestMemoryUsedMin int64 `db:"request_memory_used_min"`
 
 	FailCountSum int64 `db:"fail_count_sum"`
+
+	RetCode4012CountSum int64 `db:"ret_code_4012_count_sum"`
+	RetCode4013CountSum int64 `db:"ret_code_4013_count_sum"`
+	RetCode5001CountSum int64 `db:"ret_code_5001_count_sum"`
+	RetCode5024CountSum int64 `db:"ret_code_5024_count_sum"`
+	RetCode5167CountSum int64 `db:"ret_code_5167_count_sum"`
+	RetCode5217CountSum int64 `db:"ret_code_5217_count_sum"`
+	RetCode6002CountSum int64 `db:"ret_code_6002_count_sum"`
+
+	Event0WaitTimeSum int64 `db:"event_0_wait_time_sum"`
+	Event1WaitTimeSum int64 `db:"event_1_wait_time_sum"`
+	Event2WaitTimeSum int64 `db:"event_2_wait_time_sum"`
+	Event3WaitTimeSum int64 `db:"event_3_wait_time_sum"`
 }
 
 // Tenant represents a tenant with its ID.

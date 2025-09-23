@@ -69,7 +69,20 @@ func (c *Collector) collectFromObserver(ctx context.Context, manager *operation.
 			SUM(memstore_read_row_count) as memstore_read_row_count_sum, MAX(memstore_read_row_count) as memstore_read_row_count_max, MIN(memstore_read_row_count) as memstore_read_row_count_min,
 			SUM(ssstore_read_row_count) as ssstore_read_row_count_sum, MAX(ssstore_read_row_count) as ssstore_read_row_count_max, MIN(ssstore_read_row_count) as ssstore_read_row_count_min,
 			SUM(request_memory_used) as request_memory_used_sum, MAX(request_memory_used) as request_memory_used_max, MIN(request_memory_used) as request_memory_used_min,
-			SUM(CASE WHEN ret_code = 0 THEN 0 ELSE 1 END) as fail_count_sum
+			SUM(CASE WHEN ret_code = 0 THEN 0 ELSE 1 END) as fail_count_sum,
+
+			SUM(CASE WHEN ret_code = -4012 THEN 1 ELSE 0 END) as ret_code_4012_count_sum,
+			SUM(CASE WHEN ret_code = -4013 THEN 1 ELSE 0 END) as ret_code_4013_count_sum,
+			SUM(CASE WHEN ret_code = -5001 THEN 1 ELSE 0 END) as ret_code_5001_count_sum,
+			SUM(CASE WHEN ret_code = -5024 THEN 1 ELSE 0 END) as ret_code_5024_count_sum,
+			SUM(CASE WHEN ret_code = -5167 THEN 1 ELSE 0 END) as ret_code_5167_count_sum,
+			SUM(CASE WHEN ret_code = -5217 THEN 1 ELSE 0 END) as ret_code_5217_count_sum,
+			SUM(CASE WHEN ret_code = -6002 THEN 1 ELSE 0 END) as ret_code_6002_count_sum,
+
+			SUM(CASE event WHEN 'system internal wait' THEN wait_time_micro ELSE 0 END) as event_0_wait_time_sum,
+			SUM(CASE event WHEN 'mysql response wait client' THEN wait_time_micro ELSE 0 END) as event_1_wait_time_sum,
+			SUM(CASE event WHEN 'sync rpc' THEN wait_time_micro ELSE 0 END) as event_2_wait_time_sum,
+			SUM(CASE event WHEN 'db file data read' THEN wait_time_micro ELSE 0 END) as event_3_wait_time_sum
 
 		FROM gv$ob_sql_audit
 		WHERE tenant_id = ? AND svr_ip = ? AND request_id > ?
