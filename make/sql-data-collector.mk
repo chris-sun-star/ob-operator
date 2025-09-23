@@ -5,7 +5,7 @@ SQL_COLLECTOR_IMG ?= quay.io/oceanbase/sql-data-collector:${SQL_COLLECTOR_VERSIO
 build-sql-data-collector: ## Build sql-data-collector binary.
 	@echo Building sql-data-collector...
 	@mkdir -p bin
-	@go build -o bin/sql-data-collector cmd/sql-data-collector/main.go
+	@CGO_ENABLED=0 go build -o bin/sql-data-collector cmd/sql-data-collector/main.go
 
 .PHONY: docker-build-sql-data-collector
 docker-build-sql-data-collector: ## build sql-data-collector image
