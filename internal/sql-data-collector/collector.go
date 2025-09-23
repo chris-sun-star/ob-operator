@@ -124,13 +124,13 @@ func (c *Collector) getMaxRequestIDs(ctx context.Context, manager *operation.Oce
 func (c *Collector) collectFromObserver(ctx context.Context, manager *operation.OceanbaseOperationManager, svrIP string, lastRequestID uint64) ([]SQLAudit, error) {
 	query := `
 		SELECT
-			svr_ip, tenant_id, tenant_name, user_name, database_name, sql_id, query_sql, plan_id,
+			svr_ip, tenant_id, tenant_name, user_name, db_name, sql_id, query_sql, plan_id,
 			MAX(affected_rows) as affected_rows, MAX(return_rows) as return_rows, MAX(ret_code) as ret_code,
 			MAX(request_id) as request_id, MAX(request_time) as request_time, MAX(elapsed_time) as elapsed_time,
 			MAX(execute_time) as execute_time, MAX(queue_time) as queue_time
 		FROM gv$ob_sql_audit
 		WHERE tenant_id = ? AND svr_ip = ? AND request_id > ?
-		GROUP BY svr_ip, tenant_id, tenant_name, user_name, database_name, sql_id, query_sql, plan_id
+		GROUP BY svr_ip, tenant_id, tenant_name, user_name, db_name, sql_id, query_sql, plan_id
 	`
 
 	var results []SQLAudit

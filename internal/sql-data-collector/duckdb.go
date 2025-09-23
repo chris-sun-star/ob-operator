@@ -27,7 +27,7 @@ func NewDuckDBManager(path string) (*DuckDBManager, error) {
 			tenant_id BIGINT,
 			tenant_name VARCHAR,
 			user_name VARCHAR,
-			database_name VARCHAR,
+			db_name VARCHAR,
 			sql_id VARCHAR,
 			query_sql TEXT,
 			plan_id BIGINT,
@@ -81,7 +81,7 @@ func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
 	}
 
 	stmt, err := txn.Prepare(`
-		INSERT OR IGNORE INTO sql_audit (svr_ip, tenant_id, tenant_name, user_name, database_name, sql_id, query_sql, plan_id, affected_rows, return_rows, ret_code, request_id, request_time, elapsed_time, execute_time, queue_time)
+		INSERT OR IGNORE INTO sql_audit (svr_ip, tenant_id, tenant_name, user_name, db_name, sql_id, query_sql, plan_id, affected_rows, return_rows, ret_code, request_id, request_time, elapsed_time, execute_time, queue_time)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
@@ -90,7 +90,7 @@ func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
 	defer stmt.Close()
 
 	for _, r := range results {
-		_, err := stmt.Exec(r.SvrIP, r.TenantID, r.TenantName, r.UserName, r.DatabaseName, r.SQLID, r.QuerySQL, r.PlanID, r.AffectedRows, r.ReturnRows, r.RetCode, r.RequestID, r.RequestTime, r.ElapsedTime, r.ExecuteTime, r.QueueTime)
+		_, err := stmt.Exec(r.SvrIP, r.TenantID, r.TenantName, r.UserName, r.DBName, r.SQLID, r.QuerySQL, r.PlanID, r.AffectedRows, r.ReturnRows, r.RetCode, r.RequestID, r.RequestTime, r.ElapsedTime, r.ExecuteTime, r.QueueTime)
 		if err != nil {
 			txn.Rollback()
 			return fmt.Errorf("failed to execute statement: %w", err)

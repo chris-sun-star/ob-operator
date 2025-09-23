@@ -6,7 +6,7 @@ type SQLAudit struct {
 	TenantID     int64  `db:"tenant_id"`
 	TenantName   string `db:"tenant_name"`
 	UserName     string `db:"user_name"`
-	DatabaseName string `db:"database_name"`
+	DBName       string `db:"db_name"`
 	SQLID        string `db:"sql_id"`
 	QuerySQL     string `db:"query_sql"`
 	PlanID       int64  `db:"plan_id"`
