@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -84,9 +85,13 @@ func main() {
 	obClusterName := os.Getenv("OB_CLUSTER_NAME")
 	obClusterNamespace := os.Getenv("OB_CLUSTER_NAMESPACE")
 	obTenant := os.Getenv("OB_TENANT")
+	dataPath := os.Getenv("DATA_PATH")
 
 	if obClusterName == "" || obClusterNamespace == "" || obTenant == "" {
 		log.Fatal("OB_CLUSTER_NAME, OB_CLUSTER_NAMESPACE, and OB_TENANT environment variables must be set.")
+	}
+	if dataPath == "" {
+		dataPath = "."
 	}
 
 	// Create a Kubernetes client.
@@ -137,7 +142,7 @@ func main() {
 		Interval: 30 * time.Second,
 	}
 
-	duckDBPath := fmt.Sprintf("sql_audit_tenant_%s.duckdb", obTenant)
+	duckDBPath := filepath.Join(dataPath, fmt.Sprintf("sql_audit_tenant_%s.duckdb", obTenant))
 
 	// Initialize the OceanBase collector.
 	collector := sqldatacollector.NewCollector(config, obTenantID)
