@@ -109,7 +109,7 @@ func (c *Collector) getMaxRequestIDs(ctx context.Context, manager *operation.Oce
 		MaxRequest uint64 `db:"MAX(request_id)"`
 	}
 
-	if err := manager.Query(ctx, &observers, query, c.tenantID); err != nil {
+	if err := manager.QueryList(ctx, &observers, query, c.tenantID); err != nil {
 		return nil, err
 	}
 
@@ -134,7 +134,7 @@ func (c *Collector) collectFromObserver(ctx context.Context, manager *operation.
 	`
 
 	var results []SQLAudit
-	if err := manager.Query(ctx, &results, query, c.tenantID, svrIP, lastRequestID); err != nil {
+	if err := manager.QueryList(ctx, &results, query, c.tenantID, svrIP, lastRequestID); err != nil {
 		return nil, err
 	}
 	return results, nil
