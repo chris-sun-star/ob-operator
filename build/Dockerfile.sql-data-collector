@@ -1,20 +1,24 @@
 # Build the sql-data-collector binary
 FROM golang:1.24 AS builder
 
+ARG GOPROXY
+ARG GOSUMDB
+
 WORKDIR /workspace
 # copy everything
 COPY . .
-# Build the binary
+
+# Set GOPROXY if the build argument is provided
+RUN if [ -n "$GOPROXY" ]; then go env -w GOPROXY=$GOPROXY; fi
+RUN if [ -n "$GOSUMDB" ]; then go env -w GOSUMDB=$GOSUMDB; fi
+
 RUN make build-sql-data-collector
 
-# Use a minimal base image
+# start build docker image
 FROM openanolis/anolisos:8.8
 WORKDIR /
-# Copy the binary from the builder stage
 COPY --from=builder /workspace/bin/sql-data-collector .
 RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
-# Run as a non-root user
 USER 65534:65534
 
-# Set the entrypoint
 ENTRYPOINT ["/sql-data-collector"]
