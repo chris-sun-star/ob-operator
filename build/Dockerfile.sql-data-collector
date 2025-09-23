@@ -28,6 +28,8 @@ COPY --from=builder /workspace/bin/sql-data-collector .
 RUN groupadd --system appgroup && \
     useradd --system --gid appgroup appuser
 
+RUN chown -R appuser:appgroup /app
+
 # Switch to the non-root user
 USER appuser
 
