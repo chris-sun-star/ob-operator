@@ -69,7 +69,7 @@ func (c *Collector) collectFromObserver(ctx context.Context, manager *operation.
 			SUM(memstore_read_row_count) as memstore_read_row_count_sum, MAX(memstore_read_row_count) as memstore_read_row_count_max, MIN(memstore_read_row_count) as memstore_read_row_count_min,
 			SUM(ssstore_read_row_count) as ssstore_read_row_count_sum, MAX(ssstore_read_row_count) as ssstore_read_row_count_max, MIN(ssstore_read_row_count) as ssstore_read_row_count_min,
 			SUM(request_memory_used) as request_memory_used_sum, MAX(request_memory_used) as request_memory_used_max, MIN(request_memory_used) as request_memory_used_min,
-			SUM(fail_count) as fail_count_sum
+			SUM(CASE WHEN ret_code = 0 THEN 0 ELSE 1 END) as fail_count_sum
 
 		FROM gv$ob_sql_audit
 		WHERE tenant_id = ? AND svr_ip = ? AND request_id > ?
