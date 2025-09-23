@@ -15,7 +15,7 @@ RUN if [ -n "$GOSUMDB" ]; then go env -w GOSUMDB=$GOSUMDB; fi
 RUN make build-sql-data-collector
 
 # start build docker image
-FROM openanolis/anolisos:8.8
+FROM openanolis/anolisos:23
 WORKDIR /
 COPY --from=builder /workspace/bin/sql-data-collector .
 RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
