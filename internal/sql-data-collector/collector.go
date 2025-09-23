@@ -37,6 +37,53 @@ func NewCollector(config *Config, tenantID int64, initialRequestIDs map[string]u
 	return c
 }
 
+// collectFromObserver collects aggregated SQL audit data from a specific observer.
+func (c *Collector) collectFromObserver(ctx context.Context, manager *operation.OceanbaseOperationManager, svrIP string, lastRequestID uint64) ([]SQLAudit, error) {
+	query := `
+		SELECT
+			-- Grouping Keys
+			svr_ip, tenant_id, tenant_name, user_id, user_name, db_id, db_name, sql_id, plan_id,
+
+			-- Aggregated String/Identifier Values (using MAX to select one value from the group)
+			MAX(query_sql) as query_sql,
+			MAX(client_ip) as client_ip,
+			MAX(event) as event,
+			MAX(plan_type) as plan_type,
+			MAX(consistency_level) as consistency_level,
+
+			-- Aggregated Numeric Values
+			COUNT(*) as executions,
+			MIN(request_time) as min_request_time,
+			MAX(request_time) as max_request_time,
+
+			SUM(elapsed_time) as elapsed_time_sum, MAX(elapsed_time) as elapsed_time_max, MIN(elapsed_time) as elapsed_time_min,
+			SUM(execute_time) as execute_time_sum, MAX(execute_time) as execute_time_max, MIN(execute_time) as execute_time_min,
+			SUM(queue_time) as queue_time_sum, MAX(queue_time) as queue_time_max, MIN(queue_time) as queue_time_min,
+			SUM(get_plan_time) as get_plan_time_sum, MAX(get_plan_time) as get_plan_time_max, MIN(get_plan_time) as get_plan_time_min,
+			SUM(affected_rows) as affected_rows_sum, MAX(affected_rows) as affected_rows_max, MIN(affected_rows) as affected_rows_min,
+			SUM(return_rows) as return_rows_sum, MAX(return_rows) as return_rows_max, MIN(return_rows) as return_rows_min,
+			SUM(partition_cnt) as partition_count_sum, MAX(partition_cnt) as partition_count_max, MIN(partition_cnt) as partition_count_min,
+			SUM(retry_cnt) as retry_count_sum, MAX(retry_cnt) as retry_count_max, MIN(retry_cnt) as retry_count_min,
+			SUM(disk_reads) as disk_reads_sum, MAX(disk_reads) as disk_reads_max, MIN(disk_reads) as disk_reads_min,
+			SUM(rpc_count) as rpc_count_sum, MAX(rpc_count) as rpc_count_max, MIN(rpc_count) as rpc_count_min,
+			SUM(memstore_read_row_count) as memstore_read_row_count_sum, MAX(memstore_read_row_count) as memstore_read_row_count_max, MIN(memstore_read_row_count) as memstore_read_row_count_min,
+			SUM(ssstore_read_row_count) as ssstore_read_row_count_sum, MAX(ssstore_read_row_count) as ssstore_read_row_count_max, MIN(ssstore_read_row_count) as ssstore_read_row_count_min,
+			SUM(request_memory_used) as request_memory_used_sum, MAX(request_memory_used) as request_memory_used_max, MIN(request_memory_used) as request_memory_used_min,
+			SUM(fail_count) as fail_count_sum
+
+		FROM gv$ob_sql_audit
+		WHERE tenant_id = ? AND svr_ip = ? AND request_id > ?
+		GROUP BY
+			svr_ip, tenant_id, tenant_name, user_id, user_name, db_id, db_name, sql_id, plan_id
+	`
+
+	var results []SQLAudit
+	if err := manager.QueryList(ctx, &results, query, c.tenantID, svrIP, lastRequestID); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
 // Collect fetches new SQL audit data from the OceanBase cluster.
 func (c *Collector) Collect(ctx context.Context, manager *operation.OceanbaseOperationManager) ([]SQLAudit, error) {
 	// Step 1: Find observers with new data.
@@ -55,9 +102,7 @@ func (c *Collector) Collect(ctx context.Context, manager *operation.OceanbaseOpe
 		lastRequestID, ok := c.lastRequestIDs[svrIP]
 		c.mu.Unlock()
 
-		// If we have a last request ID and it's the same as the current max, skip.
-		// We use != instead of > to handle observer restarts where request_id may reset.
-		if ok && lastRequestID == maxRequestID {
+		if ok && lastRequestID >= maxRequestID {
 			continue
 		}
 
@@ -118,24 +163,4 @@ func (c *Collector) getMaxRequestIDs(ctx context.Context, manager *operation.Oce
 		maxRequestIDs[o.SvrIP] = o.MaxRequest
 	}
 	return maxRequestIDs, nil
-}
-
-// collectFromObserver collects aggregated SQL audit data from a specific observer.
-func (c *Collector) collectFromObserver(ctx context.Context, manager *operation.OceanbaseOperationManager, svrIP string, lastRequestID uint64) ([]SQLAudit, error) {
-	query := `
-		SELECT
-			svr_ip, tenant_id, tenant_name, user_name, db_name, sql_id, query_sql, plan_id,
-			MAX(affected_rows) as affected_rows, MAX(return_rows) as return_rows, MAX(ret_code) as ret_code,
-			MAX(request_id) as request_id, MAX(request_time) as request_time, MAX(elapsed_time) as elapsed_time,
-			MAX(execute_time) as execute_time, MAX(queue_time) as queue_time
-		FROM gv$ob_sql_audit
-		WHERE tenant_id = ? AND svr_ip = ? AND request_id > ?
-		GROUP BY svr_ip, tenant_id, tenant_name, user_name, db_name, sql_id, query_sql, plan_id
-	`
-
-	var results []SQLAudit
-	if err := manager.QueryList(ctx, &results, query, c.tenantID, svrIP, lastRequestID); err != nil {
-		return nil, err
-	}
-	return results, nil
 }

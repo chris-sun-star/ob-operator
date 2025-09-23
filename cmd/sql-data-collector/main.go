@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -152,8 +153,19 @@ func main() {
 	}
 	log.Printf("Found tenant '%s' with ID %d", obTenant, obTenantID)
 
+	// Configure collection interval
+	intervalSeconds := 30
+	intervalStr := os.Getenv("COLLECTION_INTERVAL_SECONDS")
+	if intervalStr != "" {
+		if val, err := strconv.Atoi(intervalStr); err == nil && val > 0 {
+			intervalSeconds = val
+		} else {
+			log.Printf("Invalid COLLECTION_INTERVAL_SECONDS value '%s', using default of 30 seconds.", intervalStr)
+		}
+	}
+
 	config := &sqldatacollector.Config{
-		Interval: 30 * time.Second,
+		Interval: time.Duration(intervalSeconds) * time.Second,
 	}
 
 	duckDBPath := filepath.Join(dataPath, fmt.Sprintf("sql_audit_tenant_%s.duckdb", obTenant))

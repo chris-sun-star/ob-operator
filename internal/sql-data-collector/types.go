@@ -1,23 +1,81 @@
 package sqldatacollector
 
-// SQLAudit represents a single row of aggregated data from gv$ob_sql_audit.
+// SQLAudit represents an aggregated row of data from gv$ob_sql_audit.
 type SQLAudit struct {
-	SvrIP        string `db:"svr_ip"`
-	TenantID     int64  `db:"tenant_id"`
-	TenantName   string `db:"tenant_name"`
-	UserName     string `db:"user_name"`
-	DBName       string `db:"db_name"`
-	SQLID        string `db:"sql_id"`
-	QuerySQL     string `db:"query_sql"`
-	PlanID       int64  `db:"plan_id"`
-	AffectedRows int64  `db:"affected_rows"`
-	ReturnRows   int64  `db:"return_rows"`
-	RetCode      int64  `db:"ret_code"`
-	RequestID    uint64 `db:"request_id"`
-	RequestTime  int64  `db:"request_time"`
-	ElapsedTime  int64  `db:"elapsed_time"`
-	ExecuteTime  int64  `db:"execute_time"`
-	QueueTime    int64  `db:"queue_time"`
+	// Grouping Keys
+	SvrIP             string `db:"svr_ip"`
+	TenantId          uint64 `db:"tenant_id"`
+	TenantName        string `db:"tenant_name"`
+	UserId            int64  `db:"user_id"`
+	UserName          string `db:"user_name"`
+	DbId              uint64 `db:"db_id"`
+	DBName            string `db:"db_name"`
+	SqlId             string `db:"sql_id"`
+	QuerySql          string `db:"query_sql"`
+	PlanId            int64  `db:"plan_id"`
+	ClientIp          string `db:"client_ip"`
+	Event             string `db:"event"`
+	PlanType          int64  `db:"plan_type"`
+	ConsistencyLevel  int64  `db:"consistency_level"`
+
+	// Aggregated Values
+	Executions        int64 `db:"executions"`
+	MinRequestTime    int64 `db:"min_request_time"`
+	MaxRequestTime    int64 `db:"max_request_time"`
+
+	ElapsedTimeSum int64 `db:"elapsed_time_sum"`
+	ElapsedTimeMax int64 `db:"elapsed_time_max"`
+	ElapsedTimeMin int64 `db:"elapsed_time_min"`
+
+	ExecuteTimeSum int64 `db:"execute_time_sum"`
+	ExecuteTimeMax int64 `db:"execute_time_max"`
+	ExecuteTimeMin int64 `db:"execute_time_min"`
+
+	QueueTimeSum int64 `db:"queue_time_sum"`
+	QueueTimeMax int64 `db:"queue_time_max"`
+	QueueTimeMin int64 `db:"queue_time_min"`
+
+	GetPlanTimeSum int64 `db:"get_plan_time_sum"`
+	GetPlanTimeMax int64 `db:"get_plan_time_max"`
+	GetPlanTimeMin int64 `db:"get_plan_time_min"`
+
+	AffectedRowsSum int64 `db:"affected_rows_sum"`
+	AffectedRowsMax int64 `db:"affected_rows_max"`
+	AffectedRowsMin int64 `db:"affected_rows_min"`
+
+	ReturnRowsSum int64 `db:"return_rows_sum"`
+	ReturnRowsMax int64 `db:"return_rows_max"`
+	ReturnRowsMin int64 `db:"return_rows_min"`
+
+	PartitionCountSum int64 `db:"partition_count_sum"`
+	PartitionCountMax int64 `db:"partition_count_max"`
+	PartitionCountMin int64 `db:"partition_count_min"`
+
+	RetryCountSum int64 `db:"retry_count_sum"`
+	RetryCountMax int64 `db:"retry_count_max"`
+	RetryCountMin int64 `db:"retry_count_min"`
+
+	DiskReadsSum int64 `db:"disk_reads_sum"`
+	DiskReadsMax int64 `db:"disk_reads_max"`
+	DiskReadsMin int64 `db:"disk_reads_min"`
+
+	RpcCountSum int64 `db:"rpc_count_sum"`
+	RpcCountMax int64 `db:"rpc_count_max"`
+	RpcCountMin int64 `db:"rpc_count_min"`
+
+	MemstoreReadRowCountSum int64 `db:"memstore_read_row_count_sum"`
+	MemstoreReadRowCountMax int64 `db:"memstore_read_row_count_max"`
+	MemstoreReadRowCountMin int64 `db:"memstore_read_row_count_min"`
+
+	SSStoreReadRowCountSum int64 `db:"ssstore_read_row_count_sum"`
+	SSStoreReadRowCountMax int64 `db:"ssstore_read_row_count_max"`
+	SSStoreReadRowCountMin int64 `db:"ssstore_read_row_count_min"`
+
+	RequestMemoryUsedSum int64 `db:"request_memory_used_sum"`
+	RequestMemoryUsedMax int64 `db:"request_memory_used_max"`
+	RequestMemoryUsedMin int64 `db:"request_memory_used_min"`
+
+	FailCountSum int64 `db:"fail_count_sum"`
 }
 
 // Tenant represents a tenant with its ID.
