@@ -25,8 +25,8 @@ WORKDIR /app
 COPY --from=builder /workspace/bin/sql-data-collector .
 
 # Create a non-root user
-RUN addgroup --system appgroup && \
-    adduser --system --ingroup appgroup appuser
+RUN groupadd --system appgroup && \
+    useradd --system --gid appgroup appuser
 
 # Switch to the non-root user
 USER appuser

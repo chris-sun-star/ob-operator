@@ -1,13 +1,11 @@
 package sqldatacollector
 
 import (
-	"context"
 	"database/sql"
-	"database/sql/driver"
 	"fmt"
-	"log"
+	"strings"
 
-	"github.com/marcboeker/go-duckdb"
+	_ "github.com/marcboeker/go-duckdb"
 )
 
 // DuckDBManager handles operations with the DuckDB database.
@@ -15,118 +13,96 @@ type DuckDBManager struct {
 	db *sql.DB
 }
 
-// NewDuckDBManager creates a new DuckDBManager instance.
-func NewDuckDBManager(dbPath string) (*DuckDBManager, error) {
-	connector, err := duckdb.NewConnector(dbPath, nil)
+// NewDuckDBManager creates a new DuckDBManager and initializes the database table.
+func NewDuckDBManager(path string) (*DuckDBManager, error) {
+	db, err := sql.Open("duckdb", path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open duckdb: %w", err)
 	}
 
-	db := sql.OpenDB(connector)
-	if err := db.Ping(); err != nil {
-		return nil, err
-	}
-
-	mgr := &DuckDBManager{db: db}
-	if err := mgr.createTable(); err != nil {
-		return nil, err
-	}
-
-	return mgr, nil
-}
-
-// Close closes the DuckDB connection.
-func (m *DuckDBManager) Close() error {
-	return m.db.Close()
-}
-
-func (m *DuckDBManager) createTable() error {
-	query := `
-	CREATE TABLE IF NOT EXISTS sql_audit_stats (
-		CollectTime BIGINT,
-		SvrIp VARCHAR,
-		TenantId UBIGINT,
-		UserId BIGINT,
-		DbId UBIGINT,
-		SqlId VARCHAR,
-		MaxRequestId BIGINT,
-		MinRequestTime BIGINT,
-		MaxRequestTime BIGINT,
-		Executions BIGINT,
-		AffectedRows BIGINT,
-		ReturnRows BIGINT,
-		FailCount BIGINT,
-		ElapsedTime BIGINT,
-		MaxElapsedTime BIGINT,
-		CpuTime BIGINT,
-		MaxCpuTime BIGINT,
-		NetTime BIGINT,
-		NetWaitTime BIGINT,
-		QueueTime BIGINT,
-		DecodeTime BIGINT,
-		GetPlanTime BIGINT,
-		ExecuteTime BIGINT,
-		ApplicationWaitTime BIGINT,
-		ConcurrencyWaitTime BIGINT,
-		UserIoWaitTime BIGINT,
-		ScheduleTime BIGINT,
-		RpcCount BIGINT,
-		MissPlanCount BIGINT,
-		MemstoreReadRowCount BIGINT,
-		SSStoreReadRowCount BIGINT
-	);`
-
-	_, err := m.db.Exec(query)
-	return err
-}
-
-// InsertBatch inserts a batch of SqlAuditResult into DuckDB using the Appender API.
-func (m *DuckDBManager) InsertBatch(results []SqlAuditResult) error {
-	if len(results) == 0 {
-		return nil
-	}
-
-	conn, err := m.db.Conn(context.Background())
+	// Create the table if it doesn't exist.
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS sql_audit (
+			svr_ip VARCHAR,
+			tenant_id BIGINT,
+			tenant_name VARCHAR,
+			user_name VARCHAR,
+			database_name VARCHAR,
+			sql_id VARCHAR,
+			query_sql TEXT,
+			plan_id BIGINT,
+			affected_rows BIGINT,
+			return_rows BIGINT,
+			ret_code BIGINT,
+			request_id BIGINT,
+			request_time BIGINT,
+			elapsed_time BIGINT,
+			execute_time BIGINT,
+			queue_time BIGINT,
+			PRIMARY KEY (svr_ip, request_id)
+		)
+	`)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("failed to create table: %w", err)
 	}
-	defer conn.Close()
 
-	err = conn.Raw(func(driverConn interface{}) error {
-		dc, ok := driverConn.(driver.Conn)
-		if !ok {
-			return fmt.Errorf("expected driver.Conn but got %T", driverConn)
+	return &DuckDBManager{db: db}, nil
+}
+
+// GetLastRequestIDs retrieves the last request ID for each server from the database.
+func (m *DuckDBManager) GetLastRequestIDs() (map[string]uint64, error) {
+	rows, err := m.db.Query("SELECT svr_ip, MAX(request_id) FROM sql_audit GROUP BY svr_ip")
+	if err != nil {
+		// If the table doesn't exist yet on the very first run, return an empty map.
+		if strings.Contains(err.Error(), "does not exist") {
+			return make(map[string]uint64), nil
 		}
+		return nil, err
+	}
+	defer rows.Close()
 
-		appender, err := duckdb.NewAppenderFromConn(dc, "", "sql_audit_stats")
+	lastRequestIDs := make(map[string]uint64)
+	for rows.Next() {
+		var svrIP string
+		var maxRequestID uint64
+		if err := rows.Scan(&svrIP, &maxRequestID); err != nil {
+			return nil, err
+		}
+		lastRequestIDs[svrIP] = maxRequestID
+	}
+	return lastRequestIDs, nil
+}
+
+// InsertBatch inserts a batch of SQL audit data into the database.
+func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
+	txn, err := m.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	stmt, err := txn.Prepare(`
+		INSERT OR IGNORE INTO sql_audit (svr_ip, tenant_id, tenant_name, user_name, database_name, sql_id, query_sql, plan_id, affected_rows, return_rows, ret_code, request_id, request_time, elapsed_time, execute_time, queue_time)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, r := range results {
+		_, err := stmt.Exec(r.SvrIP, r.TenantID, r.TenantName, r.UserName, r.DatabaseName, r.SQLID, r.QuerySQL, r.PlanID, r.AffectedRows, r.ReturnRows, r.RetCode, r.RequestID, r.RequestTime, r.ElapsedTime, r.ExecuteTime, r.QueueTime)
 		if err != nil {
-			return err
+			txn.Rollback()
+			return fmt.Errorf("failed to execute statement: %w", err)
 		}
-		defer appender.Close()
-
-		for _, res := range results {
-			err := appender.AppendRow(
-				res.CollectTime, res.SvrIp, res.TenantId, res.UserId, res.DbId, res.SqlId,
-				res.MaxRequestId, res.MinRequestTime, res.MaxRequestTime, res.Executions,
-				res.AffectedRows, res.ReturnRows, res.FailCount, res.ElapsedTime, res.MaxElapsedTime,
-				res.CpuTime, res.MaxCpuTime, res.NetTime, res.NetWaitTime, res.QueueTime, res.DecodeTime,
-				res.GetPlanTime, res.ExecuteTime, res.ApplicationWaitTime, res.ConcurrencyWaitTime,
-				res.UserIoWaitTime, res.ScheduleTime, res.RpcCount, res.MissPlanCount,
-				res.MemstoreReadRowCount, res.SSStoreReadRowCount,
-			)
-			if err != nil {
-				return fmt.Errorf("error appending row: %w", err)
-			}
-		}
-
-		if err := appender.Flush(); err != nil {
-			return fmt.Errorf("error flushing appender: %w", err)
-		}
-		return nil
-	})
-
-	if err == nil {
-		log.Printf("Successfully inserted %d records into DuckDB.", len(results))
 	}
-	return err
+
+	return txn.Commit()
+}
+
+// Close closes the database connection.
+func (m *DuckDBManager) Close() {
+	if m.db != nil {
+		m.db.Close()
+	}
 }

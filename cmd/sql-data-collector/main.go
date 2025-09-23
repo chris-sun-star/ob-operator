@@ -158,15 +158,22 @@ func main() {
 
 	duckDBPath := filepath.Join(dataPath, fmt.Sprintf("sql_audit_tenant_%s.duckdb", obTenant))
 
-	// Initialize the OceanBase collector.
-	collector := sqldatacollector.NewCollector(config, obTenantID)
-
 	// Initialize the DuckDB manager.
 	duckdbManager, err := sqldatacollector.NewDuckDBManager(duckDBPath)
 	if err != nil {
 		log.Fatalf("Failed to create DuckDB manager: %v", err)
 	}
 	defer duckdbManager.Close()
+
+	// Retrieve the last known request IDs from DuckDB to resume progress.
+	lastRequestIDs, err := duckdbManager.GetLastRequestIDs()
+	if err != nil {
+		log.Fatalf("Failed to get last request IDs from DuckDB: %v", err)
+	}
+	log.Printf("Retrieved progress for %d observers from DuckDB.", len(lastRequestIDs))
+
+	// Initialize the OceanBase collector with the retrieved progress.
+	collector := sqldatacollector.NewCollector(config, obTenantID, lastRequestIDs)
 
 	// Run the collection loop.
 	ticker := time.NewTicker(config.Interval)
