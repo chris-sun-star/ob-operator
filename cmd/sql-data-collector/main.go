@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -78,7 +79,20 @@ func (cm *ConnectionManager) Close() {
 }
 
 func main() {
-	logf.SetLogger(zap.New(zap.UseDevMode(true)))
+	// Configure logging
+	logDir := "./log"
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		log.Fatalf("Failed to create log directory: %v", err)
+	}
+	logFile, err := os.OpenFile(filepath.Join(logDir, "sql-data-collector.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("Failed to open log file: %v", err)
+	}
+	multiWriter := io.MultiWriter(os.Stdout, logFile)
+	log.SetOutput(multiWriter)
+
+	logf.SetLogger(zap.New(zap.UseDevMode(true), zap.WriteTo(multiWriter)))
+
 	log.Println("SQL Data Collector starting...")
 
 	// Read configuration from environment variables.

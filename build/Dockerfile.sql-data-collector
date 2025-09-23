@@ -15,10 +15,21 @@ RUN if [ -n "$GOSUMDB" ]; then go env -w GOSUMDB=$GOSUMDB; fi
 RUN make build-sql-data-collector
 
 # start build docker image
-FROM openanolis/anolisos:23
-WORKDIR /
-COPY --from=builder /workspace/bin/sql-data-collector .
-RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
-USER 65534:65534
+# Use ubuntu:24.04 as the base image
+FROM ubuntu:24.04
 
-ENTRYPOINT ["/sql-data-collector"]
+# Set working directory
+WORKDIR /app
+
+# Copy the binary from the builder stage
+COPY --from=builder /workspace/bin/sql-data-collector .
+
+# Create a non-root user
+RUN addgroup --system appgroup && \
+    adduser --system --ingroup appgroup appuser
+
+# Switch to the non-root user
+USER appuser
+
+# Set the entrypoint
+ENTRYPOINT ["./sql-data-collector"]
