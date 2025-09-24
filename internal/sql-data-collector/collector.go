@@ -41,15 +41,11 @@ func NewCollector(config *Config, tenantID int64, initialRequestIDs map[string]u
 func (c *Collector) collectFromObserver(ctx context.Context, manager *operation.OceanbaseOperationManager, svrIP string, lastRequestID uint64) ([]SQLAudit, error) {
 	query := `
 		SELECT
-			-- Grouping Keys
 			svr_ip, tenant_id, tenant_name, user_id, user_name, db_id, db_name, sql_id, plan_id,
 
-			-- Aggregated String/Identifier Values
-			MAX(query_sql) as query_sql, MAX(client_ip) as client_ip, MAX(event) as event, MAX(plan_type) as plan_type, MAX(consistency_level) as consistency_level,
+			MAX(query_sql) as query_sql, MAX(client_ip) as client_ip, MAX(event) as event, MAX(plan_type) as plan_type, 
 			MAX(format_sql_id) as format_sql_id, MAX(effective_tenant_id) as effective_tenant_id, MAX(trace_id) as trace_id, MAX(sid) as sid, MAX(user_client_ip) as user_client_ip, MAX(tx_id) as tx_id,
-			MAX(is_sub_plan) as is_sub_plan, MAX(sub_plan_count) as sub_plan_count, MAX(last_fail_info) as last_fail_info, MAX(cause_type) as cause_type,
 
-			-- Aggregated Numeric Values
 			COUNT(*) as executions, MIN(request_time) as min_request_time, MAX(request_time) as max_request_time,
 			MAX(request_id) as max_request_id, MIN(request_id) as min_request_id,
 
@@ -78,12 +74,12 @@ func (c *Collector) collectFromObserver(ctx context.Context, manager *operation.
 			SUM(row_cache_hit) as row_cache_hit_sum, MAX(row_cache_hit) as row_cache_hit_max, MIN(row_cache_hit) as row_cache_hit_min,
 			SUM(bloom_filter_cache_hit) as bloom_filter_cache_hit_sum, MAX(bloom_filter_cache_hit) as bloom_filter_cache_hit_max, MIN(bloom_filter_cache_hit) as bloom_filter_cache_hit_min,
 			SUM(block_cache_hit) as block_cache_hit_sum, MAX(block_cache_hit) as block_cache_hit_max, MIN(block_cache_hit) as block_cache_hit_min,
-			SUM(block_index_cache_hit) as block_index_cache_hit_sum, MAX(block_index_cache_hit) as block_index_cache_hit_max, MIN(block_index_cache_hit) as block_index_cache_hit_min,
+			SUM(index_block_cache_hit) as index_block_cache_hit_sum, MAX(index_block_cache_hit) as index_block_cache_hit_max, MIN(index_block_cache_hit) as index_block_cache_hit_min,
 			SUM(expected_worker_count) as expected_worker_count_sum, MAX(expected_worker_count) as expected_worker_count_max, MIN(expected_worker_count) as expected_worker_count_min,
 			SUM(used_worker_count) as used_worker_count_sum, MAX(used_worker_count) as used_worker_count_max, MIN(used_worker_count) as used_worker_count_min,
 			SUM(table_scan) as table_scan_sum, MAX(table_scan) as table_scan_max, MIN(table_scan) as table_scan_min,
-			SUM(consistency_level_strong) as consistency_level_strong_sum, MAX(consistency_level_strong) as consistency_level_strong_max, MIN(consistency_level_strong) as consistency_level_strong_min,
-			SUM(consistency_level_weak) as consistency_level_weak_sum, MAX(consistency_level_weak) as consistency_level_weak_max, MIN(consistency_level_weak) as consistency_level_weak_min,
+			SUM(CASE WHEN consistency_level = 3 THEN 1 ELSE 0 END) as consistency_level_strong_count,
+			SUM(CASE WHEN consistency_level = 2 THEN 1 ELSE 0 END) as consistency_level_weak_count,
 			SUM(CASE WHEN ret_code = 0 THEN 0 ELSE 1 END) as fail_count_sum,
 			SUM(CASE WHEN ret_code = -4012 THEN 1 ELSE 0 END) as ret_code_4012_count_sum,
 			SUM(CASE WHEN ret_code = -4013 THEN 1 ELSE 0 END) as ret_code_4013_count_sum,
@@ -95,20 +91,8 @@ func (c *Collector) collectFromObserver(ctx context.Context, manager *operation.
 			SUM(CASE event WHEN 'system internal wait' THEN wait_time_micro ELSE 0 END) as event_0_wait_time_sum,
 			SUM(CASE event WHEN 'mysql response wait client' THEN wait_time_micro ELSE 0 END) as event_1_wait_time_sum,
 			SUM(CASE event WHEN 'sync rpc' THEN wait_time_micro ELSE 0 END) as event_2_wait_time_sum,
-			SUM(CASE event WHEN 'db file data read' THEN wait_time_micro ELSE 0 END) as event_3_wait_time_sum,
+			SUM(CASE event WHEN 'db file data read' THEN wait_time_micro ELSE 0 END) as event_3_wait_time_sum
 
-			MAX(cpu_time) as max_cpu_time,
-			MAX(elapsed_time) as max_elapsed_time,
-			MAX(expected_worker_count) as max_expected_worker_count,
-			MAX(used_worker_count) as max_used_worker_count,
-			MAX(request_memory_used) as max_memory_used,
-			MAX(application_wait_time) as max_application_wait_time,
-			MAX(concurrency_wait_time) as max_concurrency_wait_time,
-			MAX(user_io_wait_time) as max_user_io_wait_time,
-			MAX(disk_reads) as max_disk_reads,
-			MAX(affected_rows) as max_affected_rows,
-			MAX(return_rows) as max_return_rows,
-			MAX(partition_cnt) as max_partition_count
 
 		FROM gv$ob_sql_audit
 		WHERE tenant_id = ? AND svr_ip = ? AND request_id > ?

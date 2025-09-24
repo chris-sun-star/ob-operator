@@ -3,39 +3,37 @@ package sqldatacollector
 // SQLAudit represents an aggregated row of data from gv$ob_sql_audit.
 type SQLAudit struct {
 	// Grouping Keys
-	SvrIP             string `db:"svr_ip"`
-	TenantId          uint64 `db:"tenant_id"`
-	TenantName        string `db:"tenant_name"`
-	UserId            int64  `db:"user_id"`
-	UserName          string `db:"user_name"`
-	DbId              uint64 `db:"db_id"`
-	DBName            string `db:"db_name"`
-	SqlId             string `db:"sql_id"`
-	PlanId            int64  `db:"plan_id"`
+	SvrIP      string `db:"svr_ip"`
+	TenantId   uint64 `db:"tenant_id"`
+	TenantName string `db:"tenant_name"`
+	UserId     int64  `db:"user_id"`
+	UserName   string `db:"user_name"`
+	DbId       uint64 `db:"db_id"`
+	DBName     string `db:"db_name"`
+	SqlId      string `db:"sql_id"`
+	PlanId     int64  `db:"plan_id"`
 
 	// Aggregated String/Identifier Values
 	QuerySql          string `db:"query_sql"`
 	ClientIp          string `db:"client_ip"`
 	Event             string `db:"event"`
 	PlanType          int64  `db:"plan_type"`
-	ConsistencyLevel  int64  `db:"consistency_level"`
 	FormatSqlId       string `db:"format_sql_id"`
 	EffectiveTenantId uint64 `db:"effective_tenant_id"`
 	TraceId           string `db:"trace_id"`
 	Sid               uint64 `db:"sid"`
 	UserClientIp      string `db:"user_client_ip"`
 	TxId              string `db:"tx_id"`
-	IsSubPlan         int64  `db:"is_sub_plan"`
 	SubPlanCount      int64  `db:"sub_plan_count"`
 	LastFailInfo      int64  `db:"last_fail_info"`
 	CauseType         int64  `db:"cause_type"`
 
 	// Aggregated Numeric Values
-	Executions        int64 `db:"executions"` // COUNT(*)
-	MinRequestTime    int64 `db:"min_request_time"`
-	MaxRequestTime    int64 `db:"max_request_time"`
-	MaxRequestId      uint64 `db:"max_request_id"` // Crucial for progress tracking
-	MinRequestId      uint64 `db:"min_request_id"`
+	Executions     int64  `db:"executions"` // COUNT(*)
+	MinRequestTime int64  `db:"min_request_time"`
+	MaxRequestTime int64  `db:"max_request_time"`
+	MaxRequestId   uint64 `db:"max_request_id"` // Crucial for progress tracking
+	MinRequestId   uint64 `db:"min_request_id"`
 
 	ElapsedTimeSum int64 `db:"elapsed_time_sum"`
 	ElapsedTimeMax int64 `db:"elapsed_time_max"`
@@ -137,9 +135,9 @@ type SQLAudit struct {
 	BlockCacheHitMax int64 `db:"block_cache_hit_max"`
 	BlockCacheHitMin int64 `db:"block_cache_hit_min"`
 
-	BlockIndexCacheHitSum int64 `db:"block_index_cache_hit_sum"`
-	BlockIndexCacheHitMax int64 `db:"block_index_cache_hit_max"`
-	BlockIndexCacheHitMin int64 `db:"block_index_cache_hit_min"`
+	IndexBlockCacheHitSum int64 `db:"index_block_cache_hit_sum"`
+	IndexBlockCacheHitMax int64 `db:"index_block_cache_hit_max"`
+	IndexBlockCacheHitMin int64 `db:"index_block_cache_hit_min"`
 
 	ExpectedWorkerCountSum int64 `db:"expected_worker_count_sum"`
 	ExpectedWorkerCountMax int64 `db:"expected_worker_count_max"`
@@ -153,13 +151,12 @@ type SQLAudit struct {
 	TableScanMax int64 `db:"table_scan_max"`
 	TableScanMin int64 `db:"table_scan_min"`
 
-	ConsistencyLevelStrongSum int64 `db:"consistency_level_strong_sum"`
-	ConsistencyLevelStrongMax int64 `db:"consistency_level_strong_max"`
-	ConsistencyLevelStrongMin int64 `db:"consistency_level_strong_min"`
+	ConsistencyLevelStrongCount int64 `db:"consistency_level_strong_count"`
+	ConsistencyLevelWeakCount   int64 `db:"consistency_level_weak_count"`
 
-	ConsistencyLevelWeakSum int64 `db:"consistency_level_weak_sum"`
-	ConsistencyLevelWeakMax int64 `db:"consistency_level_weak_max"`
-	ConsistencyLevelWeakMin int64 `db:"consistency_level_weak_min"`
+	CpuTimeSum int64 `db:"cpu_time_sum"`
+	CpuTimeMax int64 `db:"cpu_time_max"`
+	CpuTimeMin int64 `db:"cpu_time_min"`
 
 	FailCountSum int64 `db:"fail_count_sum"`
 
