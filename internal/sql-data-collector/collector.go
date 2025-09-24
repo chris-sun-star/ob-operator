@@ -44,17 +44,14 @@ func (c *Collector) collectFromObserver(ctx context.Context, manager *operation.
 			-- Grouping Keys
 			svr_ip, tenant_id, tenant_name, user_id, user_name, db_id, db_name, sql_id, plan_id,
 
-			-- Aggregated String/Identifier Values (using MAX to select one value from the group)
-			MAX(query_sql) as query_sql,
-			MAX(client_ip) as client_ip,
-			MAX(event) as event,
-			MAX(plan_type) as plan_type,
-			MAX(consistency_level) as consistency_level,
+			-- Aggregated String/Identifier Values
+			MAX(query_sql) as query_sql, MAX(client_ip) as client_ip, MAX(event) as event, MAX(plan_type) as plan_type, MAX(consistency_level) as consistency_level,
+			MAX(format_sql_id) as format_sql_id, MAX(effective_tenant_id) as effective_tenant_id, MAX(trace_id) as trace_id, MAX(sid) as sid, MAX(user_client_ip) as user_client_ip, MAX(tx_id) as tx_id,
+			MAX(is_sub_plan) as is_sub_plan, MAX(sub_plan_count) as sub_plan_count, MAX(last_fail_info) as last_fail_info, MAX(cause_type) as cause_type,
 
 			-- Aggregated Numeric Values
-			COUNT(*) as executions,
-			MIN(request_time) as min_request_time,
-			MAX(request_time) as max_request_time,
+			COUNT(*) as executions, MIN(request_time) as min_request_time, MAX(request_time) as max_request_time,
+			MAX(request_id) as max_request_id, MIN(request_id) as min_request_id,
 
 			SUM(elapsed_time) as elapsed_time_sum, MAX(elapsed_time) as elapsed_time_max, MIN(elapsed_time) as elapsed_time_min,
 			SUM(execute_time) as execute_time_sum, MAX(execute_time) as execute_time_max, MIN(execute_time) as execute_time_min,
@@ -69,8 +66,25 @@ func (c *Collector) collectFromObserver(ctx context.Context, manager *operation.
 			SUM(memstore_read_row_count) as memstore_read_row_count_sum, MAX(memstore_read_row_count) as memstore_read_row_count_max, MIN(memstore_read_row_count) as memstore_read_row_count_min,
 			SUM(ssstore_read_row_count) as ssstore_read_row_count_sum, MAX(ssstore_read_row_count) as ssstore_read_row_count_max, MIN(ssstore_read_row_count) as ssstore_read_row_count_min,
 			SUM(request_memory_used) as request_memory_used_sum, MAX(request_memory_used) as request_memory_used_max, MIN(request_memory_used) as request_memory_used_min,
+			SUM(wait_time_micro) as wait_time_micro_sum, MAX(wait_time_micro) as wait_time_micro_max, MIN(wait_time_micro) as wait_time_micro_min,
+			SUM(total_wait_time_micro) as total_wait_time_micro_sum, MAX(total_wait_time_micro) as total_wait_time_micro_max, MIN(total_wait_time_micro) as total_wait_time_micro_min,
+			SUM(net_time) as net_time_sum, MAX(net_time) as net_time_max, MIN(net_time) as net_time_min,
+			SUM(net_wait_time) as net_wait_time_sum, MAX(net_wait_time) as net_wait_time_max, MIN(net_wait_time) as net_wait_time_min,
+			SUM(decode_time) as decode_time_sum, MAX(decode_time) as decode_time_max, MIN(decode_time) as decode_time_min,
+			SUM(application_wait_time) as application_wait_time_sum, MAX(application_wait_time) as application_wait_time_max, MIN(application_wait_time) as application_wait_time_min,
+			SUM(concurrency_wait_time) as concurrency_wait_time_sum, MAX(concurrency_wait_time) as concurrency_wait_time_max, MIN(concurrency_wait_time) as concurrency_wait_time_min,
+			SUM(user_io_wait_time) as user_io_wait_time_sum, MAX(user_io_wait_time) as user_io_wait_time_max, MIN(user_io_wait_time) as user_io_wait_time_min,
+			SUM(schedule_time) as schedule_time_sum, MAX(schedule_time) as schedule_time_max, MIN(schedule_time) as schedule_time_min,
+			SUM(row_cache_hit) as row_cache_hit_sum, MAX(row_cache_hit) as row_cache_hit_max, MIN(row_cache_hit) as row_cache_hit_min,
+			SUM(bloom_filter_cache_hit) as bloom_filter_cache_hit_sum, MAX(bloom_filter_cache_hit) as bloom_filter_cache_hit_max, MIN(bloom_filter_cache_hit) as bloom_filter_cache_hit_min,
+			SUM(block_cache_hit) as block_cache_hit_sum, MAX(block_cache_hit) as block_cache_hit_max, MIN(block_cache_hit) as block_cache_hit_min,
+			SUM(block_index_cache_hit) as block_index_cache_hit_sum, MAX(block_index_cache_hit) as block_index_cache_hit_max, MIN(block_index_cache_hit) as block_index_cache_hit_min,
+			SUM(expected_worker_count) as expected_worker_count_sum, MAX(expected_worker_count) as expected_worker_count_max, MIN(expected_worker_count) as expected_worker_count_min,
+			SUM(used_worker_count) as used_worker_count_sum, MAX(used_worker_count) as used_worker_count_max, MIN(used_worker_count) as used_worker_count_min,
+			SUM(table_scan) as table_scan_sum, MAX(table_scan) as table_scan_max, MIN(table_scan) as table_scan_min,
+			SUM(consistency_level_strong) as consistency_level_strong_sum, MAX(consistency_level_strong) as consistency_level_strong_max, MIN(consistency_level_strong) as consistency_level_strong_min,
+			SUM(consistency_level_weak) as consistency_level_weak_sum, MAX(consistency_level_weak) as consistency_level_weak_max, MIN(consistency_level_weak) as consistency_level_weak_min,
 			SUM(CASE WHEN ret_code = 0 THEN 0 ELSE 1 END) as fail_count_sum,
-
 			SUM(CASE WHEN ret_code = -4012 THEN 1 ELSE 0 END) as ret_code_4012_count_sum,
 			SUM(CASE WHEN ret_code = -4013 THEN 1 ELSE 0 END) as ret_code_4013_count_sum,
 			SUM(CASE WHEN ret_code = -5001 THEN 1 ELSE 0 END) as ret_code_5001_count_sum,
@@ -78,11 +92,23 @@ func (c *Collector) collectFromObserver(ctx context.Context, manager *operation.
 			SUM(CASE WHEN ret_code = -5167 THEN 1 ELSE 0 END) as ret_code_5167_count_sum,
 			SUM(CASE WHEN ret_code = -5217 THEN 1 ELSE 0 END) as ret_code_5217_count_sum,
 			SUM(CASE WHEN ret_code = -6002 THEN 1 ELSE 0 END) as ret_code_6002_count_sum,
-
 			SUM(CASE event WHEN 'system internal wait' THEN wait_time_micro ELSE 0 END) as event_0_wait_time_sum,
 			SUM(CASE event WHEN 'mysql response wait client' THEN wait_time_micro ELSE 0 END) as event_1_wait_time_sum,
 			SUM(CASE event WHEN 'sync rpc' THEN wait_time_micro ELSE 0 END) as event_2_wait_time_sum,
-			SUM(CASE event WHEN 'db file data read' THEN wait_time_micro ELSE 0 END) as event_3_wait_time_sum
+			SUM(CASE event WHEN 'db file data read' THEN wait_time_micro ELSE 0 END) as event_3_wait_time_sum,
+
+			MAX(cpu_time) as max_cpu_time,
+			MAX(elapsed_time) as max_elapsed_time,
+			MAX(expected_worker_count) as max_expected_worker_count,
+			MAX(used_worker_count) as max_used_worker_count,
+			MAX(request_memory_used) as max_memory_used,
+			MAX(application_wait_time) as max_application_wait_time,
+			MAX(concurrency_wait_time) as max_concurrency_wait_time,
+			MAX(user_io_wait_time) as max_user_io_wait_time,
+			MAX(disk_reads) as max_disk_reads,
+			MAX(affected_rows) as max_affected_rows,
+			MAX(return_rows) as max_return_rows,
+			MAX(partition_cnt) as max_partition_count
 
 		FROM gv$ob_sql_audit
 		WHERE tenant_id = ? AND svr_ip = ? AND request_id > ?
@@ -120,10 +146,10 @@ func (c *Collector) Collect(ctx context.Context, manager *operation.OceanbaseOpe
 		}
 
 		wg.Add(1)
-		go func(svrIP string, lastID uint64) {
+		go func(svrIP string, lastRequestID uint64) {
 			defer wg.Done()
-			log.Printf("Collecting from observer %s since request_id %d", svrIP, lastID)
-			data, err := c.collectFromObserver(ctx, manager, svrIP, lastID)
+			log.Printf("Collecting from observer %s since request_id %d", svrIP, lastRequestID)
+			data, err := c.collectFromObserver(ctx, manager, svrIP, lastRequestID)
 			if err != nil {
 				errChan <- fmt.Errorf("failed to collect from observer %s: %w", svrIP, err)
 				return
@@ -150,8 +176,10 @@ func (c *Collector) Collect(ctx context.Context, manager *operation.OceanbaseOpe
 
 	// Step 3: Update the last request IDs for the next cycle.
 	c.mu.Lock()
-	for svrIP, maxRequestID := range maxRequestIDs {
-		c.lastRequestIDs[svrIP] = maxRequestID
+	for _, audit := range allResults {
+		if audit.MaxRequestId > c.lastRequestIDs[audit.SvrIP] {
+			c.lastRequestIDs[audit.SvrIP] = audit.MaxRequestId
+		}
 	}
 	c.mu.Unlock()
 

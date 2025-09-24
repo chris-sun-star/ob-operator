@@ -11,17 +11,31 @@ type SQLAudit struct {
 	DbId              uint64 `db:"db_id"`
 	DBName            string `db:"db_name"`
 	SqlId             string `db:"sql_id"`
-	QuerySql          string `db:"query_sql"`
 	PlanId            int64  `db:"plan_id"`
+
+	// Aggregated String/Identifier Values
+	QuerySql          string `db:"query_sql"`
 	ClientIp          string `db:"client_ip"`
 	Event             string `db:"event"`
 	PlanType          int64  `db:"plan_type"`
 	ConsistencyLevel  int64  `db:"consistency_level"`
+	FormatSqlId       string `db:"format_sql_id"`
+	EffectiveTenantId uint64 `db:"effective_tenant_id"`
+	TraceId           string `db:"trace_id"`
+	Sid               uint64 `db:"sid"`
+	UserClientIp      string `db:"user_client_ip"`
+	TxId              string `db:"tx_id"`
+	IsSubPlan         int64  `db:"is_sub_plan"`
+	SubPlanCount      int64  `db:"sub_plan_count"`
+	LastFailInfo      int64  `db:"last_fail_info"`
+	CauseType         int64  `db:"cause_type"`
 
-	// Aggregated Values
-	Executions        int64 `db:"executions"`
+	// Aggregated Numeric Values
+	Executions        int64 `db:"executions"` // COUNT(*)
 	MinRequestTime    int64 `db:"min_request_time"`
 	MaxRequestTime    int64 `db:"max_request_time"`
+	MaxRequestId      uint64 `db:"max_request_id"` // Crucial for progress tracking
+	MinRequestId      uint64 `db:"min_request_id"`
 
 	ElapsedTimeSum int64 `db:"elapsed_time_sum"`
 	ElapsedTimeMax int64 `db:"elapsed_time_max"`
@@ -74,6 +88,78 @@ type SQLAudit struct {
 	RequestMemoryUsedSum int64 `db:"request_memory_used_sum"`
 	RequestMemoryUsedMax int64 `db:"request_memory_used_max"`
 	RequestMemoryUsedMin int64 `db:"request_memory_used_min"`
+
+	WaitTimeMicroSum int64 `db:"wait_time_micro_sum"`
+	WaitTimeMicroMax int64 `db:"wait_time_micro_max"`
+	WaitTimeMicroMin int64 `db:"wait_time_micro_min"`
+
+	TotalWaitTimeMicroSum int64 `db:"total_wait_time_micro_sum"`
+	TotalWaitTimeMicroMax int64 `db:"total_wait_time_micro_max"`
+	TotalWaitTimeMicroMin int64 `db:"total_wait_time_micro_min"`
+
+	NetTimeSum int64 `db:"net_time_sum"`
+	NetTimeMax int64 `db:"net_time_max"`
+	NetTimeMin int64 `db:"net_time_min"`
+
+	NetWaitTimeSum int64 `db:"net_wait_time_sum"`
+	NetWaitTimeMax int64 `db:"net_wait_time_max"`
+	NetWaitTimeMin int64 `db:"net_wait_time_min"`
+
+	DecodeTimeSum int64 `db:"decode_time_sum"`
+	DecodeTimeMax int64 `db:"decode_time_max"`
+	DecodeTimeMin int64 `db:"decode_time_min"`
+
+	ApplicationWaitTimeSum int64 `db:"application_wait_time_sum"`
+	ApplicationWaitTimeMax int64 `db:"application_wait_time_max"`
+	ApplicationWaitTimeMin int64 `db:"application_wait_time_min"`
+
+	ConcurrencyWaitTimeSum int64 `db:"concurrency_wait_time_sum"`
+	ConcurrencyWaitTimeMax int64 `db:"concurrency_wait_time_max"`
+	ConcurrencyWaitTimeMin int64 `db:"concurrency_wait_time_min"`
+
+	UserIoWaitTimeSum int64 `db:"user_io_wait_time_sum"`
+	UserIoWaitTimeMax int64 `db:"user_io_wait_time_max"`
+	UserIoWaitTimeMin int64 `db:"user_io_wait_time_min"`
+
+	ScheduleTimeSum int64 `db:"schedule_time_sum"`
+	ScheduleTimeMax int64 `db:"schedule_time_max"`
+	ScheduleTimeMin int64 `db:"schedule_time_min"`
+
+	RowCacheHitSum int64 `db:"row_cache_hit_sum"`
+	RowCacheHitMax int64 `db:"row_cache_hit_max"`
+	RowCacheHitMin int64 `db:"row_cache_hit_min"`
+
+	BloomFilterCacheHitSum int64 `db:"bloom_filter_cache_hit_sum"`
+	BloomFilterCacheHitMax int64 `db:"bloom_filter_cache_hit_max"`
+	BloomFilterCacheHitMin int64 `db:"bloom_filter_cache_hit_min"`
+
+	BlockCacheHitSum int64 `db:"block_cache_hit_sum"`
+	BlockCacheHitMax int64 `db:"block_cache_hit_max"`
+	BlockCacheHitMin int64 `db:"block_cache_hit_min"`
+
+	BlockIndexCacheHitSum int64 `db:"block_index_cache_hit_sum"`
+	BlockIndexCacheHitMax int64 `db:"block_index_cache_hit_max"`
+	BlockIndexCacheHitMin int64 `db:"block_index_cache_hit_min"`
+
+	ExpectedWorkerCountSum int64 `db:"expected_worker_count_sum"`
+	ExpectedWorkerCountMax int64 `db:"expected_worker_count_max"`
+	ExpectedWorkerCountMin int64 `db:"expected_worker_count_min"`
+
+	UsedWorkerCountSum int64 `db:"used_worker_count_sum"`
+	UsedWorkerCountMax int64 `db:"used_worker_count_max"`
+	UsedWorkerCountMin int64 `db:"used_worker_count_min"`
+
+	TableScanSum int64 `db:"table_scan_sum"`
+	TableScanMax int64 `db:"table_scan_max"`
+	TableScanMin int64 `db:"table_scan_min"`
+
+	ConsistencyLevelStrongSum int64 `db:"consistency_level_strong_sum"`
+	ConsistencyLevelStrongMax int64 `db:"consistency_level_strong_max"`
+	ConsistencyLevelStrongMin int64 `db:"consistency_level_strong_min"`
+
+	ConsistencyLevelWeakSum int64 `db:"consistency_level_weak_sum"`
+	ConsistencyLevelWeakMax int64 `db:"consistency_level_weak_max"`
+	ConsistencyLevelWeakMin int64 `db:"consistency_level_weak_min"`
 
 	FailCountSum int64 `db:"fail_count_sum"`
 
