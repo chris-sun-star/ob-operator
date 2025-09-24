@@ -43,7 +43,7 @@ func (c *Collector) collectFromObserver(ctx context.Context, manager *operation.
 		SELECT
 			svr_ip, tenant_id, tenant_name, user_id, user_name, db_id, db_name, sql_id, plan_id,
 
-			MAX(query_sql) as query_sql, MAX(client_ip) as client_ip, MAX(event) as event, MAX(plan_type) as plan_type, 
+			MAX(query_sql) as query_sql, MAX(client_ip) as client_ip, MAX(event) as event, 
 			MAX(format_sql_id) as format_sql_id, MAX(effective_tenant_id) as effective_tenant_id, MAX(trace_id) as trace_id, MAX(sid) as sid, MAX(user_client_ip) as user_client_ip, MAX(tx_id) as tx_id,
 
 			COUNT(*) as executions, MIN(request_time) as min_request_time, MAX(request_time) as max_request_time,
@@ -91,7 +91,14 @@ func (c *Collector) collectFromObserver(ctx context.Context, manager *operation.
 			SUM(CASE event WHEN 'system internal wait' THEN wait_time_micro ELSE 0 END) as event_0_wait_time_sum,
 			SUM(CASE event WHEN 'mysql response wait client' THEN wait_time_micro ELSE 0 END) as event_1_wait_time_sum,
 			SUM(CASE event WHEN 'sync rpc' THEN wait_time_micro ELSE 0 END) as event_2_wait_time_sum,
-			SUM(CASE event WHEN 'db file data read' THEN wait_time_micro ELSE 0 END) as event_3_wait_time_sum
+			SUM(CASE event WHEN 'db file data read' THEN wait_time_micro ELSE 0 END) as event_3_wait_time_sum,
+
+			SUM(CASE plan_type WHEN 1 THEN 1 ELSE 0 END) as plan_type_local_count,
+			SUM(CASE plan_type WHEN 2 THEN 1 ELSE 0 END) as plan_type_remote_count,
+			SUM(CASE plan_type WHEN 3 THEN 1 ELSE 0 END) as plan_type_distributed_count,
+			SUM(CASE is_inner_sql WHEN 1 THEN 1 ELSE 0 END) as inner_sql_count,
+			SUM(CASE is_hit_plan WHEN 1 THEN 0 ELSE 1 END) as miss_plan_count,
+			SUM(CASE is_executor_rpc WHEN 1 THEN 1 ELSE 0 END) as executor_rpc_count
 
 
 		FROM gv$ob_sql_audit

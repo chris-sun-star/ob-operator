@@ -17,7 +17,6 @@ type SQLAudit struct {
 	QuerySql          string `db:"query_sql"`
 	ClientIp          string `db:"client_ip"`
 	Event             string `db:"event"`
-	PlanType          int64  `db:"plan_type"`
 	FormatSqlId       string `db:"format_sql_id"`
 	EffectiveTenantId uint64 `db:"effective_tenant_id"`
 	TraceId           string `db:"trace_id"`
@@ -172,6 +171,13 @@ type SQLAudit struct {
 	Event1WaitTimeSum int64 `db:"event_1_wait_time_sum"`
 	Event2WaitTimeSum int64 `db:"event_2_wait_time_sum"`
 	Event3WaitTimeSum int64 `db:"event_3_wait_time_sum"`
+
+	PlanTypeLocalCount       int64 `db:"plan_type_local_count"`
+	PlanTypeRemoteCount      int64 `db:"plan_type_remote_count"`
+	PlanTypeDistributedCount int64 `db:"plan_type_distributed_count"`
+	InnerSqlCount            int64 `db:"inner_sql_count"`
+	MissPlanCount            int64 `db:"miss_plan_count"`
+	ExecutorRpcCount         int64 `db:"executor_rpc_count"`
 }
 
 // Tenant represents a tenant with its ID.

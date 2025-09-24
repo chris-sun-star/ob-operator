@@ -23,16 +23,13 @@ func NewDuckDBManager(path string) (*DuckDBManager, error) {
 
 	_, err = db.Exec(`
         CREATE TABLE IF NOT EXISTS sql_audit (
-            -- Grouping Keys
             svr_ip VARCHAR, tenant_id BIGINT, tenant_name VARCHAR, user_id BIGINT, user_name VARCHAR,
             db_id BIGINT, db_name VARCHAR, sql_id VARCHAR, plan_id BIGINT,
 
-            -- Aggregated String/Identifier Values
-            query_sql TEXT, client_ip VARCHAR, event VARCHAR, plan_type BIGINT, 
+            query_sql TEXT, client_ip VARCHAR, event VARCHAR,
             format_sql_id VARCHAR, effective_tenant_id BIGINT, trace_id VARCHAR, sid BIGINT,
             user_client_ip VARCHAR, tx_id VARCHAR,
 
-            -- Aggregated Numeric Values
             executions BIGINT, min_request_time BIGINT, max_request_time BIGINT,
             max_request_id BIGINT, min_request_id BIGINT,
 
@@ -73,6 +70,10 @@ func NewDuckDBManager(path string) (*DuckDBManager, error) {
 			ret_code_6002_count_sum BIGINT,
 			event_0_wait_time_sum BIGINT, event_1_wait_time_sum BIGINT, event_2_wait_time_sum BIGINT,
 			event_3_wait_time_sum BIGINT,
+			plan_type_local_count BIGINT, plan_type_remote_count BIGINT, plan_type_distributed_count BIGINT,
+			inner_sql_count BIGINT,
+			miss_plan_count BIGINT,
+			executor_rpc_count BIGINT,
 
             collect_time TIMESTAMPTZ,
 
@@ -120,7 +121,7 @@ func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
 	if len(results) == 0 {
 		return nil
 	}
-	numColumns := 126 // Number of fields in SQLAudit + collect_time
+	numColumns := 131 // Number of fields in SQLAudit + collect_time
 	placeholders := strings.Repeat("?,", numColumns-1) + "?"
 	sql := fmt.Sprintf("INSERT OR IGNORE INTO sql_audit VALUES (%s)", placeholders)
 
@@ -137,7 +138,7 @@ func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
 			// Grouping Keys
 			r.SvrIP, r.TenantId, r.TenantName, r.UserId, r.UserName, r.DbId, r.DBName, r.SqlId, r.PlanId,
 			// Aggregated String/Identifier Values
-			r.QuerySql, r.ClientIp, r.Event, r.PlanType, r.FormatSqlId, r.EffectiveTenantId, r.TraceId, r.Sid, r.UserClientIp, r.TxId,
+			r.QuerySql, r.ClientIp, r.Event, r.FormatSqlId, r.EffectiveTenantId, r.TraceId, r.Sid, r.UserClientIp, r.TxId,
 			// Aggregated Numeric Values
 			r.Executions, r.MinRequestTime, r.MaxRequestTime, r.MaxRequestId, r.MinRequestId,
 			r.ElapsedTimeSum, r.ElapsedTimeMax, r.ElapsedTimeMin,
@@ -175,6 +176,10 @@ func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
 			r.RetCode4012CountSum, r.RetCode4013CountSum, r.RetCode5001CountSum, r.RetCode5024CountSum,
 			r.RetCode5167CountSum, r.RetCode5217CountSum, r.RetCode6002CountSum,
 			r.Event0WaitTimeSum, r.Event1WaitTimeSum, r.Event2WaitTimeSum, r.Event3WaitTimeSum,
+			r.PlanTypeLocalCount, r.PlanTypeRemoteCount, r.PlanTypeDistributedCount,
+			r.InnerSqlCount,
+			r.MissPlanCount,
+			r.ExecutorRpcCount,
 
 			collectTime,
 		)
