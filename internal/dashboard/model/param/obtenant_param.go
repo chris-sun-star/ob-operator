@@ -40,7 +40,7 @@ type CreateOBTenantParam struct {
 	DeletionProtection     bool            `json:"deletionProtection"`
 	EnableSQLDataCollector bool            `json:"enableSqlDataCollector,omitempty"`
 	Parameters             []common.KVPair `json:"parameters"`
-	Variables          []common.KVPair `json:"variables"`
+	Variables              []common.KVPair `json:"variables"`
 }
 
 type ResourcePoolSpec struct {

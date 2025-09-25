@@ -29,11 +29,11 @@ import (
 
 // ConnectionManager handles the connection to the OceanBase cluster.
 type ConnectionManager struct {
-	k8sClient          client.Client
-	logger             logr.Logger
-	obcluster          *v1alpha1.OBCluster
-	cachedConnection   *operation.OceanbaseOperationManager
-	mu                 sync.Mutex
+	k8sClient        client.Client
+	logger           logr.Logger
+	obcluster        *v1alpha1.OBCluster
+	cachedConnection *operation.OceanbaseOperationManager
+	mu               sync.Mutex
 }
 
 // NewConnectionManager creates a new ConnectionManager.

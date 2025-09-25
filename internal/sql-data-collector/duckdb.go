@@ -2,6 +2,7 @@ package sqldatacollector
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -185,7 +186,8 @@ func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
 		)
 		if err != nil {
 			txn.Rollback()
-			return fmt.Errorf("failed to execute statement: %w", err)
+			recordJSON, _ := json.Marshal(r)
+			return fmt.Errorf("failed to execute statement for record %s: %w", string(recordJSON), err)
 		}
 	}
 

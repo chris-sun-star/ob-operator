@@ -43,8 +43,8 @@ type SQLDataCollectorConfig struct {
 }
 
 type Config struct {
-	Inspection     InspectionConfig       `yaml:"inspection"`
-	Job            JobConfig              `yaml:"job"`
+	Inspection       InspectionConfig       `yaml:"inspection"`
+	Job              JobConfig              `yaml:"job"`
 	SQLDataCollector SQLDataCollectorConfig `yaml:"sqlDataCollector"`
 }
 

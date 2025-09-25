@@ -580,7 +580,6 @@ func createSQLDataCollectorDeployment(ctx context.Context, tenant *v1alpha1.OBTe
 		},
 	}
 
-
 	_, err := k8sclient.ClientSet.AppsV1().Deployments(namespace).Create(ctx, deployment, v1.CreateOptions{})
 	if err != nil {
 		logger.Errorf("failed to create deployment %s: %v", deployment.Name, err)
