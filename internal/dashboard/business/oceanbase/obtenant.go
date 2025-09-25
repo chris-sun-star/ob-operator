@@ -493,7 +493,7 @@ func CreateOBTenant(ctx context.Context, nn types.NamespacedName, p *param.Creat
 func createSQLDataCollectorDeployment(ctx context.Context, tenant *v1alpha1.OBTenant) error {
 	k8sclient := client.GetClient()
 
-	deploymentName := fmt.Sprintf("sql-data-collector-%s", tenant.Name)
+	deploymentName := fmt.Sprintf("sql-data-collector-%s-%s", tenant.Namespace, tenant.Name)
 	namespace := os.Getenv("NAMESPACE")
 	pvcName := os.Getenv("SHARED_VOLUME_PVC_NAME")
 
@@ -511,9 +511,6 @@ func createSQLDataCollectorDeployment(ctx context.Context, tenant *v1alpha1.OBTe
 		ObjectMeta: v1.ObjectMeta{
 			Name:      deploymentName,
 			Namespace: namespace,
-			OwnerReferences: []v1.OwnerReference{
-				*v1.NewControllerRef(tenant, v1alpha1.GroupVersion.WithKind("OBTenant")),
-			},
 			Labels: map[string]string{
 				"app":    "sql-data-collector",
 				"tenant": tenant.Name,
@@ -583,8 +580,13 @@ func createSQLDataCollectorDeployment(ctx context.Context, tenant *v1alpha1.OBTe
 		},
 	}
 
+
 	_, err := k8sclient.ClientSet.AppsV1().Deployments(namespace).Create(ctx, deployment, v1.CreateOptions{})
-	if err != nil && !kubeerrors.IsAlreadyExists(err) {
+	if err != nil {
+		logger.Errorf("failed to create deployment %s: %v", deployment.Name, err)
+		if kubeerrors.IsAlreadyExists(err) {
+			return nil
+		}
 		return oberr.NewInternal(err.Error())
 	}
 	logger.Infof("create sql-data-collector deployment %s for tenant %s", deploymentName, tenant.Name)
@@ -617,6 +619,17 @@ func GetOBTenant(ctx context.Context, nn types.NamespacedName) (*response.OBTena
 }
 
 func DeleteOBTenant(ctx context.Context, nn types.NamespacedName) error {
+	dashboardNamespace := os.Getenv("NAMESPACE")
+	if dashboardNamespace != "" {
+		deploymentName := fmt.Sprintf("sql-data-collector-%s-%s", nn.Namespace, nn.Name)
+		k8sclient := client.GetClient()
+		err := k8sclient.ClientSet.AppsV1().Deployments(dashboardNamespace).Delete(ctx, deploymentName, v1.DeleteOptions{})
+		if err != nil && !kubeerrors.IsNotFound(err) {
+			logger.Errorf("failed to delete sql-data-collector deployment %s: %v", deploymentName, err)
+		}
+	} else {
+		logger.Warn("NAMESPACE environment variable not set, cannot delete sql-data-collector deployment")
+	}
 	return clients.DeleteOBTenant(ctx, nn)
 }
 
