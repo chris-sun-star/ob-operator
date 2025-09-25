@@ -1,13 +1,14 @@
 package sqldatacollector
 
 import (
+	"context"
 	"database/sql"
-	"encoding/json"
+	"database/sql/driver"
 	"fmt"
 	"strings"
 	"time"
 
-	_ "github.com/marcboeker/go-duckdb"
+	duckdb "github.com/marcboeker/go-duckdb"
 )
 
 // DuckDBManager handles operations with the DuckDB database.
@@ -113,85 +114,90 @@ func (m *DuckDBManager) GetLastRequestIDs() (map[string]uint64, error) {
 
 // InsertBatch inserts a batch of SQL audit data into the database.
 func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
-	txn, err := m.db.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-
-	// Dynamically generate the INSERT statement
 	if len(results) == 0 {
 		return nil
 	}
-	numColumns := 131 // Number of fields in SQLAudit + collect_time
-	placeholders := strings.Repeat("?,", numColumns-1) + "?"
-	sql := fmt.Sprintf("INSERT OR IGNORE INTO sql_audit VALUES (%s)", placeholders)
 
-	stmt, err := txn.Prepare(sql)
+	conn, err := m.db.Conn(context.Background())
 	if err != nil {
-		return fmt.Errorf("failed to prepare statement: %w", err)
+		return fmt.Errorf("failed to get connection for appender: %w", err)
 	}
-	defer stmt.Close()
+	defer conn.Close()
 
-	collectTime := time.Now()
-
-	for _, r := range results {
-		_, err := stmt.Exec(
-			// Grouping Keys
-			r.SvrIP, r.TenantId, r.TenantName, r.UserId, r.UserName, r.DbId, r.DBName, r.SqlId, r.PlanId,
-			// Aggregated String/Identifier Values
-			r.QuerySql, r.ClientIp, r.Event, r.FormatSqlId, r.EffectiveTenantId, r.TraceId, r.Sid, r.UserClientIp, r.TxId,
-			// Aggregated Numeric Values
-			r.Executions, r.MinRequestTime, r.MaxRequestTime, r.MaxRequestId, r.MinRequestId,
-			r.ElapsedTimeSum, r.ElapsedTimeMax, r.ElapsedTimeMin,
-			r.ExecuteTimeSum, r.ExecuteTimeMax, r.ExecuteTimeMin,
-			r.QueueTimeSum, r.QueueTimeMax, r.QueueTimeMin,
-			r.GetPlanTimeSum, r.GetPlanTimeMax, r.GetPlanTimeMin,
-			r.AffectedRowsSum, r.AffectedRowsMax, r.AffectedRowsMin,
-			r.ReturnRowsSum, r.ReturnRowsMax, r.ReturnRowsMin,
-			r.PartitionCountSum, r.PartitionCountMax, r.PartitionCountMin,
-			r.RetryCountSum, r.RetryCountMax, r.RetryCountMin,
-			r.DiskReadsSum, r.DiskReadsMax, r.DiskReadsMin,
-			r.RpcCountSum, r.RpcCountMax, r.RpcCountMin,
-			r.MemstoreReadRowCountSum, r.MemstoreReadRowCountMax, r.MemstoreReadRowCountMin,
-			r.SSStoreReadRowCountSum, r.SSStoreReadRowCountMax, r.SSStoreReadRowCountMin,
-			r.RequestMemoryUsedSum, r.RequestMemoryUsedMax, r.RequestMemoryUsedMin,
-			r.WaitTimeMicroSum, r.WaitTimeMicroMax, r.WaitTimeMicroMin,
-			r.TotalWaitTimeMicroSum, r.TotalWaitTimeMicroMax, r.TotalWaitTimeMicroMin,
-			r.NetTimeSum, r.NetTimeMax, r.NetTimeMin,
-			r.NetWaitTimeSum, r.NetWaitTimeMax, r.NetWaitTimeMin,
-			r.DecodeTimeSum, r.DecodeTimeMax, r.DecodeTimeMin,
-			r.ApplicationWaitTimeSum, r.ApplicationWaitTimeMax, r.ApplicationWaitTimeMin,
-			r.ConcurrencyWaitTimeSum, r.ConcurrencyWaitTimeMax, r.ConcurrencyWaitTimeMin,
-			r.UserIoWaitTimeSum, r.UserIoWaitTimeMax, r.UserIoWaitTimeMin,
-			r.ScheduleTimeSum, r.ScheduleTimeMax, r.ScheduleTimeMin,
-			r.RowCacheHitSum, r.RowCacheHitMax, r.RowCacheHitMin,
-			r.BloomFilterCacheHitSum, r.BloomFilterCacheHitMax, r.BloomFilterCacheHitMin,
-			r.BlockCacheHitSum, r.BlockCacheHitMax, r.BlockCacheHitMin,
-			r.IndexBlockCacheHitSum, r.IndexBlockCacheHitMax, r.IndexBlockCacheHitMin,
-			r.ExpectedWorkerCountSum, r.ExpectedWorkerCountMax, r.ExpectedWorkerCountMin,
-			r.UsedWorkerCountSum, r.UsedWorkerCountMax, r.UsedWorkerCountMin,
-			r.TableScanSum, r.TableScanMax, r.TableScanMin,
-			r.ConsistencyLevelStrongCount,
-			r.ConsistencyLevelWeakCount,
-			r.FailCountSum,
-			r.RetCode4012CountSum, r.RetCode4013CountSum, r.RetCode5001CountSum, r.RetCode5024CountSum,
-			r.RetCode5167CountSum, r.RetCode5217CountSum, r.RetCode6002CountSum,
-			r.Event0WaitTimeSum, r.Event1WaitTimeSum, r.Event2WaitTimeSum, r.Event3WaitTimeSum,
-			r.PlanTypeLocalCount, r.PlanTypeRemoteCount, r.PlanTypeDistributedCount,
-			r.InnerSqlCount,
-			r.MissPlanCount,
-			r.ExecutorRpcCount,
-
-			collectTime,
-		)
-		if err != nil {
-			txn.Rollback()
-			recordJSON, _ := json.Marshal(r)
-			return fmt.Errorf("failed to execute statement for record %s: %w", string(recordJSON), err)
+	return conn.Raw(func(driverConn interface{}) error {
+		duckdbConn, ok := driverConn.(driver.Conn)
+		if !ok {
+			return fmt.Errorf("failed to get raw duckdb connection")
 		}
-	}
 
-	return txn.Commit()
+		appender, err := duckdb.NewAppenderFromConn(duckdbConn, "", "sql_audit")
+		if err != nil {
+			return fmt.Errorf("failed to create appender: %w", err)
+		}
+
+		collectTime := time.Now()
+
+		for _, r := range results {
+			err := appender.AppendRow(
+				// Grouping Keys
+				r.SvrIP, r.TenantId, r.TenantName, r.UserId, r.UserName, r.DbId, r.DBName, r.SqlId, r.PlanId,
+				// Aggregated String/Identifier Values
+				r.QuerySql, r.ClientIp, r.Event, r.FormatSqlId, r.EffectiveTenantId, r.TraceId, r.Sid, r.UserClientIp, r.TxId,
+				// Aggregated Numeric Values
+				r.Executions, r.MinRequestTime, r.MaxRequestTime, r.MaxRequestId, r.MinRequestId,
+				r.ElapsedTimeSum, r.ElapsedTimeMax, r.ElapsedTimeMin,
+				r.ExecuteTimeSum, r.ExecuteTimeMax, r.ExecuteTimeMin,
+				r.QueueTimeSum, r.QueueTimeMax, r.QueueTimeMin,
+				r.GetPlanTimeSum, r.GetPlanTimeMax, r.GetPlanTimeMin,
+				r.AffectedRowsSum, r.AffectedRowsMax, r.AffectedRowsMin,
+				r.ReturnRowsSum, r.ReturnRowsMax, r.ReturnRowsMin,
+				r.PartitionCountSum, r.PartitionCountMax, r.PartitionCountMin,
+				r.RetryCountSum, r.RetryCountMax, r.RetryCountMin,
+				r.DiskReadsSum, r.DiskReadsMax, r.DiskReadsMin,
+				r.RpcCountSum, r.RpcCountMax, r.RpcCountMin,
+				r.MemstoreReadRowCountSum, r.MemstoreReadRowCountMax, r.MemstoreReadRowCountMin,
+				r.SSStoreReadRowCountSum, r.SSStoreReadRowCountMax, r.SSStoreReadRowCountMin,
+				r.RequestMemoryUsedSum, r.RequestMemoryUsedMax, r.RequestMemoryUsedMin,
+				r.WaitTimeMicroSum, r.WaitTimeMicroMax, r.WaitTimeMicroMin,
+				r.TotalWaitTimeMicroSum, r.TotalWaitTimeMicroMax, r.TotalWaitTimeMicroMin,
+				r.NetTimeSum, r.NetTimeMax, r.NetTimeMin,
+				r.NetWaitTimeSum, r.NetWaitTimeMax, r.NetWaitTimeMin,
+				r.DecodeTimeSum, r.DecodeTimeMax, r.DecodeTimeMin,
+				r.ApplicationWaitTimeSum, r.ApplicationWaitTimeMax, r.ApplicationWaitTimeMin,
+				r.ConcurrencyWaitTimeSum, r.ConcurrencyWaitTimeMax, r.ConcurrencyWaitTimeMin,
+				r.UserIoWaitTimeSum, r.UserIoWaitTimeMax, r.UserIoWaitTimeMin,
+				r.ScheduleTimeSum, r.ScheduleTimeMax, r.ScheduleTimeMin,
+				r.RowCacheHitSum, r.RowCacheHitMax, r.RowCacheHitMin,
+				r.BloomFilterCacheHitSum, r.BloomFilterCacheHitMax, r.BloomFilterCacheHitMin,
+				r.BlockCacheHitSum, r.BlockCacheHitMax, r.BlockCacheHitMin,
+				r.IndexBlockCacheHitSum, r.IndexBlockCacheHitMax, r.IndexBlockCacheHitMin,
+				r.ExpectedWorkerCountSum, r.ExpectedWorkerCountMax, r.ExpectedWorkerCountMin,
+				r.UsedWorkerCountSum, r.UsedWorkerCountMax, r.UsedWorkerCountMin,
+				r.TableScanSum, r.TableScanMax, r.TableScanMin,
+				r.ConsistencyLevelStrongCount,
+				r.ConsistencyLevelWeakCount,
+				r.FailCountSum,
+				r.RetCode4012CountSum, r.RetCode4013CountSum, r.RetCode5001CountSum, r.RetCode5024CountSum,
+				r.RetCode5167CountSum, r.RetCode5217CountSum, r.RetCode6002CountSum,
+				r.Event0WaitTimeSum, r.Event1WaitTimeSum, r.Event2WaitTimeSum, r.Event3WaitTimeSum,
+				r.PlanTypeLocalCount, r.PlanTypeRemoteCount, r.PlanTypeDistributedCount,
+				r.InnerSqlCount,
+				r.MissPlanCount,
+				r.ExecutorRpcCount,
+
+				collectTime,
+			)
+			if err != nil {
+				appender.Close() // Rollback
+				return fmt.Errorf("failed to append row: %w", err)
+			}
+		}
+
+		if err := appender.Close(); err != nil {
+			return fmt.Errorf("failed to flush and close appender: %w", err)
+		}
+		return nil
+	})
 }
 
 // Close closes the database connection.

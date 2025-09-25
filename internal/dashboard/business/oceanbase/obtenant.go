@@ -503,7 +503,7 @@ func createSQLDataCollectorDeployment(ctx context.Context, tenant *v1alpha1.OBTe
 
 	image := config.GetConfig().SQLDataCollector.Image
 	dataPath := "/data"
-	tenantDataPath := fmt.Sprintf("sql-data-collector/%s", tenant.Name)
+	tenantDataPath := fmt.Sprintf("sql-data-collector/%s/%s", tenant.Namespace, tenant.Name)
 
 	replicas := int32(1)
 
