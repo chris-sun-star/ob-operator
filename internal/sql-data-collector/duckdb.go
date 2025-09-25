@@ -77,7 +77,7 @@ func NewDuckDBManager(path string) (*DuckDBManager, error) {
 
             collect_time TIMESTAMPTZ,
 
-            PRIMARY KEY (sql_id, svr_ip, min_request_time)
+PRIMARY KEY (svr_ip, tenant_id, tenant_name, user_id, user_name, db_id, db_name, sql_id, plan_id, max_request_id)
         )
     `)
 	if err != nil {
