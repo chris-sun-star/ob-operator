@@ -18,3 +18,5 @@ data:
         ttlSecondsAfterFinished: {{ .Values.job.inspection.ttlSecondsAfterFinished }}
       normal:
         ttlSecondsAfterFinished: {{ .Values.job.normal.ttlSecondsAfterFinished }}
+    sqlDataCollector:
+      image: {{ .Values.sqlDataCollector.image }}

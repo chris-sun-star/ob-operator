@@ -42,3 +42,6 @@ job:
   normal:
     ttlSecondsAfterFinished: 300 # 5 minutes
 
+sqlDataCollector:
+  image: "quay.io/oceanbase/sql-data-collector:0.1.0"
+

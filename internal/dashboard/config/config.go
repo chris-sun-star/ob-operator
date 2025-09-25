@@ -38,9 +38,14 @@ type JobConfig struct {
 	Normal     JobTypeConfig `yaml:"normal"`
 }
 
+type SQLDataCollectorConfig struct {
+	Image string `yaml:"image"`
+}
+
 type Config struct {
-	Inspection InspectionConfig `yaml:"inspection"`
-	Job        JobConfig        `yaml:"job"`
+	Inspection     InspectionConfig       `yaml:"inspection"`
+	Job            JobConfig              `yaml:"job"`
+	SQLDataCollector SQLDataCollectorConfig `yaml:"sqlDataCollector"`
 }
 
 var (

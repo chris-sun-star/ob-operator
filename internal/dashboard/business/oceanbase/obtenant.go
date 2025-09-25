@@ -14,12 +14,17 @@ package oceanbase
 
 import (
 	"context"
+	"fmt"
 	"math"
+	"os"
 	"sort"
 	"strings"
 
+	"github.com/oceanbase/ob-operator/internal/dashboard/config"
+
 	"github.com/pkg/errors"
 	logger "github.com/sirupsen/logrus"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -474,7 +479,116 @@ func CreateOBTenant(ctx context.Context, nn types.NamespacedName, p *param.Creat
 	if err != nil {
 		return nil, err
 	}
+
+	if p.EnableSQLDataCollector {
+		if err := createSQLDataCollectorDeployment(ctx, tenant); err != nil {
+			// Log the error, but don't fail the tenant creation
+			logger.Errorf("failed to create sql-data-collector deployment: %v", err)
+		}
+	}
+
 	return buildDetailFromApiType(ctx, tenant), nil
+}
+
+func createSQLDataCollectorDeployment(ctx context.Context, tenant *v1alpha1.OBTenant) error {
+	k8sclient := client.GetClient()
+
+	deploymentName := fmt.Sprintf("sql-data-collector-%s", tenant.Name)
+	namespace := os.Getenv("NAMESPACE")
+	pvcName := os.Getenv("SHARED_VOLUME_PVC_NAME")
+
+	// The service account name is constructed from the release name, which is part of the PVC name.
+	releaseName := strings.TrimSuffix(pvcName, "-shared-volume-pvc")
+	serviceAccountName := releaseName + "-sa"
+
+	image := config.GetConfig().SQLDataCollector.Image
+	dataPath := "/data"
+	tenantDataPath := fmt.Sprintf("sql-data-collector/%s", tenant.Name)
+
+	replicas := int32(1)
+
+	deployment := &appsv1.Deployment{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      deploymentName,
+			Namespace: namespace,
+			OwnerReferences: []v1.OwnerReference{
+				*v1.NewControllerRef(tenant, v1alpha1.GroupVersion.WithKind("OBTenant")),
+			},
+			Labels: map[string]string{
+				"app":    "sql-data-collector",
+				"tenant": tenant.Name,
+			},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &v1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app":    "sql-data-collector",
+					"tenant": tenant.Name,
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: v1.ObjectMeta{
+					Labels: map[string]string{
+						"app":    "sql-data-collector",
+						"tenant": tenant.Name,
+					},
+				},
+				Spec: corev1.PodSpec{
+					ServiceAccountName: serviceAccountName,
+					Volumes: []corev1.Volume{
+						{
+							Name: "data-volume",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: pvcName,
+								},
+							},
+						},
+					},
+					Containers: []corev1.Container{
+						{
+							Name:            "sql-data-collector",
+							Image:           image,
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "data-volume",
+									MountPath: dataPath,
+									SubPath:   tenantDataPath,
+								},
+							},
+							Env: []corev1.EnvVar{
+								{
+									Name:  "OB_CLUSTER_NAME",
+									Value: tenant.Spec.ClusterName,
+								},
+								{
+									Name:  "OB_CLUSTER_NAMESPACE",
+									Value: tenant.Namespace,
+								},
+								{
+									Name:  "OB_TENANT",
+									Value: tenant.Spec.TenantName,
+								},
+								{
+									Name:  "DATA_PATH",
+									Value: dataPath,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err := k8sclient.ClientSet.AppsV1().Deployments(namespace).Create(ctx, deployment, v1.CreateOptions{})
+	if err != nil && !kubeerrors.IsAlreadyExists(err) {
+		return oberr.NewInternal(err.Error())
+	}
+	logger.Infof("create sql-data-collector deployment %s for tenant %s", deploymentName, tenant.Name)
+	return nil
 }
 
 func ListAllOBTenants(ctx context.Context, ns string, listOptions v1.ListOptions) ([]*response.OBTenantOverview, error) {
