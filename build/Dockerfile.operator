@@ -8,7 +8,7 @@ ARG RACE
 WORKDIR /workspace
 # copy everything
 COPY . .
-RUN make build
+RUN make operator
 
 # start build docker image
 FROM openanolis/anolisos:8.8

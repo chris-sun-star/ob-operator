@@ -13,7 +13,7 @@ WORKDIR /workspace
 COPY . .
 RUN make dashboard-dep-install
 RUN swag --version
-RUN make dashboard-build
+RUN make dashboard
 
 # start build docker image
 FROM openanolis/anolisos:8.8
