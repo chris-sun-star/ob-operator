@@ -12,7 +12,7 @@ COPY . .
 RUN if [ -n "$GOPROXY" ]; then go env -w GOPROXY=$GOPROXY; fi
 RUN if [ -n "$GOSUMDB" ]; then go env -w GOSUMDB=$GOSUMDB; fi
 
-RUN make build-sql-data-collector
+RUN make sql-data-collector
 
 # start build docker image
 # Use ubuntu:24.04 as the base image

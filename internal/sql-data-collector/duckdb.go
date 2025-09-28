@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -13,28 +15,88 @@ import (
 
 // DuckDBManager handles operations with the DuckDB database.
 type DuckDBManager struct {
-	db *sql.DB
+	db   *sql.DB
+	path string // path to the directory storing partitioned parquet files
 }
 
-// NewDuckDBManager creates a new DuckDBManager and initializes the database table.
+// NewDuckDBManager creates a new DuckDBManager.
+// The path is the directory where the partitioned data will be stored.
 func NewDuckDBManager(path string) (*DuckDBManager, error) {
-	db, err := sql.Open("duckdb", path)
+	// Use an in-memory DuckDB database for operations.
+	db, err := sql.Open("duckdb", "") // In-memory
 	if err != nil {
-		return nil, fmt.Errorf("failed to open duckdb: %w", err)
+		return nil, fmt.Errorf("failed to open in-memory duckdb: %w", err)
 	}
 
-	_, err = db.Exec(`
-        CREATE TABLE IF NOT EXISTS sql_audit (
+	// Ensure the data directory exists
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create data directory %s: %w", path, err)
+	}
+
+	return &DuckDBManager{db: db, path: path}, nil
+}
+
+// GetLastRequestIDs retrieves the last request ID for each server from the database.
+func (m *DuckDBManager) GetLastRequestIDs() (map[string]uint64, error) {
+	// Glob pattern to read all parquet files
+	globPath := filepath.Join(m.path, "**", "*.parquet")
+	query := fmt.Sprintf("SELECT svr_ip, MAX(max_request_id) FROM read_parquet('%s') GROUP BY svr_ip", globPath)
+
+	rows, err := m.db.Query(query)
+	if err != nil {
+		// If the directory is empty or no files yet, it might error.
+		// Check for "No files found that match the pattern"
+		if strings.Contains(err.Error(), "No files found") {
+			return make(map[string]uint64), nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	lastRequestIDs := make(map[string]uint64)
+	for rows.Next() {
+		var svrIP string
+		var maxRequestID uint64
+		if err := rows.Scan(&svrIP, &maxRequestID); err != nil {
+			return nil, err
+		}
+		lastRequestIDs[svrIP] = maxRequestID
+	}
+	return lastRequestIDs, nil
+}
+
+// InsertBatch inserts a batch of SQL audit data into the database.
+func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
+	if len(results) == 0 {
+		return nil
+	}
+
+	conn, err := m.db.Conn(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to get connection for appender: %w", err)
+	}
+	defer conn.Close()
+
+	return conn.Raw(func(driverConn interface{}) error {
+		tx, err := conn.BeginTx(context.Background(), nil)
+		if err != nil {
+			return fmt.Errorf("failed to begin transaction: %w", err)
+		}
+		defer tx.Rollback() // Rollback on any error
+
+		duckdbConn, ok := driverConn.(driver.Conn)
+		if !ok {
+			return fmt.Errorf("failed to get raw duckdb connection")
+		}
+
+		createTempTableSQL := `CREATE TEMP TABLE sql_audit_batch (
             svr_ip VARCHAR, tenant_id BIGINT, tenant_name VARCHAR, user_id BIGINT, user_name VARCHAR,
             db_id BIGINT, db_name VARCHAR, sql_id VARCHAR, plan_id BIGINT,
-
             query_sql TEXT, client_ip VARCHAR, event VARCHAR,
             format_sql_id VARCHAR, effective_tenant_id BIGINT, trace_id VARCHAR, sid BIGINT,
             user_client_ip VARCHAR, tx_id VARCHAR,
-
             executions BIGINT, min_request_time BIGINT, max_request_time BIGINT,
             max_request_id BIGINT, min_request_id BIGINT,
-
             elapsed_time_sum BIGINT, elapsed_time_max BIGINT, elapsed_time_min BIGINT,
             execute_time_sum BIGINT, execute_time_max BIGINT, execute_time_min BIGINT,
             queue_time_sum BIGINT, queue_time_max BIGINT, queue_time_min BIGINT,
@@ -76,73 +138,25 @@ func NewDuckDBManager(path string) (*DuckDBManager, error) {
 			inner_sql_count BIGINT,
 			miss_plan_count BIGINT,
 			executor_rpc_count BIGINT,
-
-            collect_time TIMESTAMPTZ
-        )
-        PARTITION BY (strftime(collect_time, '%Y-%m-%d'))
-    `)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create table: %w", err)
-	}
-
-	return &DuckDBManager{db: db}, nil
-}
-
-// GetLastRequestIDs retrieves the last request ID for each server from the database.
-func (m *DuckDBManager) GetLastRequestIDs() (map[string]uint64, error) {
-	rows, err := m.db.Query("SELECT svr_ip, MAX(max_request_id) FROM sql_audit GROUP BY svr_ip")
-	if err != nil {
-		if strings.Contains(err.Error(), "does not exist") {
-			return make(map[string]uint64), nil
-		}
-		return nil, err
-	}
-	defer rows.Close()
-
-	lastRequestIDs := make(map[string]uint64)
-	for rows.Next() {
-		var svrIP string
-		var maxRequestID uint64
-		if err := rows.Scan(&svrIP, &maxRequestID); err != nil {
-			return nil, err
-		}
-		lastRequestIDs[svrIP] = maxRequestID
-	}
-	return lastRequestIDs, nil
-}
-
-// InsertBatch inserts a batch of SQL audit data into the database.
-func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
-	if len(results) == 0 {
-		return nil
-	}
-
-	conn, err := m.db.Conn(context.Background())
-	if err != nil {
-		return fmt.Errorf("failed to get connection for appender: %w", err)
-	}
-	defer conn.Close()
-
-	return conn.Raw(func(driverConn interface{}) error {
-		duckdbConn, ok := driverConn.(driver.Conn)
-		if !ok {
-			return fmt.Errorf("failed to get raw duckdb connection")
+            collect_time TIMESTAMPTZ,
+            collect_date DATE
+        )`
+		if _, err := tx.Exec(createTempTableSQL); err != nil {
+			return fmt.Errorf("failed to create temp table: %w", err)
 		}
 
-		appender, err := duckdb.NewAppenderFromConn(duckdbConn, "", "sql_audit")
+		appender, err := duckdb.NewAppenderFromConn(duckdbConn, "", "sql_audit_batch")
 		if err != nil {
-			return fmt.Errorf("failed to create appender: %w", err)
+			return fmt.Errorf("failed to create appender for temp table: %w", err)
 		}
 
 		collectTime := time.Now()
+		collectDate := collectTime.Format("2006-01-02")
 
 		for _, r := range results {
 			err := appender.AppendRow(
-				// Grouping Keys
 				r.SvrIP, r.TenantId, r.TenantName, r.UserId, r.UserName, r.DbId, r.DBName, r.SqlId, r.PlanId,
-				// Aggregated String/Identifier Values
 				r.QuerySql, r.ClientIp, r.Event, r.FormatSqlId, r.EffectiveTenantId, r.TraceId, r.Sid, r.UserClientIp, r.TxId,
-				// Aggregated Numeric Values
 				r.Executions, r.MinRequestTime, r.MaxRequestTime, r.MaxRequestId, r.MinRequestId,
 				r.ElapsedTimeSum, r.ElapsedTimeMax, r.ElapsedTimeMin,
 				r.ExecuteTimeSum, r.ExecuteTimeMax, r.ExecuteTimeMin,
@@ -183,19 +197,28 @@ func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
 				r.InnerSqlCount,
 				r.MissPlanCount,
 				r.ExecutorRpcCount,
-
 				collectTime,
+				collectDate, // The partition key
 			)
 			if err != nil {
-				appender.Close() // Rollback
-				return fmt.Errorf("failed to append row: %w", err)
+				appender.Close()
+				return fmt.Errorf("failed to append row to temp table: %w", err)
 			}
 		}
-
 		if err := appender.Close(); err != nil {
 			return fmt.Errorf("failed to flush and close appender: %w", err)
 		}
-		return nil
+
+		// Now copy from the temp table to the partitioned parquet file
+		copySQL := fmt.Sprintf(
+			"COPY sql_audit_batch TO '%s' (FORMAT PARQUET, PARTITION_BY (collect_date), OVERWRITE_OR_APPEND 1)",
+			m.path,
+		)
+		if _, err := tx.Exec(copySQL); err != nil {
+			return fmt.Errorf("failed to copy data to partitioned parquet file: %w", err)
+		}
+
+		return tx.Commit()
 	})
 }
 
@@ -212,9 +235,32 @@ func (m *DuckDBManager) DeleteOldData(retentionDays int) error {
 		return nil
 	}
 	cutoffDate := time.Now().AddDate(0, 0, -retentionDays)
-	_, err := m.db.Exec("DELETE FROM sql_audit WHERE collect_time < ?", cutoffDate)
+
+	partitions, err := filepath.Glob(filepath.Join(m.path, "collect_date=*"))
 	if err != nil {
-		return fmt.Errorf("failed to delete old data: %w", err)
+		return fmt.Errorf("failed to glob partitions: %w", err)
 	}
+
+	for _, partitionDir := range partitions {
+		dirName := filepath.Base(partitionDir)
+		parts := strings.Split(dirName, "=")
+		if len(parts) != 2 {
+			continue
+		}
+		partitionDateStr := parts[1]
+		partitionDate, err := time.Parse("2006-01-02", partitionDateStr)
+		if err != nil {
+			// Log this error? For now, just skip.
+			continue
+		}
+
+		if partitionDate.Before(cutoffDate) {
+			if err := os.RemoveAll(partitionDir); err != nil {
+				// Log this error?
+				return fmt.Errorf("failed to delete old partition %s: %w", partitionDir, err)
+			}
+		}
+	}
+
 	return nil
 }

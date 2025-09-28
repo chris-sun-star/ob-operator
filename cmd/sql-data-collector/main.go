@@ -168,7 +168,7 @@ func main() {
 		Interval: time.Duration(intervalSeconds) * time.Second,
 	}
 
-	duckDBPath := filepath.Join(dataPath, fmt.Sprintf("sql_audit_tenant_%s.duckdb", obTenant))
+	duckDBPath := filepath.Join(dataPath, "sql_audit")
 
 	// Initialize the DuckDB manager.
 	duckdbManager, err := sqldatacollector.NewDuckDBManager(duckDBPath)
