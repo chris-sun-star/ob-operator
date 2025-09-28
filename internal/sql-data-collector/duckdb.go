@@ -77,10 +77,9 @@ func NewDuckDBManager(path string) (*DuckDBManager, error) {
 			miss_plan_count BIGINT,
 			executor_rpc_count BIGINT,
 
-            collect_time TIMESTAMPTZ,
-
-PRIMARY KEY (svr_ip, tenant_id, tenant_name, user_id, user_name, db_id, db_name, sql_id, plan_id, max_request_id)
+            collect_time TIMESTAMPTZ
         )
+        PARTITION BY (strftime(collect_time, '%Y-%m-%d'))
     `)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create table: %w", err)
@@ -205,4 +204,17 @@ func (m *DuckDBManager) Close() {
 	if m.db != nil {
 		m.db.Close()
 	}
+}
+
+// DeleteOldData deletes data from sql_audit table older than the retention period.
+func (m *DuckDBManager) DeleteOldData(retentionDays int) error {
+	if retentionDays <= 0 {
+		return nil
+	}
+	cutoffDate := time.Now().AddDate(0, 0, -retentionDays)
+	_, err := m.db.Exec("DELETE FROM sql_audit WHERE collect_time < ?", cutoffDate)
+	if err != nil {
+		return fmt.Errorf("failed to delete old data: %w", err)
+	}
+	return nil
 }

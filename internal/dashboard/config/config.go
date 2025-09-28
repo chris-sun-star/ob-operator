@@ -39,7 +39,8 @@ type JobConfig struct {
 }
 
 type SQLDataCollectorConfig struct {
-	Image string `yaml:"image"`
+	Image         string `yaml:"image"`
+	RetentionDays int    `yaml:"retentionDays"`
 }
 
 type Config struct {

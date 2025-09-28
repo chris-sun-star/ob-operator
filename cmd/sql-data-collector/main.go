@@ -191,6 +191,36 @@ func main() {
 	ticker := time.NewTicker(config.Interval)
 	defer ticker.Stop()
 
+	// Start the cleanup routine for old data
+	retentionStr := os.Getenv("DATA_RETENTION_DAYS")
+	retentionDays, err := strconv.Atoi(retentionStr)
+	if err != nil {
+		log.Fatalf("Invalid or missing DATA_RETENTION_DAYS environment variable: %v", err)
+	}
+
+	go func() {
+		// Run cleanup once at startup
+		log.Println("Running initial cleanup of old data...")
+		if err := duckdbManager.DeleteOldData(retentionDays); err != nil {
+			log.Printf("Error during initial data cleanup: %v", err)
+		}
+
+		// Then run periodically
+		cleanupTicker := time.NewTicker(24 * time.Hour)
+		defer cleanupTicker.Stop()
+		for {
+			select {
+			case <-cleanupTicker.C:
+				log.Println("Running periodic cleanup of old data...")
+				if err := duckdbManager.DeleteOldData(retentionDays); err != nil {
+					log.Printf("Error during periodic data cleanup: %v", err)
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
 	// Run a collection immediately at startup.
 	runCollection(ctx, connManager, collector, duckdbManager)
 

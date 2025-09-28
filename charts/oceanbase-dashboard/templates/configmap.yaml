@@ -20,3 +20,4 @@ data:
         ttlSecondsAfterFinished: {{ .Values.job.normal.ttlSecondsAfterFinished }}
     sqlDataCollector:
       image: {{ .Values.sqlDataCollector.image }}
+      retentionDays: {{ .Values.sqlDataCollector.retentionDays }}

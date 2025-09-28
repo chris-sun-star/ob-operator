@@ -572,6 +572,10 @@ func createSQLDataCollectorDeployment(ctx context.Context, tenant *v1alpha1.OBTe
 									Name:  "DATA_PATH",
 									Value: dataPath,
 								},
+								{
+									Name:  "DATA_RETENTION_DAYS",
+									Value: fmt.Sprintf("%d", config.GetConfig().SQLDataCollector.RetentionDays),
+								},
 							},
 						},
 					},
