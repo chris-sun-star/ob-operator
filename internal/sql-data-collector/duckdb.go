@@ -5,28 +5,38 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	duckdb "github.com/marcboeker/go-duckdb"
+	"github.com/google/uuid"
 )
 
 // DuckDBManager handles operations with the DuckDB database.
 type DuckDBManager struct {
 	db   *sql.DB
-	path string // path to the directory storing partitioned parquet files
+	path string // path to the directory storing daily parquet files
 }
 
 // NewDuckDBManager creates a new DuckDBManager.
-// The path is the directory where the partitioned data will be stored.
+// The path is the directory where the daily parquet files will be stored.
 func NewDuckDBManager(path string) (*DuckDBManager, error) {
 	// Use an in-memory DuckDB database for operations.
 	db, err := sql.Open("duckdb", "") // In-memory
 	if err != nil {
 		return nil, fmt.Errorf("failed to open in-memory duckdb: %w", err)
 	}
+
+	// Get and log DuckDB version
+	var version string
+	err = db.QueryRow("SELECT version()").Scan(&version)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get DuckDB version: %w", err)
+	}
+	log.Printf("DuckDB version: %s", version)
 
 	// Ensure the data directory exists
 	if err := os.MkdirAll(path, 0755); err != nil {
@@ -36,20 +46,46 @@ func NewDuckDBManager(path string) (*DuckDBManager, error) {
 	return &DuckDBManager{db: db, path: path}, nil
 }
 
-// GetLastRequestIDs retrieves the last request ID for each server from the database.
+// GetLastRequestIDs retrieves the last request ID for each server from the most recent daily parquet file.
 func (m *DuckDBManager) GetLastRequestIDs() (map[string]uint64, error) {
-	// Glob pattern to read all parquet files
-	globPath := filepath.Join(m.path, "**", "*.parquet")
-	query := fmt.Sprintf("SELECT svr_ip, MAX(max_request_id) FROM read_parquet('%s') GROUP BY svr_ip", globPath)
+	files, err := filepath.Glob(filepath.Join(m.path, "*.parquet"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to glob parquet files: %w", err)
+	}
+
+	if len(files) == 0 {
+		return make(map[string]uint64), nil
+	}
+
+	// Find the most recent file by parsing the date from the filename.
+	var latestFile string
+	var latestDate time.Time
+	for _, file := range files {
+		fileName := filepath.Base(file)
+		dateStr := strings.TrimSuffix(fileName, ".parquet")
+		fileDate, err := time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			// Skip files with invalid date format in their name.
+			log.Printf("Skipping file %s with invalid date format: %v", fileName, err)
+			continue
+		}
+		if latestFile == "" || fileDate.After(latestDate) {
+			latestDate = fileDate
+			latestFile = file
+		}
+	}
+
+	if latestFile == "" {
+		return make(map[string]uint64), nil
+	}
+
+	query := fmt.Sprintf("SELECT svr_ip, MAX(max_request_id) FROM read_parquet('%s') GROUP BY svr_ip", latestFile)
 
 	rows, err := m.db.Query(query)
 	if err != nil {
-		// If the directory is empty or no files yet, it might error.
-		// Check for "No files found that match the pattern"
-		if strings.Contains(err.Error(), "No files found") {
-			return make(map[string]uint64), nil
-		}
-		return nil, err
+		// If the file is empty or corrupted, it might error.
+		log.Printf("Error querying latest parquet file %s: %v", latestFile, err)
+		return make(map[string]uint64), nil // Return empty map to start fresh for this file
 	}
 	defer rows.Close()
 
@@ -73,85 +109,85 @@ func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
 
 	conn, err := m.db.Conn(context.Background())
 	if err != nil {
-		return fmt.Errorf("failed to get connection for appender: %w", err)
+		return fmt.Errorf("failed to get connection: %w", err)
 	}
 	defer conn.Close()
 
-	return conn.Raw(func(driverConn interface{}) error {
-		tx, err := conn.BeginTx(context.Background(), nil)
-		if err != nil {
-			return fmt.Errorf("failed to begin transaction: %w", err)
-		}
-		defer tx.Rollback() // Rollback on any error
+	// Determine the target Parquet file based on the current date.
+	currentDate := time.Now().Format("2006-01-02")
+	targetParquetFile := filepath.Join(m.path, fmt.Sprintf("%s.parquet", currentDate))
 
+	// Create a temporary table for this batch.
+	tempTableName := "sql_audit_batch_" + uuid.New().String()[:8] // Use a unique temp table name
+	createTempTableSQL := `CREATE TEMP TABLE ` + tempTableName + ` (
+        svr_ip VARCHAR, tenant_id BIGINT, tenant_name VARCHAR, user_id BIGINT, user_name VARCHAR,
+        db_id BIGINT, db_name VARCHAR, sql_id VARCHAR, plan_id BIGINT,
+        query_sql TEXT, client_ip VARCHAR, event VARCHAR,
+        format_sql_id VARCHAR, effective_tenant_id BIGINT, trace_id VARCHAR, sid BIGINT,
+        user_client_ip VARCHAR, tx_id VARCHAR,
+        executions BIGINT, min_request_time BIGINT, max_request_time BIGINT,
+        max_request_id BIGINT, min_request_id BIGINT,
+        elapsed_time_sum BIGINT, elapsed_time_max BIGINT, elapsed_time_min BIGINT,
+        execute_time_sum BIGINT, execute_time_max BIGINT, execute_time_min BIGINT,
+        queue_time_sum BIGINT, queue_time_max BIGINT, queue_time_min BIGINT,
+        get_plan_time_sum BIGINT, get_plan_time_max BIGINT, get_plan_time_min BIGINT,
+        affected_rows_sum BIGINT, affected_rows_max BIGINT, affected_rows_min BIGINT,
+        return_rows_sum BIGINT, return_rows_max BIGINT, return_rows_min BIGINT,
+        partition_count_sum BIGINT, partition_count_max BIGINT, partition_count_min BIGINT,
+        retry_count_sum BIGINT, retry_count_max BIGINT, retry_count_min BIGINT,
+        disk_reads_sum BIGINT, disk_reads_max BIGINT, disk_reads_min BIGINT,
+        rpc_count_sum BIGINT, rpc_count_max BIGINT, rpc_count_min BIGINT,
+        memstore_read_row_count_sum BIGINT, memstore_read_row_count_max BIGINT, memstore_read_row_count_min BIGINT,
+        ssstore_read_row_count_sum BIGINT, ssstore_read_row_count_max BIGINT, ssstore_read_row_count_min BIGINT,
+        request_memory_used_sum BIGINT, request_memory_used_max BIGINT, request_memory_used_min BIGINT,
+        wait_time_micro_sum BIGINT, wait_time_micro_max BIGINT, wait_time_micro_min BIGINT,
+        total_wait_time_micro_sum BIGINT, total_wait_time_micro_max BIGINT, total_wait_time_micro_min BIGINT,
+        net_time_sum BIGINT, net_time_max BIGINT, net_time_min BIGINT,
+        net_wait_time_sum BIGINT, net_wait_time_max BIGINT, net_wait_time_min BIGINT,
+        decode_time_sum BIGINT, decode_time_max BIGINT, decode_time_min BIGINT,
+        application_wait_time_sum BIGINT, application_wait_time_max BIGINT, application_wait_time_min BIGINT,
+        concurrency_wait_time_sum BIGINT, concurrency_wait_time_max BIGINT, concurrency_wait_time_min BIGINT,
+        user_io_wait_time_sum BIGINT, user_io_wait_time_max BIGINT, user_io_wait_time_min BIGINT,
+        schedule_time_sum BIGINT, schedule_time_max BIGINT, schedule_time_min BIGINT,
+        row_cache_hit_sum BIGINT, row_cache_hit_max BIGINT, row_cache_hit_min BIGINT,
+        bloom_filter_cache_hit_sum BIGINT, bloom_filter_cache_hit_max BIGINT, bloom_filter_cache_hit_min BIGINT,
+        block_cache_hit_sum BIGINT, block_cache_hit_max BIGINT, block_cache_hit_min BIGINT,
+        index_block_cache_hit_sum BIGINT, index_block_cache_hit_max BIGINT, index_block_cache_hit_min BIGINT,
+        expected_worker_count_sum BIGINT, expected_worker_count_max BIGINT, expected_worker_count_min BIGINT,
+        used_worker_count_sum BIGINT, used_worker_count_max BIGINT, used_worker_count_min BIGINT,
+        table_scan_sum BIGINT, table_scan_max BIGINT, table_scan_min BIGINT,
+        consistency_level_strong_count BIGINT,
+        consistency_level_weak_count BIGINT,
+        fail_count_sum BIGINT,
+		ret_code_4012_count_sum BIGINT, ret_code_4013_count_sum BIGINT, ret_code_5001_count_sum BIGINT,
+		ret_code_5024_count_sum BIGINT, ret_code_5167_count_sum BIGINT, ret_code_5217_count_sum BIGINT,
+		ret_code_6002_count_sum BIGINT,
+		event_0_wait_time_sum BIGINT, event_1_wait_time_sum BIGINT, event_2_wait_time_sum BIGINT,
+		event_3_wait_time_sum BIGINT,
+		plan_type_local_count BIGINT, plan_type_remote_count BIGINT, plan_type_distributed_count BIGINT,
+		inner_sql_count BIGINT,
+		miss_plan_count BIGINT,
+		executor_rpc_count BIGINT,
+        collect_time TIMESTAMPTZ,
+        collect_date DATE
+    )`
+	if _, err := conn.ExecContext(context.Background(), createTempTableSQL); err != nil {
+		return fmt.Errorf("failed to create temp table: %w", err)
+	}
+
+	// Use the appender to load data into the temp table.
+	err = conn.Raw(func(driverConn interface{}) error {
 		duckdbConn, ok := driverConn.(driver.Conn)
 		if !ok {
 			return fmt.Errorf("failed to get raw duckdb connection")
 		}
-
-		createTempTableSQL := `CREATE TEMP TABLE sql_audit_batch (
-            svr_ip VARCHAR, tenant_id BIGINT, tenant_name VARCHAR, user_id BIGINT, user_name VARCHAR,
-            db_id BIGINT, db_name VARCHAR, sql_id VARCHAR, plan_id BIGINT,
-            query_sql TEXT, client_ip VARCHAR, event VARCHAR,
-            format_sql_id VARCHAR, effective_tenant_id BIGINT, trace_id VARCHAR, sid BIGINT,
-            user_client_ip VARCHAR, tx_id VARCHAR,
-            executions BIGINT, min_request_time BIGINT, max_request_time BIGINT,
-            max_request_id BIGINT, min_request_id BIGINT,
-            elapsed_time_sum BIGINT, elapsed_time_max BIGINT, elapsed_time_min BIGINT,
-            execute_time_sum BIGINT, execute_time_max BIGINT, execute_time_min BIGINT,
-            queue_time_sum BIGINT, queue_time_max BIGINT, queue_time_min BIGINT,
-            get_plan_time_sum BIGINT, get_plan_time_max BIGINT, get_plan_time_min BIGINT,
-            affected_rows_sum BIGINT, affected_rows_max BIGINT, affected_rows_min BIGINT,
-            return_rows_sum BIGINT, return_rows_max BIGINT, return_rows_min BIGINT,
-            partition_count_sum BIGINT, partition_count_max BIGINT, partition_count_min BIGINT,
-            retry_count_sum BIGINT, retry_count_max BIGINT, retry_count_min BIGINT,
-            disk_reads_sum BIGINT, disk_reads_max BIGINT, disk_reads_min BIGINT,
-            rpc_count_sum BIGINT, rpc_count_max BIGINT, rpc_count_min BIGINT,
-            memstore_read_row_count_sum BIGINT, memstore_read_row_count_max BIGINT, memstore_read_row_count_min BIGINT,
-            ssstore_read_row_count_sum BIGINT, ssstore_read_row_count_max BIGINT, ssstore_read_row_count_min BIGINT,
-            request_memory_used_sum BIGINT, request_memory_used_max BIGINT, request_memory_used_min BIGINT,
-            wait_time_micro_sum BIGINT, wait_time_micro_max BIGINT, wait_time_micro_min BIGINT,
-            total_wait_time_micro_sum BIGINT, total_wait_time_micro_max BIGINT, total_wait_time_micro_min BIGINT,
-            net_time_sum BIGINT, net_time_max BIGINT, net_time_min BIGINT,
-            net_wait_time_sum BIGINT, net_wait_time_max BIGINT, net_wait_time_min BIGINT,
-            decode_time_sum BIGINT, decode_time_max BIGINT, decode_time_min BIGINT,
-            application_wait_time_sum BIGINT, application_wait_time_max BIGINT, application_wait_time_min BIGINT,
-            concurrency_wait_time_sum BIGINT, concurrency_wait_time_max BIGINT, concurrency_wait_time_min BIGINT,
-            user_io_wait_time_sum BIGINT, user_io_wait_time_max BIGINT, user_io_wait_time_min BIGINT,
-            schedule_time_sum BIGINT, schedule_time_max BIGINT, schedule_time_min BIGINT,
-            row_cache_hit_sum BIGINT, row_cache_hit_max BIGINT, row_cache_hit_min BIGINT,
-            bloom_filter_cache_hit_sum BIGINT, bloom_filter_cache_hit_max BIGINT, bloom_filter_cache_hit_min BIGINT,
-            block_cache_hit_sum BIGINT, block_cache_hit_max BIGINT, block_cache_hit_min BIGINT,
-            index_block_cache_hit_sum BIGINT, index_block_cache_hit_max BIGINT, index_block_cache_hit_min BIGINT,
-            expected_worker_count_sum BIGINT, expected_worker_count_max BIGINT, expected_worker_count_min BIGINT,
-            used_worker_count_sum BIGINT, used_worker_count_max BIGINT, used_worker_count_min BIGINT,
-            table_scan_sum BIGINT, table_scan_max BIGINT, table_scan_min BIGINT,
-            consistency_level_strong_count BIGINT,
-            consistency_level_weak_count BIGINT,
-            fail_count_sum BIGINT,
-			ret_code_4012_count_sum BIGINT, ret_code_4013_count_sum BIGINT, ret_code_5001_count_sum BIGINT,
-			ret_code_5024_count_sum BIGINT, ret_code_5167_count_sum BIGINT, ret_code_5217_count_sum BIGINT,
-			ret_code_6002_count_sum BIGINT,
-			event_0_wait_time_sum BIGINT, event_1_wait_time_sum BIGINT, event_2_wait_time_sum BIGINT,
-			event_3_wait_time_sum BIGINT,
-			plan_type_local_count BIGINT, plan_type_remote_count BIGINT, plan_type_distributed_count BIGINT,
-			inner_sql_count BIGINT,
-			miss_plan_count BIGINT,
-			executor_rpc_count BIGINT,
-            collect_time TIMESTAMPTZ,
-            collect_date DATE
-        )`
-		if _, err := tx.Exec(createTempTableSQL); err != nil {
-			return fmt.Errorf("failed to create temp table: %w", err)
-		}
-
-		appender, err := duckdb.NewAppenderFromConn(duckdbConn, "", "sql_audit_batch")
+		appender, err := duckdb.NewAppenderFromConn(duckdbConn, "", tempTableName)
 		if err != nil {
-			return fmt.Errorf("failed to create appender for temp table: %w", err)
+			return fmt.Errorf("failed to create appender: %w", err)
 		}
+		defer appender.Close()
 
 		collectTime := time.Now()
-		collectDate := collectTime.Format("2006-01-02")
 
 		for _, r := range results {
 			err := appender.AppendRow(
@@ -198,28 +234,29 @@ func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
 				r.MissPlanCount,
 				r.ExecutorRpcCount,
 				collectTime,
-				collectDate, // The partition key
+				collectTime,
 			)
 			if err != nil {
-				appender.Close()
 				return fmt.Errorf("failed to append row to temp table: %w", err)
 			}
 		}
-		if err := appender.Close(); err != nil {
-			return fmt.Errorf("failed to flush and close appender: %w", err)
-		}
-
-		// Now copy from the temp table to the partitioned parquet file
-		copySQL := fmt.Sprintf(
-			"COPY sql_audit_batch TO '%s' (FORMAT PARQUET, PARTITION_BY (collect_date), OVERWRITE_OR_APPEND 1)",
-			m.path,
-		)
-		if _, err := tx.Exec(copySQL); err != nil {
-			return fmt.Errorf("failed to copy data to partitioned parquet file: %w", err)
-		}
-
-		return tx.Commit()
+		return nil
 	})
+	if err != nil {
+		return fmt.Errorf("failed to append data: %w", err)
+	}
+
+	// Now, copy the data from the temp table to the daily parquet file.
+	// Use APPEND to append to the existing file or create a new one.
+	copySQL := fmt.Sprintf(
+		"COPY %s TO '%s' (FORMAT PARQUET, APPEND)",
+		tempTableName, targetParquetFile,
+	)
+	if _, err := conn.ExecContext(context.Background(), copySQL); err != nil {
+		return fmt.Errorf("failed to copy to parquet: %w", err)
+	}
+
+	return nil
 }
 
 // Close closes the database connection.
@@ -229,35 +266,34 @@ func (m *DuckDBManager) Close() {
 	}
 }
 
-// DeleteOldData deletes data from sql_audit table older than the retention period.
+// DeleteOldData deletes data from daily parquet files older than the retention period.
 func (m *DuckDBManager) DeleteOldData(retentionDays int) error {
 	if retentionDays <= 0 {
 		return nil
 	}
 	cutoffDate := time.Now().AddDate(0, 0, -retentionDays)
 
-	partitions, err := filepath.Glob(filepath.Join(m.path, "collect_date=*"))
-	if err != nil {
-		return fmt.Errorf("failed to glob partitions: %w", err)
-	}
-
-	for _, partitionDir := range partitions {
-		dirName := filepath.Base(partitionDir)
-		parts := strings.Split(dirName, "=")
-		if len(parts) != 2 {
-			continue
-		}
-		partitionDateStr := parts[1]
-		partitionDate, err := time.Parse("2006-01-02", partitionDateStr)
+	// Glob for daily parquet files.
+	// Example: m.path/YYYY-MM-DD.parquet
+	files, err := filepath.Glob(filepath.Join(m.path, "*.parquet"))
+			if err != nil {
+				return fmt.Errorf("failed to glob daily parquet files: %w", err)
+			}
+	for _, filePath := range files {
+		fileName := filepath.Base(filePath)
+		// Extract date from filename (e.g., "YYYY-MM-DD.parquet")
+		dateStr := strings.TrimSuffix(fileName, ".parquet")
+		fileDate, err := time.Parse("2006-01-02", dateStr)
 		if err != nil {
-			// Log this error? For now, just skip.
+			// Skip files with invalid date format in their name.
+			log.Printf("Skipping file %s with invalid date format: %v", fileName, err)
 			continue
 		}
 
-		if partitionDate.Before(cutoffDate) {
-			if err := os.RemoveAll(partitionDir); err != nil {
+		if fileDate.Before(cutoffDate) {
+			if err := os.Remove(filePath); err != nil {
 				// Log this error?
-				return fmt.Errorf("failed to delete old partition %s: %w", partitionDir, err)
+				return fmt.Errorf("failed to delete old daily file %s: %w", filePath, err)
 			}
 		}
 	}

@@ -142,16 +142,33 @@ func main() {
 	defer connManager.Close()
 
 	// Get an initial connection to retrieve the tenant ID.
-	initialManager, err := connManager.GetConnection(ctx)
-	if err != nil {
-		log.Fatalf("Failed to get initial OceanBase connection: %v", err)
-	}
+	var obTenantID int64
+	var initialManager *operation.OceanbaseOperationManager
 
-	obTenantID, err := getTenantIDByName(ctx, initialManager, obTenant)
-	if err != nil {
-		log.Fatalf("Failed to get tenant ID for tenant %s: %v", obTenant, err)
+	for {
+		var err error
+		initialManager, err = connManager.GetConnection(ctx)
+		if err != nil {
+			log.Printf("Failed to get OceanBase connection: %v. Retrying in 10 seconds...", err)
+		} else {
+			tenantID, err := getTenantIDByName(ctx, initialManager, obTenant)
+			if err == nil {
+				obTenantID = tenantID
+				log.Printf("Found tenant '%s' with ID %d", obTenant, obTenantID)
+				break // Success
+			}
+			log.Printf("Failed to get tenant ID for tenant %s: %v. Retrying in 10 seconds...", obTenant, err)
+		}
+
+		// Wait before retrying or exit if context is cancelled.
+		select {
+		case <-time.After(10 * time.Second):
+			continue
+		case <-ctx.Done():
+			log.Println("Collector stopped during tenant ID retrieval.")
+			return
+		}
 	}
-	log.Printf("Found tenant '%s' with ID %d", obTenant, obTenantID)
 
 	// Configure collection interval
 	intervalSeconds := 30
@@ -255,6 +272,8 @@ func runCollection(ctx context.Context, connMgr *ConnectionManager, coll *sqldat
 	if len(results) > 0 {
 		if err := duckdbMgr.InsertBatch(results); err != nil {
 			log.Printf("Error inserting data into DuckDB: %v", err)
+		} else {
+			log.Printf("Successfully inserted %d records.", len(results))
 		}
 	}
 }
