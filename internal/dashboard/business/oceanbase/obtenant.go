@@ -495,15 +495,22 @@ func createSQLDataCollectorDeployment(ctx context.Context, tenant *v1alpha1.OBTe
 
 	deploymentName := fmt.Sprintf("sql-data-collector-%s-%s", tenant.Namespace, tenant.Name)
 	namespace := os.Getenv("NAMESPACE")
-	pvcName := os.Getenv("SHARED_VOLUME_PVC_NAME")
 
-	// The service account name is constructed from the release name, which is part of the PVC name.
-	releaseName := strings.TrimSuffix(pvcName, "-shared-volume-pvc")
+	// Get the dedicated PVC name for sql-data-collector data from the environment variable
+	sqlDataPvcName := os.Getenv("SQL_DATA_PVC_NAME")
+	if sqlDataPvcName == "" {
+		logger.Errorf("SQL_DATA_PVC_NAME environment variable not set, cannot create sql-data-collector deployment")
+		return oberr.NewInternal("SQL_DATA_PVC_NAME environment variable not set")
+	}
+
+	releaseName := strings.TrimSuffix(sqlDataPvcName, "-sql-data-pvc")
 	serviceAccountName := releaseName + "-sa"
 
 	image := config.GetConfig().SQLDataCollector.Image
+	// Mount path inside the sql-data-collector pod for its data
 	dataPath := "/data"
-	tenantDataPath := fmt.Sprintf("sql-data-collector/%s/%s", tenant.Namespace, tenant.Name)
+	// Construct a unique subpath for this sql-data-collector within the dedicated volume
+	tenantDataSubPath := fmt.Sprintf("%s/%s", tenant.Namespace, tenant.Name)
 
 	replicas := int32(1)
 
@@ -538,7 +545,7 @@ func createSQLDataCollectorDeployment(ctx context.Context, tenant *v1alpha1.OBTe
 							Name: "data-volume",
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: pvcName,
+									ClaimName: sqlDataPvcName,
 								},
 							},
 						},
@@ -552,7 +559,7 @@ func createSQLDataCollectorDeployment(ctx context.Context, tenant *v1alpha1.OBTe
 								{
 									Name:      "data-volume",
 									MountPath: dataPath,
-									SubPath:   tenantDataPath,
+									SubPath:   tenantDataSubPath,
 								},
 							},
 							Env: []corev1.EnvVar{

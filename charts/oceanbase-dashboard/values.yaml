@@ -46,3 +46,9 @@ sqlDataCollector:
   image: "quay.io/oceanbase/sql-data-collector:0.1.0"
   retentionDays: 7
 
+sqlDataCollectorDataPersistence:
+  enabled: true
+  storageClassName: ""
+  accessMode: ReadWriteOnce
+  storage: 20Gi
+
