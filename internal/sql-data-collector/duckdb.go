@@ -294,22 +294,6 @@ func (m *DuckDBManager) Compact() error {
 		return fmt.Errorf("failed to create compaction table from small files: %w", err)
 	}
 
-	// Merge with older compacted files
-	compactedFiles, err := filepath.Glob(filepath.Join(m.path, CompactedFilePattern))
-	if err != nil {
-		return fmt.Errorf("failed to glob compacted parquet files: %w", err)
-	}
-	var filesToDelete []string
-	filesToDelete = append(filesToDelete, filesToCompact...)
-
-	if len(compactedFiles) > 0 {
-		loadSQL := fmt.Sprintf("INSERT INTO %s SELECT * FROM read_parquet(['%s'])", tempTableName, strings.Join(compactedFiles, "','"))
-		if _, err := conn.ExecContext(context.Background(), loadSQL); err != nil {
-			return fmt.Errorf("failed to load existing compacted parquet data: %w", err)
-		}
-		filesToDelete = append(filesToDelete, compactedFiles...)
-	}
-
 	// Define the compacted file path and a temporary path for atomic operation.
 	compactedFile := filepath.Join(m.path, "compacted-"+timestamp.Format(FileTimeFormat)+".parquet")
 	tempCompactedFile := compactedFile + ".tmp"
@@ -321,7 +305,7 @@ func (m *DuckDBManager) Compact() error {
 	}
 
 	// Delete the original files that were compacted.
-	for _, file := range filesToDelete {
+	for _, file := range filesToCompact {
 		if err := os.Remove(file); err != nil {
 			log.Printf("Failed to delete old file %s: %v", file, err)
 		}

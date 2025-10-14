@@ -17,7 +17,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/oceanbase/ob-operator/api/v1alpha1"
 	"github.com/oceanbase/ob-operator/internal/resource/utils"
-	"github.com/oceanbase/ob-operator/internal/sql-data-collector"
+	sqldatacollector "github.com/oceanbase/ob-operator/internal/sql-data-collector"
 	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/operation"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	CompactionThreshold = 10
+	CompactionThreshold = 120
 )
 
 // ConnectionManager handles the connection to the OceanBase cluster.
