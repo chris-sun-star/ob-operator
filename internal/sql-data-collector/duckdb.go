@@ -304,16 +304,16 @@ func (m *DuckDBManager) Compact() error {
 		return fmt.Errorf("failed to copy to temporary compacted file: %w", err)
 	}
 
+	// Atomically rename the temporary compacted file to the final name.
+	if err := os.Rename(tempCompactedFile, compactedFile); err != nil {
+		return fmt.Errorf("failed to rename temporary compacted file: %w", err)
+	}
+
 	// Delete the original files that were compacted.
 	for _, file := range filesToCompact {
 		if err := os.Remove(file); err != nil {
 			log.Printf("Failed to delete old file %s: %v", file, err)
 		}
-	}
-
-	// Atomically rename the temporary compacted file to the final name.
-	if err := os.Rename(tempCompactedFile, compactedFile); err != nil {
-		return fmt.Errorf("failed to rename temporary compacted file: %w", err)
 	}
 
 	return nil
