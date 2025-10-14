@@ -27,6 +27,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
+const (
+	CompactionThreshold = 10
+)
+
 // ConnectionManager handles the connection to the OceanBase cluster.
 type ConnectionManager struct {
 	k8sClient        client.Client
@@ -240,12 +244,13 @@ func main() {
 	}()
 
 	// Run a collection immediately at startup.
-	runCollection(ctx, connManager, collector, duckdbManager)
+	compactionCounter := 0
+	runCollection(ctx, connManager, collector, duckdbManager, &compactionCounter)
 
 	for {
 		select {
 		case <-ticker.C:
-			runCollection(ctx, connManager, collector, duckdbManager)
+			runCollection(ctx, connManager, collector, duckdbManager, &compactionCounter)
 		case <-ctx.Done():
 			log.Println("Collector stopped.")
 			return
@@ -254,7 +259,7 @@ func main() {
 }
 
 // runCollection performs one full collection and insertion cycle.
-func runCollection(ctx context.Context, connMgr *ConnectionManager, coll *sqldatacollector.Collector, duckdbMgr *sqldatacollector.DuckDBManager) {
+func runCollection(ctx context.Context, connMgr *ConnectionManager, coll *sqldatacollector.Collector, duckdbMgr *sqldatacollector.DuckDBManager, compactionCounter *int) {
 	log.Println("Running collection cycle...")
 
 	// Get a valid connection for this cycle.
@@ -275,6 +280,16 @@ func runCollection(ctx context.Context, connMgr *ConnectionManager, coll *sqldat
 			log.Printf("Error inserting data into DuckDB: %v", err)
 		} else {
 			log.Printf("Successfully inserted %d records.", len(results))
+			(*compactionCounter)++
+		}
+	}
+
+	if *compactionCounter >= CompactionThreshold {
+		log.Println("Compaction threshold reached, running compaction...")
+		if err := duckdbMgr.Compact(); err != nil {
+			log.Printf("Error during compaction: %v", err)
+		} else {
+			*compactionCounter = 0
 		}
 	}
 }

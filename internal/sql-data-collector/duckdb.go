@@ -8,11 +8,18 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	duckdb "github.com/marcboeker/go-duckdb"
 	"github.com/google/uuid"
+)
+
+const (
+	SmallFilePattern     = "[0-9]*.parquet"
+	CompactedFilePattern = "compacted-*.parquet"
+	FileTimeFormat       = "2006-01-02-15-04-05"
 )
 
 // DuckDBManager handles operations with the DuckDB database.
@@ -46,7 +53,7 @@ func NewDuckDBManager(path string) (*DuckDBManager, error) {
 	return &DuckDBManager{db: db, path: path}, nil
 }
 
-// GetLastRequestIDs retrieves the last request ID for each server from the most recent daily parquet file.
+// GetLastRequestIDs retrieves the last request ID for each server from the most recent parquet file.
 func (m *DuckDBManager) GetLastRequestIDs() (map[string]uint64, error) {
 	files, err := filepath.Glob(filepath.Join(m.path, "*.parquet"))
 	if err != nil {
@@ -57,35 +64,24 @@ func (m *DuckDBManager) GetLastRequestIDs() (map[string]uint64, error) {
 		return make(map[string]uint64), nil
 	}
 
-	// Find the most recent file by parsing the date from the filename.
-	var latestFile string
-	var latestDate time.Time
-	for _, file := range files {
-		fileName := filepath.Base(file)
-		dateStr := strings.TrimSuffix(fileName, ".parquet")
-		fileDate, err := time.Parse("2006-01-02", dateStr)
-		if err != nil {
-			// Skip files with invalid date format in their name.
-			log.Printf("Skipping file %s with invalid date format: %v", fileName, err)
-			continue
+	sort.Slice(files, func(i, j int) bool {
+		timeI, errI := parseTimeFromFileName(files[i])
+		timeJ, errJ := parseTimeFromFileName(files[j])
+		if errI != nil || errJ != nil {
+			return false
 		}
-		if latestFile == "" || fileDate.After(latestDate) {
-			latestDate = fileDate
-			latestFile = file
-		}
-	}
+		return timeI.Before(timeJ)
+	})
 
-	if latestFile == "" {
-		return make(map[string]uint64), nil
-	}
+	mostRecentFile := files[len(files)-1]
 
-	query := fmt.Sprintf("SELECT svr_ip, MAX(max_request_id) FROM read_parquet('%s') GROUP BY svr_ip", latestFile)
+	// Query only the most recent file.
+	query := fmt.Sprintf("SELECT svr_ip, MAX(max_request_id) FROM read_parquet('%s') GROUP BY svr_ip", mostRecentFile)
 
 	rows, err := m.db.Query(query)
 	if err != nil {
-		// If the file is empty or corrupted, it might error.
-		log.Printf("Error querying latest parquet file %s: %v", latestFile, err)
-		return make(map[string]uint64), nil // Return empty map to start fresh for this file
+		log.Printf("Error querying latest parquet file %s: %v", mostRecentFile, err)
+		return make(map[string]uint64), nil
 	}
 	defer rows.Close()
 
@@ -112,10 +108,6 @@ func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
 		return fmt.Errorf("failed to get connection: %w", err)
 	}
 	defer conn.Close()
-
-	// Determine the target Parquet file based on the current date.
-	currentDate := time.Now().Format("2006-01-02")
-	targetParquetFile := filepath.Join(m.path, fmt.Sprintf("%s.parquet", currentDate))
 
 	// Create a temporary table for this batch.
 	tempTableName := "sql_audit_batch_" + uuid.New().String()[:8] // Use a unique temp table name
@@ -246,15 +238,11 @@ func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
 		return fmt.Errorf("failed to append data: %w", err)
 	}
 
-	// If the target file exists, load its data into the temp table.
-	if _, err := os.Stat(targetParquetFile); err == nil {
-		loadSQL := fmt.Sprintf("INSERT INTO %s SELECT * FROM read_parquet('%s')", tempTableName, targetParquetFile)
-		if _, err := conn.ExecContext(context.Background(), loadSQL); err != nil {
-			return fmt.Errorf("failed to load existing parquet data: %w", err)
-		}
-	}
+	// Determine the target Parquet file based on the current timestamp.
+	currentTime := time.Now().Format(FileTimeFormat)
+	targetParquetFile := filepath.Join(m.path, fmt.Sprintf("%s-%s.parquet", currentTime, uuid.New().String()[:8]))
 
-	// Now, copy all data from the temp table to the daily parquet file, overwriting it.
+	// Now, copy the data from the temp table to the new parquet file.
 	copySQL := fmt.Sprintf(
 		"COPY %s TO '%s' (FORMAT PARQUET)",
 		tempTableName, targetParquetFile,
@@ -266,6 +254,88 @@ func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
 	return nil
 }
 
+// Compact merges small parquet files into a single file.
+func (m *DuckDBManager) Compact() error {
+	conn, err := m.db.Conn(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to get connection: %w", err)
+	}
+	defer conn.Close()
+
+	smallFiles, err := filepath.Glob(filepath.Join(m.path, SmallFilePattern))
+	if err != nil {
+		return fmt.Errorf("failed to glob small parquet files: %w", err)
+	}
+
+	if len(smallFiles) <= 1 {
+		return nil // Nothing to compact
+	}
+
+	sort.Slice(smallFiles, func(i, j int) bool {
+		timeI, errI := parseTimeFromFileName(smallFiles[i])
+		timeJ, errJ := parseTimeFromFileName(smallFiles[j])
+		if errI != nil || errJ != nil {
+			return false
+		}
+		return timeI.Before(timeJ)
+	})
+
+	filesToCompact := smallFiles[:len(smallFiles)-1]
+	lastFileInBatch := filesToCompact[len(filesToCompact)-1]
+	timestamp, err := parseTimeFromFileName(lastFileInBatch)
+	if err != nil {
+		return fmt.Errorf("failed to parse timestamp from file %s: %w", lastFileInBatch, err)
+	}
+
+	// Create a temporary table to hold the data from the small files.
+	tempTableName := "compaction_table_" + uuid.New().String()[:8]
+	createTempTableSQL := fmt.Sprintf("CREATE TEMP TABLE %s AS SELECT * FROM read_parquet(['%s'])", tempTableName, strings.Join(filesToCompact, "','"))
+	if _, err := conn.ExecContext(context.Background(), createTempTableSQL); err != nil {
+		return fmt.Errorf("failed to create compaction table from small files: %w", err)
+	}
+
+	// Merge with older compacted files
+	compactedFiles, err := filepath.Glob(filepath.Join(m.path, CompactedFilePattern))
+	if err != nil {
+		return fmt.Errorf("failed to glob compacted parquet files: %w", err)
+	}
+	var filesToDelete []string
+	filesToDelete = append(filesToDelete, filesToCompact...)
+
+	if len(compactedFiles) > 0 {
+		loadSQL := fmt.Sprintf("INSERT INTO %s SELECT * FROM read_parquet(['%s'])", tempTableName, strings.Join(compactedFiles, "','"))
+		if _, err := conn.ExecContext(context.Background(), loadSQL); err != nil {
+			return fmt.Errorf("failed to load existing compacted parquet data: %w", err)
+		}
+		filesToDelete = append(filesToDelete, compactedFiles...)
+	}
+
+	// Define the compacted file path and a temporary path for atomic operation.
+	compactedFile := filepath.Join(m.path, "compacted-"+timestamp.Format(FileTimeFormat)+".parquet")
+	tempCompactedFile := compactedFile + ".tmp"
+
+	// Copy the data from the temporary table to the temporary compacted file.
+	copySQL := fmt.Sprintf("COPY %s TO '%s' (FORMAT PARQUET)", tempTableName, tempCompactedFile)
+	if _, err := conn.ExecContext(context.Background(), copySQL); err != nil {
+		return fmt.Errorf("failed to copy to temporary compacted file: %w", err)
+	}
+
+	// Delete the original files that were compacted.
+	for _, file := range filesToDelete {
+		if err := os.Remove(file); err != nil {
+			log.Printf("Failed to delete old file %s: %v", file, err)
+		}
+	}
+
+	// Atomically rename the temporary compacted file to the final name.
+	if err := os.Rename(tempCompactedFile, compactedFile); err != nil {
+		return fmt.Errorf("failed to rename temporary compacted file: %w", err)
+	}
+
+	return nil
+}
+
+
 // Close closes the database connection.
 func (m *DuckDBManager) Close() {
 	if m.db != nil {
@@ -273,37 +343,47 @@ func (m *DuckDBManager) Close() {
 	}
 }
 
-// DeleteOldData deletes data from daily parquet files older than the retention period.
+// DeleteOldData deletes data from parquet files older than the retention period.
 func (m *DuckDBManager) DeleteOldData(retentionDays int) error {
 	if retentionDays <= 0 {
 		return nil
 	}
 	cutoffDate := time.Now().AddDate(0, 0, -retentionDays)
 
-	// Glob for daily parquet files.
-	// Example: m.path/YYYY-MM-DD.parquet
 	files, err := filepath.Glob(filepath.Join(m.path, "*.parquet"))
-			if err != nil {
-				return fmt.Errorf("failed to glob daily parquet files: %w", err)
-			}
+	if err != nil {
+		return fmt.Errorf("failed to glob parquet files: %w", err)
+	}
+
 	for _, filePath := range files {
-		fileName := filepath.Base(filePath)
-		// Extract date from filename (e.g., "YYYY-MM-DD.parquet")
-		dateStr := strings.TrimSuffix(fileName, ".parquet")
-		fileDate, err := time.Parse("2006-01-02", dateStr)
+		fileTime, err := parseTimeFromFileName(filePath)
 		if err != nil {
-			// Skip files with invalid date format in their name.
-			log.Printf("Skipping file %s with invalid date format: %v", fileName, err)
+			log.Printf("Skipping file %s with invalid date format: %v", filePath, err)
 			continue
 		}
 
-		if fileDate.Before(cutoffDate) {
+		if fileTime.Before(cutoffDate) {
 			if err := os.Remove(filePath); err != nil {
-				// Log this error?
-				return fmt.Errorf("failed to delete old daily file %s: %w", filePath, err)
+				return fmt.Errorf("failed to delete old file %s: %w", filePath, err)
 			}
 		}
 	}
 
 	return nil
+}
+
+func parseTimeFromFileName(fileName string) (time.Time, error) {
+	baseName := filepath.Base(fileName)
+	var dateStr string
+	if strings.HasPrefix(baseName, "compacted-") {
+		dateStr = strings.TrimSuffix(strings.TrimPrefix(baseName, "compacted-"), ".parquet")
+	} else {
+		parts := strings.Split(baseName, "-")
+		if len(parts) > 6 {
+			dateStr = strings.Join(parts[0:6], "-")
+		} else {
+			return time.Time{}, fmt.Errorf("invalid small file name format")
+		}
+	}
+	return time.Parse(FileTimeFormat, dateStr)
 }
