@@ -74,6 +74,7 @@ func (cm *ConnectionManager) GetConnection(ctx context.Context) (*operation.Ocea
 func (cm *ConnectionManager) Close() {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
+	log.Println("Closing ConnectionManager")
 	if cm.cachedConnection != nil {
 		cm.cachedConnection.Close()
 	}

@@ -246,10 +246,17 @@ func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
 		return fmt.Errorf("failed to append data: %w", err)
 	}
 
-	// Now, copy the data from the temp table to the daily parquet file.
-	// Use APPEND to append to the existing file or create a new one.
+	// If the target file exists, load its data into the temp table.
+	if _, err := os.Stat(targetParquetFile); err == nil {
+		loadSQL := fmt.Sprintf("INSERT INTO %s SELECT * FROM read_parquet('%s')", tempTableName, targetParquetFile)
+		if _, err := conn.ExecContext(context.Background(), loadSQL); err != nil {
+			return fmt.Errorf("failed to load existing parquet data: %w", err)
+		}
+	}
+
+	// Now, copy all data from the temp table to the daily parquet file, overwriting it.
 	copySQL := fmt.Sprintf(
-		"COPY %s TO '%s' (FORMAT PARQUET, APPEND)",
+		"COPY %s TO '%s' (FORMAT PARQUET)",
 		tempTableName, targetParquetFile,
 	)
 	if _, err := conn.ExecContext(context.Background(), copySQL); err != nil {

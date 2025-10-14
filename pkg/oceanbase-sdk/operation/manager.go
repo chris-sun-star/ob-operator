@@ -101,5 +101,6 @@ func (m *OceanbaseOperationManager) QueryCount(ctx context.Context, count *int, 
 }
 
 func (m *OceanbaseOperationManager) Close() error {
+	m.Logger.Info("Closing OceanbaseOperationManager")
 	return m.Connector.Close()
 }
