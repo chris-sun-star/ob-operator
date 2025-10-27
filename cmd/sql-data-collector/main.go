@@ -29,6 +29,7 @@ import (
 
 const (
 	CompactionThreshold = 120
+	PlanWorkerCount = 4
 )
 
 // ConnectionManager handles the connection to the OceanBase cluster.
@@ -112,6 +113,10 @@ func main() {
 	}
 	if dataPath == "" {
 		dataPath = "."
+	}
+	planDataPath := os.Getenv("PLAN_DATA_PATH")
+	if planDataPath == "" {
+		planDataPath = "./plan.duckdb"
 	}
 
 	// Create a Kubernetes client.
@@ -199,6 +204,70 @@ func main() {
 	}
 	defer duckdbManager.Close()
 
+	// Initialize the PlanStore.
+	planStore, err := sqldatacollector.NewPlanStore(planDataPath)
+	if err != nil {
+		log.Fatalf("Failed to create PlanStore: %v", err)
+	}
+	defer planStore.Close()
+
+	// Load existing plans from the PlanStore.
+	existingPlans, err := planStore.LoadExistingPlans()
+	if err != nil {
+		log.Fatalf("Failed to load existing plans: %v", err)
+	}
+	log.Printf("Loaded %d existing plans.", len(existingPlans))
+
+	// Create channels for plan collection
+	planIdentifierChan := make(chan sqldatacollector.PlanIdentifier, 100)
+	sqlPlanChan := make(chan sqldatacollector.SQLPlan, 100)
+
+	// Initialize the PlanCollector.
+	planCollector := sqldatacollector.NewPlanCollector(existingPlans, planIdentifierChan)
+
+	// Start plan workers
+	var wg sync.WaitGroup
+	wg.Add(PlanWorkerCount)
+	for i := 0; i < PlanWorkerCount; i++ {
+		worker := sqldatacollector.NewPlanWorker(initialManager, planIdentifierChan, sqlPlanChan, &wg)
+		go worker.Start(ctx)
+	}
+
+	// Start a goroutine to store the collected plans
+	go func() {
+		plans := make([]sqldatacollector.SQLPlan, 0, 100)
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case plan, ok := <-sqlPlanChan:
+				if !ok {
+					if len(plans) > 0 {
+						if err := planStore.Store(plans); err != nil {
+							log.Printf("Error inserting plan data into DuckDB: %v", err)
+						}
+					}
+					return
+				}
+				plans = append(plans, plan)
+				if len(plans) >= 100 {
+					if err := planStore.Store(plans); err != nil {
+						log.Printf("Error inserting plan data into DuckDB: %v", err)
+					}
+					plans = make([]sqldatacollector.SQLPlan, 0, 100)
+				}
+			case <-ticker.C:
+				if len(plans) > 0 {
+					if err := planStore.Store(plans); err != nil {
+						log.Printf("Error inserting plan data into DuckDB: %v", err)
+					}
+					plans = make([]sqldatacollector.SQLPlan, 0, 100)
+				}
+			}
+		}
+	}()
+
 	// Retrieve the last known request IDs from DuckDB to resume progress.
 	lastRequestIDs, err := duckdbManager.GetLastRequestIDs()
 	if err != nil {
@@ -245,21 +314,24 @@ func main() {
 
 	// Run a collection immediately at startup.
 	compactionCounter := 0
-	runCollection(ctx, connManager, collector, duckdbManager, &compactionCounter)
+	runCollection(ctx, connManager, collector, duckdbManager, planCollector, &compactionCounter)
 
 	for {
 		select {
 		case <-ticker.C:
-			runCollection(ctx, connManager, collector, duckdbManager, &compactionCounter)
+			runCollection(ctx, connManager, collector, duckdbManager, planCollector, &compactionCounter)
 		case <-ctx.Done():
 			log.Println("Collector stopped.")
+			close(planIdentifierChan)
+			wg.Wait()
+			close(sqlPlanChan)
 			return
 		}
 	}
 }
 
 // runCollection performs one full collection and insertion cycle.
-func runCollection(ctx context.Context, connMgr *ConnectionManager, coll *sqldatacollector.Collector, duckdbMgr *sqldatacollector.DuckDBManager, compactionCounter *int) {
+func runCollection(ctx context.Context, connMgr *ConnectionManager, coll *sqldatacollector.Collector, duckdbMgr *sqldatacollector.DuckDBManager, planColl *sqldatacollector.PlanCollector, compactionCounter *int) {
 	log.Println("Running collection cycle...")
 
 	// Get a valid connection for this cycle.
@@ -281,6 +353,9 @@ func runCollection(ctx context.Context, connMgr *ConnectionManager, coll *sqldat
 		} else {
 			log.Printf("Successfully inserted %d records.", len(results))
 			(*compactionCounter)++
+
+			// Collect and store SQL plans asynchronously
+			planColl.CollectAsync(results)
 		}
 	}
 

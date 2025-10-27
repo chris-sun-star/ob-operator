@@ -41,7 +41,7 @@ func NewCollector(config *Config, tenantID int64, initialRequestIDs map[string]u
 func (c *Collector) collectFromObserver(ctx context.Context, manager *operation.OceanbaseOperationManager, svrIP string, lastRequestID uint64) ([]SQLAudit, error) {
 	query := `
 		SELECT
-			svr_ip, tenant_id, tenant_name, user_id, user_name, db_id, db_name, sql_id, plan_id,
+			svr_ip, svr_port, tenant_id, tenant_name, user_id, user_name, db_id, db_name, sql_id, plan_id,
 
 			MAX(query_sql) as query_sql, MAX(client_ip) as client_ip, MAX(event) as event, 
 			MAX(format_sql_id) as format_sql_id, MAX(effective_tenant_id) as effective_tenant_id, MAX(trace_id) as trace_id, MAX(sid) as sid, MAX(user_client_ip) as user_client_ip, MAX(tx_id) as tx_id,
@@ -104,7 +104,7 @@ func (c *Collector) collectFromObserver(ctx context.Context, manager *operation.
 		FROM gv$ob_sql_audit
 		WHERE tenant_id = ? AND svr_ip = ? AND request_id > ?
 		GROUP BY
-			svr_ip, tenant_id, tenant_name, user_id, user_name, db_id, db_name, sql_id, plan_id
+			svr_ip, svr_port, tenant_id, tenant_name, user_id, user_name, db_id, db_name, sql_id, plan_id
 	`
 
 	var results []SQLAudit
