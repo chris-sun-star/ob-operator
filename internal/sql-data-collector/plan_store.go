@@ -4,9 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
-	"strings"
+	"time"
 )
 
 // PlanStore handles operations with the DuckDB database for SQL plans.
@@ -17,14 +15,10 @@ type PlanStore struct {
 
 // NewPlanStore creates a new PlanStore.
 func NewPlanStore(path string) (*PlanStore, error) {
-	// Ensure the directory exists
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return nil, fmt.Errorf("failed to create data directory %s: %w", path, err)
-	}
-
+	log.Printf("Using plan store at %s", path)
 	db, err := sql.Open("duckdb", path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open duckdb file at %s: %w", path, err)
+		return nil, fmt.Errorf("failed to open in-memory duckdb: %w", err)
 	}
 
 	// Get and log DuckDB version
@@ -76,7 +70,7 @@ func NewPlanStore(path string) (*PlanStore, error) {
 		QBLOCK_NAME        VARCHAR,
 		REMARKS            VARCHAR,
 		OTHER_XML          VARCHAR,
-		PRIMARY KEY (TENANT_ID, SVR_IP, SVR_PORT, PLAN_ID, PLAN_HASH)
+		PRIMARY KEY (TENANT_ID, SVR_IP, SVR_PORT, PLAN_ID, ID)
 	)`
 	if _, err := db.Exec(createTableSQL); err != nil {
 		return nil, fmt.Errorf("failed to create sql_plan table: %w", err)
@@ -87,7 +81,7 @@ func NewPlanStore(path string) (*PlanStore, error) {
 
 // LoadExistingPlans retrieves the identifiers of all plans currently in the database.
 func (s *PlanStore) LoadExistingPlans() (map[string]bool, error) {
-	query := "SELECT TENANT_ID, SVR_IP, SVR_PORT, PLAN_ID, PLAN_HASH FROM sql_plan"
+	query := "SELECT TENANT_ID, SVR_IP, SVR_PORT, PLAN_ID FROM sql_plan"
 	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query existing plans: %w", err)
@@ -100,51 +94,39 @@ func (s *PlanStore) LoadExistingPlans() (map[string]bool, error) {
 		var svrIP string
 		var svrPort int64
 		var planID int64
-		var planHash uint64
-		if err := rows.Scan(&tenantID, &svrIP, &svrPort, &planID, &planHash); err != nil {
+		if err := rows.Scan(&tenantID, &svrIP, &svrPort, &planID); err != nil {
 			return nil, fmt.Errorf("failed to scan existing plan: %w", err)
 		}
-		key := fmt.Sprintf("%d-%s-%d-%d-%d", tenantID, svrIP, svrPort, planID, planHash)
+		key := fmt.Sprintf("%d-%s-%d-%d", tenantID, svrIP, svrPort, planID)
 		existingPlans[key] = true
 	}
 	return existingPlans, nil
 }
 
 const (
-	maxBatchCount = 100
 	SQLPlanColumnCount = 39
 )
 
-// Store inserts a batch of SQLPlan data into the database.
-func (s *PlanStore) Store(plans []SQLPlan) error {
-	if len(plans) == 0 {
-		return nil
+// Store inserts a single SQLPlan data into the database.
+func (s *PlanStore) Store(plan SQLPlan) error {
+	parsedGmtCreate, err := time.Parse("2006-01-02 15:04:05.000000", plan.GmtCreate)
+	if err != nil {
+		log.Printf("Error parsing GmtCreate \"%s\": %v. Using zero time.", plan.GmtCreate, err)
+		parsedGmtCreate = time.Time{}
 	}
 
-	for i := 0; i < len(plans); i += maxBatchCount {
-		end := i + maxBatchCount
-		if end > len(plans) {
-			end = len(plans)
-		}
-		batch := plans[i:end]
+	stmt := fmt.Sprintf("INSERT OR IGNORE INTO sql_plan (TENANT_ID, SVR_IP, SVR_PORT, PLAN_ID, SQL_ID, DB_ID, PLAN_HASH, GMT_CREATE, OPERATOR, OBJECT_NODE, OBJECT_ID, OBJECT_OWNER, OBJECT_NAME, OBJECT_ALIAS, OBJECT_TYPE, OPTIMIZER, ID, PARENT_ID, DEPTH, POSITION, COST, REAL_COST, CARDINALITY, REAL_CARDINALITY, IO_COST, CPU_COST, BYTES, ROWSET, OTHER_TAG, PARTITION_START, OTHER, ACCESS_PREDICATES, FILTER_PREDICATES, STARTUP_PREDICATES, PROJECTION, SPECIAL_PREDICATES, QBLOCK_NAME, REMARKS, OTHER_XML) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 
-		valueStrings := make([]string, 0, len(batch))
-		valueArgs := make([]interface{}, 0, len(batch)*39)
-		for _, p := range batch {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-			valueArgs = append(valueArgs, p.TenantID, p.SvrIP, p.SvrPort, p.PlanID, p.SQLID, p.DbID, p.PlanHash, p.GmtCreate,
-				p.Operator, p.ObjectNode, p.ObjectID, p.ObjectOwner, p.ObjectName, p.ObjectAlias,
-				p.ObjectType, p.Optimizer, p.ID, p.ParentID, p.Depth, p.Position, p.Cost, p.RealCost,
-				p.Cardinality, p.RealCardinality, p.IoCost, p.CpuCost, p.Bytes, p.Rowset, p.OtherTag,
-				p.PartitionStart, p.Other, p.AccessPredicates, p.FilterPredicates, p.StartupPredicates,
-				p.Projection, p.SpecialPredicates, p.QblockName, p.Remarks, p.OtherXML)
-		}
+	valueArgs := []interface{}{plan.TenantID, plan.SvrIP, plan.SvrPort, plan.PlanID, plan.SQLID, plan.DbID, fmt.Sprintf("%d", plan.PlanHash), parsedGmtCreate,
+		plan.Operator, plan.ObjectNode, plan.ObjectID, plan.ObjectOwner, plan.ObjectName, plan.ObjectAlias,
+		plan.ObjectType, plan.Optimizer, plan.ID, plan.ParentID, plan.Depth, plan.Position, plan.Cost, plan.RealCost,
+		plan.Cardinality, plan.RealCardinality, plan.IoCost, plan.CpuCost, plan.Bytes, plan.Rowset, plan.OtherTag,
+		plan.PartitionStart, plan.Other, plan.AccessPredicates, plan.FilterPredicates, plan.StartupPredicates,
+		plan.Projection, plan.SpecialPredicates, plan.QblockName, plan.Remarks, plan.OtherXML}
 
-		stmt := fmt.Sprintf("INSERT OR REPLACE INTO sql_plan VALUES %s", strings.Join(valueStrings, ","))
 
-		if _, err := s.db.Exec(stmt, valueArgs...); err != nil {
-			return err
-		}
+	if _, err := s.db.Exec(stmt, valueArgs...); err != nil {
+		return err
 	}
 
 	return nil

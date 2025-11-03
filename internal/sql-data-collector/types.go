@@ -1,7 +1,5 @@
 package sqldatacollector
 
-import "time"
-
 // SQLAudit represents an aggregated row of data from gv$ob_sql_audit.
 type SQLAudit struct {
 	// Grouping Keys
@@ -197,7 +195,7 @@ type SQLPlan struct {
 	SQLID             string    `db:"SQL_ID"`
 	DbID              int64     `db:"DB_ID"`
 	PlanHash          uint64    `db:"PLAN_HASH"`
-	GmtCreate         time.Time `db:"GMT_CREATE"`
+	GmtCreate         string    `db:"GMT_CREATE"`
 	Operator          string    `db:"OPERATOR"`
 	ObjectNode        string    `db:"OBJECT_NODE"`
 	ObjectID          int64     `db:"OBJECT_ID"`

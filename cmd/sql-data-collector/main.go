@@ -14,11 +14,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-logr/logr"
 	"github.com/oceanbase/ob-operator/api/v1alpha1"
-	"github.com/oceanbase/ob-operator/internal/resource/utils"
 	sqldatacollector "github.com/oceanbase/ob-operator/internal/sql-data-collector"
-	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/operation"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -29,61 +26,8 @@ import (
 
 const (
 	CompactionThreshold = 120
-	PlanWorkerCount = 4
+	PlanWorkerCount     = 4
 )
-
-// ConnectionManager handles the connection to the OceanBase cluster.
-type ConnectionManager struct {
-	k8sClient        client.Client
-	logger           logr.Logger
-	obcluster        *v1alpha1.OBCluster
-	cachedConnection *operation.OceanbaseOperationManager
-	mu               sync.Mutex
-}
-
-// NewConnectionManager creates a new ConnectionManager.
-func NewConnectionManager(k8sClient client.Client, logger logr.Logger, obcluster *v1alpha1.OBCluster) *ConnectionManager {
-	return &ConnectionManager{
-		k8sClient: k8sClient,
-		logger:    logger,
-		obcluster: obcluster,
-	}
-}
-
-// GetConnection returns a valid OceanBaseOperationManager, handling reconnection if necessary.
-func (cm *ConnectionManager) GetConnection(ctx context.Context) (*operation.OceanbaseOperationManager, error) {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
-
-	if cm.cachedConnection != nil && cm.cachedConnection.Connector.IsAlive() {
-		log.Println("Using cached connection.")
-		return cm.cachedConnection, nil
-	}
-
-	log.Println("Cached connection is not alive, creating a new one...")
-	if cm.cachedConnection != nil {
-		cm.cachedConnection.Close()
-	}
-
-	manager, err := utils.GetSysOperationClient(cm.k8sClient, &cm.logger, cm.obcluster)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get OceanBase operation manager: %w", err)
-	}
-
-	cm.cachedConnection = manager
-	log.Println("Successfully created a new connection.")
-	return cm.cachedConnection, nil
-}
-
-// Close closes the cached connection.
-func (cm *ConnectionManager) Close() {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
-	log.Println("Closing ConnectionManager")
-	if cm.cachedConnection != nil {
-		cm.cachedConnection.Close()
-	}
-}
 
 func main() {
 	// Configure logging
@@ -114,10 +58,11 @@ func main() {
 	if dataPath == "" {
 		dataPath = "."
 	}
-	planDataPath := os.Getenv("PLAN_DATA_PATH")
-	if planDataPath == "" {
-		planDataPath = "./plan.duckdb"
+	planDir := filepath.Join(dataPath, "sql_plan")
+	if err := os.MkdirAll(planDir, 0755); err != nil {
+		log.Fatalf("Failed to create plan data directory: %v", err)
 	}
+	planDataDb := filepath.Join(planDir, "sql_plan.duckdb")
 
 	// Create a Kubernetes client.
 	k8sConfig, err := config.GetConfig()
@@ -148,26 +93,20 @@ func main() {
 
 	// Create the connection manager.
 	logger := logf.Log.WithName("collector")
-	connManager := NewConnectionManager(k8sClient, logger, obcluster)
+	connManager := sqldatacollector.NewConnectionManager(k8sClient, logger, obcluster)
 	defer connManager.Close()
 
 	// Get an initial connection to retrieve the tenant ID.
 	var obTenantID int64
-	var initialManager *operation.OceanbaseOperationManager
 
 	for {
-		var err error
-		initialManager, err = connManager.GetConnection(ctx)
+		tenantID, err := getTenantIDByName(ctx, connManager, obTenant)
 		if err != nil {
-			log.Printf("Failed to get OceanBase connection: %v. Retrying in 10 seconds...", err)
-		} else {
-			tenantID, err := getTenantIDByName(ctx, initialManager, obTenant)
-			if err == nil {
-				obTenantID = tenantID
-				log.Printf("Found tenant '%s' with ID %d", obTenant, obTenantID)
-				break // Success
-			}
 			log.Printf("Failed to get tenant ID for tenant %s: %v. Retrying in 10 seconds...", obTenant, err)
+		} else {
+			obTenantID = tenantID
+			log.Printf("Found tenant '%s' with ID %d", obTenant, obTenantID)
+			break // Success
 		}
 
 		// Wait before retrying or exit if context is cancelled.
@@ -205,68 +144,25 @@ func main() {
 	defer duckdbManager.Close()
 
 	// Initialize the PlanStore.
-	planStore, err := sqldatacollector.NewPlanStore(planDataPath)
+	planStore, err := sqldatacollector.NewPlanStore(planDataDb)
 	if err != nil {
 		log.Fatalf("Failed to create PlanStore: %v", err)
 	}
 	defer planStore.Close()
 
-	// Load existing plans from the PlanStore.
-	existingPlans, err := planStore.LoadExistingPlans()
-	if err != nil {
-		log.Fatalf("Failed to load existing plans: %v", err)
-	}
-	log.Printf("Loaded %d existing plans.", len(existingPlans))
-
 	// Create channels for plan collection
 	planIdentifierChan := make(chan sqldatacollector.PlanIdentifier, 100)
-	sqlPlanChan := make(chan sqldatacollector.SQLPlan, 100)
 
 	// Initialize the PlanCollector.
-	planCollector := sqldatacollector.NewPlanCollector(existingPlans, planIdentifierChan)
+	planCollector := sqldatacollector.NewPlanCollector(planIdentifierChan)
 
 	// Start plan workers
 	var wg sync.WaitGroup
 	wg.Add(PlanWorkerCount)
 	for i := 0; i < PlanWorkerCount; i++ {
-		worker := sqldatacollector.NewPlanWorker(initialManager, planIdentifierChan, sqlPlanChan, &wg)
+		worker := sqldatacollector.NewPlanWorker(connManager, planIdentifierChan, planStore, &wg)
 		go worker.Start(ctx)
 	}
-
-	// Start a goroutine to store the collected plans
-	go func() {
-		plans := make([]sqldatacollector.SQLPlan, 0, 100)
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case plan, ok := <-sqlPlanChan:
-				if !ok {
-					if len(plans) > 0 {
-						if err := planStore.Store(plans); err != nil {
-							log.Printf("Error inserting plan data into DuckDB: %v", err)
-						}
-					}
-					return
-				}
-				plans = append(plans, plan)
-				if len(plans) >= 100 {
-					if err := planStore.Store(plans); err != nil {
-						log.Printf("Error inserting plan data into DuckDB: %v", err)
-					}
-					plans = make([]sqldatacollector.SQLPlan, 0, 100)
-				}
-			case <-ticker.C:
-				if len(plans) > 0 {
-					if err := planStore.Store(plans); err != nil {
-						log.Printf("Error inserting plan data into DuckDB: %v", err)
-					}
-					plans = make([]sqldatacollector.SQLPlan, 0, 100)
-				}
-			}
-		}
-	}()
 
 	// Retrieve the last known request IDs from DuckDB to resume progress.
 	lastRequestIDs, err := duckdbManager.GetLastRequestIDs()
@@ -324,14 +220,13 @@ func main() {
 			log.Println("Collector stopped.")
 			close(planIdentifierChan)
 			wg.Wait()
-			close(sqlPlanChan)
 			return
 		}
 	}
 }
 
 // runCollection performs one full collection and insertion cycle.
-func runCollection(ctx context.Context, connMgr *ConnectionManager, coll *sqldatacollector.Collector, duckdbMgr *sqldatacollector.DuckDBManager, planColl *sqldatacollector.PlanCollector, compactionCounter *int) {
+func runCollection(ctx context.Context, connMgr *sqldatacollector.ConnectionManager, coll *sqldatacollector.Collector, duckdbMgr *sqldatacollector.DuckDBManager, planColl *sqldatacollector.PlanCollector, compactionCounter *int) {
 	log.Println("Running collection cycle...")
 
 	// Get a valid connection for this cycle.
@@ -370,9 +265,13 @@ func runCollection(ctx context.Context, connMgr *ConnectionManager, coll *sqldat
 }
 
 // getTenantIDByName queries the cluster for a tenant's ID based on its name.
-func getTenantIDByName(ctx context.Context, manager *operation.OceanbaseOperationManager, tenantName string) (int64, error) {
+func getTenantIDByName(ctx context.Context, connMgr *sqldatacollector.ConnectionManager, tenantName string) (int64, error) {
+	manager, err := connMgr.GetConnection(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get connection for tenant ID retrieval: %w", err)
+	}
 	var tenant sqldatacollector.Tenant
-	err := manager.QueryRow(ctx, &tenant, "SELECT tenant_id FROM __all_tenant WHERE tenant_name = ?", tenantName)
+	err = manager.QueryRow(ctx, &tenant, "SELECT tenant_id FROM __all_tenant WHERE tenant_name = ?", tenantName)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return 0, fmt.Errorf("tenant '%s' not found", tenantName)

@@ -2,32 +2,28 @@ package sqldatacollector
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"sync"
-
-	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/operation"
 )
 
 // PlanIdentifier holds the identifiers for a plan.
 type PlanIdentifier struct {
 	TenantID uint64
 	SvrIP    string
+	SvrPort  int64
 	PlanID   int64
 }
 
 // PlanCollector manages the collection of SQL plan data.
 type PlanCollector struct {
-	existingPlans map[string]bool
-	mu            sync.Mutex
-	inputChan     chan PlanIdentifier
+	mu        sync.Mutex
+	inputChan chan PlanIdentifier
 }
 
 // NewPlanCollector creates a new PlanCollector.
-func NewPlanCollector(existingPlans map[string]bool, inputChan chan PlanIdentifier) *PlanCollector {
+func NewPlanCollector(inputChan chan PlanIdentifier) *PlanCollector {
 	return &PlanCollector{
-		existingPlans: existingPlans,
-		inputChan:     inputChan,
+		inputChan: inputChan,
 	}
 }
 
@@ -35,35 +31,36 @@ func NewPlanCollector(existingPlans map[string]bool, inputChan chan PlanIdentifi
 func (c *PlanCollector) CollectAsync(audits []SQLAudit) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	log.Printf("Collecting plans for %d audit records", len(audits))
+	newPlanCount := 0
 
 	for _, audit := range audits {
-		key := fmt.Sprintf("%d-%s-%d", audit.TenantId, audit.SvrIP, audit.PlanId)
-		if !c.existingPlans[key] {
-			c.existingPlans[key] = true
-			c.inputChan <- PlanIdentifier{
-				TenantID: audit.TenantId,
-				SvrIP:    audit.SvrIP,
-				PlanID:   audit.PlanId,
-			}
+		c.inputChan <- PlanIdentifier{
+			TenantID: audit.TenantId,
+			SvrIP:    audit.SvrIP,
+			SvrPort:  audit.SvrPort,
+			PlanID:   audit.PlanId,
 		}
+		newPlanCount++
 	}
+	log.Printf("Found %d new plans", newPlanCount)
 }
 
 // PlanWorker fetches plan details from the database.
 type PlanWorker struct {
-	manager   *operation.OceanbaseOperationManager
-	inputChan chan PlanIdentifier
-	outputChan chan SQLPlan
-	wg        *sync.WaitGroup
+	connManager *ConnectionManager
+	inputChan   chan PlanIdentifier
+	planStore   *PlanStore
+	wg          *sync.WaitGroup
 }
 
 // NewPlanWorker creates a new PlanWorker.
-func NewPlanWorker(manager *operation.OceanbaseOperationManager, inputChan chan PlanIdentifier, outputChan chan SQLPlan, wg *sync.WaitGroup) *PlanWorker {
+func NewPlanWorker(connManager *ConnectionManager, inputChan chan PlanIdentifier, planStore *PlanStore, wg *sync.WaitGroup) *PlanWorker {
 	return &PlanWorker{
-		manager:   manager,
-		inputChan: inputChan,
-		outputChan: outputChan,
-		wg:        wg,
+		connManager: connManager,
+		inputChan:   inputChan,
+		planStore:   planStore,
+		wg:          wg,
 	}
 }
 
@@ -75,15 +72,29 @@ func (w *PlanWorker) Start(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case ident := <-w.inputChan:
-			query := `SELECT TENANT_ID, SVR_IP, SVR_PORT, PLAN_ID, SQL_ID, DB_ID, PLAN_HASH, GMT_CREATE, OPERATOR, OBJECT_NODE, OBJECT_ID, OBJECT_OWNER, OBJECT_NAME, OBJECT_ALIAS, OBJECT_TYPE, OPTIMIZER, ID, PARENT_ID, DEPTH, POSITION, COST, REAL_COST, CARDINALITY, REAL_CARDINALITY, IO_COST, CPU_COST, BYTES, ROWSET, OTHER_TAG, PARTITION_START, OTHER, ACCESS_PREDICATES, FILTER_PREDICATES, STARTUP_PREDICATES, PROJECTION, SPECIAL_PREDICATES, QBLOCK_NAME, REMARKS, OTHER_XML FROM GV$OB_SQL_PLAN WHERE TENANT_ID = ? AND SVR_IP = ? AND PLAN_ID = ?`
+			log.Printf("Fetching plan for tenant %d, server %s, port %d, plan %d", ident.TenantID, ident.SvrIP, ident.SvrPort, ident.PlanID)
+			manager, err := w.connManager.GetConnection(ctx)
+			if err != nil {
+				log.Printf("failed to get connection for plan worker: %v", err)
+				continue
+			}
+			query := `SELECT TENANT_ID, SVR_IP, SVR_PORT, PLAN_ID, SQL_ID, DB_ID, PLAN_HASH, GMT_CREATE, OPERATOR, OBJECT_NODE, OBJECT_ID, OBJECT_OWNER, OBJECT_NAME, OBJECT_ALIAS, OBJECT_TYPE, OPTIMIZER, ID, PARENT_ID, DEPTH, POSITION, COST, REAL_COST, CARDINALITY, REAL_CARDINALITY, IO_COST, CPU_COST, BYTES, ROWSET, OTHER_TAG, PARTITION_START, OTHER, ACCESS_PREDICATES, FILTER_PREDICATES, STARTUP_PREDICATES, PROJECTION, SPECIAL_PREDICATES, QBLOCK_NAME, REMARKS, OTHER_XML FROM GV$OB_SQL_PLAN WHERE TENANT_ID = ? AND SVR_IP = ? AND SVR_PORT = ? AND PLAN_ID = ?`
 			var plans []SQLPlan
-			if err := w.manager.QueryList(ctx, &plans, query, ident.TenantID, ident.SvrIP, ident.PlanID); err != nil {
+			if err := manager.QueryList(ctx, &plans, query, ident.TenantID, ident.SvrIP, ident.SvrPort, ident.PlanID); err != nil {
 				log.Printf("failed to query sql plan: %v", err)
 				continue
 			}
+			log.Printf("Found %d plan details for tenant %d, server %s, port %d, plan %d", len(plans), ident.TenantID, ident.SvrIP, ident.SvrPort, ident.PlanID)
 			for _, plan := range plans {
-				w.outputChan <- plan
+				if err := w.insertPlanIntoDuckDB(ctx, plan); err != nil {
+					log.Printf("Error inserting plan into DuckDB: %v", err)
+				}
 			}
 		}
 	}
+}
+
+// insertPlanIntoDuckDB inserts a single SQLPlan into the DuckDB.
+func (w *PlanWorker) insertPlanIntoDuckDB(ctx context.Context, plan SQLPlan) error {
+	return w.planStore.Store(plan)
 }

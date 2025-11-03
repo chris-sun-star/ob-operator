@@ -111,7 +111,8 @@ func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
 
 	// Create a temporary table for this batch.
 	tempTableName := "sql_audit_batch_" + uuid.New().String()[:8] // Use a unique temp table name
-	createTempTableSQL := `CREATE TEMP TABLE ` + tempTableName + ` (\n        svr_ip VARCHAR, svr_port BIGINT, tenant_id BIGINT, tenant_name VARCHAR, user_id BIGINT, user_name VARCHAR,
+	createTempTableSQL := `CREATE TEMP TABLE ` + tempTableName + ` (
+        svr_ip VARCHAR, svr_port BIGINT, tenant_id BIGINT, tenant_name VARCHAR, user_id BIGINT, user_name VARCHAR,
         db_id BIGINT, db_name VARCHAR, sql_id VARCHAR, plan_id BIGINT,
         query_sql TEXT, client_ip VARCHAR, event VARCHAR,
         format_sql_id VARCHAR, effective_tenant_id BIGINT, trace_id VARCHAR, sid BIGINT,
@@ -228,6 +229,7 @@ func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
 				collectTime,
 			)
 			if err != nil {
+				log.Printf("Failed to append row for SvrIP %s, MaxRequestId %d. SQL: %s", r.SvrIP, r.MaxRequestId, r.QuerySql)
 				return fmt.Errorf("failed to append row to temp table: %w", err)
 			}
 		}
