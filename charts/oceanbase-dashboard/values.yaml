@@ -42,13 +42,8 @@ job:
   normal:
     ttlSecondsAfterFinished: 300 # 5 minutes
 
-sqlDataCollector:
-  image: "quay.io/oceanbase/sql-data-collector:0.1.0"
+sqlAnalyzer:
+  image: "quay.io/oceanbase/sql-analyzer:0.1.0"
   retentionDays: 7
-
-sqlDataCollectorDataPersistence:
-  enabled: true
-  storageClassName: ""
-  accessMode: ReadWriteOnce
-  storage: 20Gi
+  storageSize: 20Gi
 

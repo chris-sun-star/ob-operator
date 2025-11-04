@@ -1,4 +1,4 @@
-package sqldatacollector
+package sqlanalyzer
 
 // SQLAudit represents an aggregated row of data from gv$ob_sql_audit.
 type SQLAudit struct {

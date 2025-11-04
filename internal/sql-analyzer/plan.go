@@ -1,4 +1,4 @@
-package sqldatacollector
+package sqlanalyzer
 
 import (
 	"context"

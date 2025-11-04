@@ -46,8 +46,6 @@ spec:
               mountPath: /etc/rbac
             - name: shared-volume
               mountPath: /shared-data
-            - name: sql-data-volume
-              mountPath: /sql-data
             - name: config-volume
               mountPath: /etc/dashboard/config.yaml
               subPath: config.yaml
@@ -72,8 +70,8 @@ spec:
               value: {{ .Release.Name }}-rbac-policy
             - name: NAMESPACE
               value: {{ .Release.Namespace }}
-            - name: SQL_DATA_PVC_NAME
-              value: {{ .Release.Name }}-sql-data-pvc
+            - name: SERVICE_ACCOUNT
+              value: {{ .Release.Name }}-sa
         - name: prometheus
           image: quay.io/prometheus/prometheus:v2.51.1
           resources:
@@ -148,13 +146,6 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
-        - name: sql-data-volume
-          {{- if .Values.sqlDataCollectorDataPersistence.enabled }}
-          persistentVolumeClaim:
-            claimName: {{ .Release.Name }}-sql-data-pvc
-          {{- else }}
-          emptyDir: {}
-          {{- end }}
         - name: config-volume
           configMap:
             name: {{ .Release.Name }}-dashboard-config
@@ -190,22 +181,5 @@ spec:
       storage: {{ .Values.sharedVolume.persistence.storage }}
   {{- if .Values.sharedVolume.persistence.storageClassName }}
   storageClassName: {{ .Values.sharedVolume.persistence.storageClassName }}
-  {{- end }}
-{{- end }}
-{{- if .Values.sqlDataCollectorDataPersistence.enabled }}
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ .Release.Name }}-sql-data-pvc
-  namespace: {{ .Release.Namespace }}
-spec:
-  accessModes:
-    - {{ .Values.sqlDataCollectorDataPersistence.accessMode }}
-  resources:
-    requests:
-      storage: {{ .Values.sqlDataCollectorDataPersistence.storage }}
-  {{- if .Values.sqlDataCollectorDataPersistence.storageClassName }}
-  storageClassName: {{ .Values.sqlDataCollectorDataPersistence.storageClassName }}
   {{- end }}
 {{- end }}

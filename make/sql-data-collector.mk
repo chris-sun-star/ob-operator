@@ -1,14 +1,14 @@
-SQL_COLLECTOR_VERSION ?= 0.1.0
-SQL_COLLECTOR_IMG ?= quay.io/oceanbase/sql-data-collector:${SQL_COLLECTOR_VERSION}
+SQL_ANALYZER_VERSION ?= 0.1.0
+SQL_ANALYZER_IMG ?= quay.io/oceanbase/sql-analyzer:${SQL_ANALYZER_VERSION}
 
-.PHONY: sql-data-collector
-sql-data-collector: ## Build sql-data-collector binary.
-	@echo Building sql-data-collector...
+.PHONY: sql-analyzer
+sql-analyzer: 
+	@echo Building sql-analyzer...
 	@mkdir -p bin
-	@go build -o bin/sql-data-collector cmd/sql-data-collector/main.go
+	@go build -o bin/sql-analyzer cmd/sql-analyzer/main.go
 
-.PHONY: sql-data-collector-image
-sql-data-collector-image: ## build sql-data-collector image
+.PHONY: sql-analyzer-image
+sql-analyzer-image: 
 	$(eval DOCKER_BUILD_ARGS :=)
 	$(if $(GOPROXY),$(eval DOCKER_BUILD_ARGS := --build-arg GOPROXY=$(GOPROXY)))
-	docker build $(DOCKER_BUILD_ARGS) -t ${SQL_COLLECTOR_IMG} -f build/Dockerfile.sql-data-collector .
+	docker build $(DOCKER_BUILD_ARGS) -t ${SQL_ANALYZER_IMG} -f build/Dockerfile.sql-analyzer .

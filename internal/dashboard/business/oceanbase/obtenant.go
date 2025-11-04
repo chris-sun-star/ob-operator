@@ -28,6 +28,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/rand"
@@ -480,46 +481,79 @@ func CreateOBTenant(ctx context.Context, nn types.NamespacedName, p *param.Creat
 		return nil, err
 	}
 
-	if p.EnableSQLDataCollector {
-		if err := createSQLDataCollectorDeployment(ctx, tenant); err != nil {
+	if p.EnableSQLAnalyzer {
+		if err := createSQLAnalyzerDeployment(ctx, tenant); err != nil {
 			// Log the error, but don't fail the tenant creation
-			logger.Errorf("failed to create sql-data-collector deployment: %v", err)
+			logger.Errorf("failed to create sql-analyzer deployment: %v", err)
 		}
 	}
 
 	return buildDetailFromApiType(ctx, tenant), nil
 }
 
-func createSQLDataCollectorDeployment(ctx context.Context, tenant *v1alpha1.OBTenant) error {
+func createSQLAnalyzerDeployment(ctx context.Context, tenant *v1alpha1.OBTenant) error {
 	k8sclient := client.GetClient()
 
-	deploymentName := fmt.Sprintf("sql-data-collector-%s-%s", tenant.Namespace, tenant.Name)
-	namespace := os.Getenv("NAMESPACE")
-
-	// Get the dedicated PVC name for sql-data-collector data from the environment variable
-	sqlDataPvcName := os.Getenv("SQL_DATA_PVC_NAME")
-	if sqlDataPvcName == "" {
-		logger.Errorf("SQL_DATA_PVC_NAME environment variable not set, cannot create sql-data-collector deployment")
-		return oberr.NewInternal("SQL_DATA_PVC_NAME environment variable not set")
+	obcluster, err := clients.GetOBCluster(ctx, tenant.Namespace, tenant.Spec.ClusterName)
+	if err != nil {
+		return errors.Wrapf(err, "Get obcluster %s %s", tenant.Namespace, tenant.Spec.ClusterName)
 	}
 
-	releaseName := strings.TrimSuffix(sqlDataPvcName, "-sql-data-pvc")
-	serviceAccountName := releaseName + "-sa"
+	deploymentName := fmt.Sprintf("sql-analyzer-%s-%s", tenant.Namespace, tenant.Name)
 
-	image := config.GetConfig().SQLDataCollector.Image
-	// Mount path inside the sql-data-collector pod for its data
+	serviceAccountName := os.Getenv("SERVICE_ACCOUNT")
+	if serviceAccountName == "" {
+		logger.Errorf("SERVICE_ACCOUNT environment variable not set, cannot create sql-analyzer deployment")
+		return oberr.NewInternal("SERVICE_ACCOUNT environment variable not set")
+	}
+
+	image := config.GetConfig().SQLAnalyzer.Image
 	dataPath := "/data"
-	// Construct a unique subpath for this sql-data-collector within the dedicated volume
-	tenantDataSubPath := fmt.Sprintf("%s/%s", tenant.Namespace, tenant.Name)
 
 	replicas := int32(1)
 
+	ownerReferenceList := make([]metav1.OwnerReference, 0)
+	ownerReference := metav1.OwnerReference{
+		APIVersion: tenant.APIVersion,
+		Kind:       tenant.Kind,
+		Name:       tenant.Name,
+		UID:        tenant.GetUID(),
+	}
+	ownerReferenceList = append(ownerReferenceList, ownerReference)
+
+	pvcSpec := corev1.PersistentVolumeClaimSpec{}
+	requestsResources := corev1.ResourceList{}
+	requestsResources["storage"] = config.GetConfig().SQLAnalyzer.StorageSize
+	storageClassName := obcluster.Spec.OBServerTemplate.Storage.DataStorage.StorageClass
+	pvcSpec.StorageClassName = &(storageClassName)
+	accessModes := []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
+	pvcSpec.AccessModes = accessModes
+	pvcSpec.Resources.Requests = requestsResources
+
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "pvc-sql-" + tenant.Name,
+			Namespace:       tenant.Namespace,
+			OwnerReferences: ownerReferenceList,
+			Labels: map[string]string{
+				"app":    "sql-analyzer",
+				"tenant": tenant.Name,
+			},
+		},
+		Spec: pvcSpec,
+	}
+	_, err = k8sclient.ClientSet.CoreV1().PersistentVolumeClaims(tenant.Namespace).Create(ctx, pvc, v1.CreateOptions{})
+	if err != nil {
+		return errors.Wrap(err, "Create single pvc of observer")
+	}
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: v1.ObjectMeta{
-			Name:      deploymentName,
-			Namespace: namespace,
+			Name:            deploymentName,
+			Namespace:       tenant.Namespace,
+			OwnerReferences: ownerReferenceList,
 			Labels: map[string]string{
-				"app":    "sql-data-collector",
+				"app":    "sql-analyzer",
 				"tenant": tenant.Name,
 			},
 		},
@@ -527,14 +561,14 @@ func createSQLDataCollectorDeployment(ctx context.Context, tenant *v1alpha1.OBTe
 			Replicas: &replicas,
 			Selector: &v1.LabelSelector{
 				MatchLabels: map[string]string{
-					"app":    "sql-data-collector",
+					"app":    "sql-analyzer",
 					"tenant": tenant.Name,
 				},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: v1.ObjectMeta{
 					Labels: map[string]string{
-						"app":    "sql-data-collector",
+						"app":    "sql-analyzer",
 						"tenant": tenant.Name,
 					},
 				},
@@ -545,21 +579,20 @@ func createSQLDataCollectorDeployment(ctx context.Context, tenant *v1alpha1.OBTe
 							Name: "data-volume",
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: sqlDataPvcName,
+									ClaimName: pvc.Name,
 								},
 							},
 						},
 					},
 					Containers: []corev1.Container{
 						{
-							Name:            "sql-data-collector",
+							Name:            "sql-analyzer",
 							Image:           image,
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "data-volume",
 									MountPath: dataPath,
-									SubPath:   tenantDataSubPath,
 								},
 							},
 							Env: []corev1.EnvVar{
@@ -581,7 +614,7 @@ func createSQLDataCollectorDeployment(ctx context.Context, tenant *v1alpha1.OBTe
 								},
 								{
 									Name:  "DATA_RETENTION_DAYS",
-									Value: fmt.Sprintf("%d", config.GetConfig().SQLDataCollector.RetentionDays),
+									Value: fmt.Sprintf("%d", config.GetConfig().SQLAnalyzer.RetentionDays),
 								},
 							},
 						},
@@ -591,7 +624,7 @@ func createSQLDataCollectorDeployment(ctx context.Context, tenant *v1alpha1.OBTe
 		},
 	}
 
-	_, err := k8sclient.ClientSet.AppsV1().Deployments(namespace).Create(ctx, deployment, v1.CreateOptions{})
+	_, err = k8sclient.ClientSet.AppsV1().Deployments(tenant.Namespace).Create(ctx, deployment, v1.CreateOptions{})
 	if err != nil {
 		logger.Errorf("failed to create deployment %s: %v", deployment.Name, err)
 		if kubeerrors.IsAlreadyExists(err) {
@@ -599,7 +632,7 @@ func createSQLDataCollectorDeployment(ctx context.Context, tenant *v1alpha1.OBTe
 		}
 		return oberr.NewInternal(err.Error())
 	}
-	logger.Infof("create sql-data-collector deployment %s for tenant %s", deploymentName, tenant.Name)
+	logger.Infof("create sql-analyzer deployment %s for tenant %s", deploymentName, tenant.Name)
 	return nil
 }
 
@@ -629,17 +662,6 @@ func GetOBTenant(ctx context.Context, nn types.NamespacedName) (*response.OBTena
 }
 
 func DeleteOBTenant(ctx context.Context, nn types.NamespacedName) error {
-	dashboardNamespace := os.Getenv("NAMESPACE")
-	if dashboardNamespace != "" {
-		deploymentName := fmt.Sprintf("sql-data-collector-%s-%s", nn.Namespace, nn.Name)
-		k8sclient := client.GetClient()
-		err := k8sclient.ClientSet.AppsV1().Deployments(dashboardNamespace).Delete(ctx, deploymentName, v1.DeleteOptions{})
-		if err != nil && !kubeerrors.IsNotFound(err) {
-			logger.Errorf("failed to delete sql-data-collector deployment %s: %v", deploymentName, err)
-		}
-	} else {
-		logger.Warn("NAMESPACE environment variable not set, cannot delete sql-data-collector deployment")
-	}
 	return clients.DeleteOBTenant(ctx, nn)
 }
 

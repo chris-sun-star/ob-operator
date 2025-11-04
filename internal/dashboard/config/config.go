@@ -18,6 +18,7 @@ import (
 
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 type ToolConfig struct {
@@ -38,15 +39,16 @@ type JobConfig struct {
 	Normal     JobTypeConfig `yaml:"normal"`
 }
 
-type SQLDataCollectorConfig struct {
-	Image         string `yaml:"image"`
-	RetentionDays int    `yaml:"retentionDays"`
+type SQLAnalyzerConfig struct {
+	Image         string            `yaml:"image"`
+	RetentionDays int               `yaml:"retentionDays"`
+	StorageSize   resource.Quantity `yaml:"storageSize"`
 }
 
 type Config struct {
-	Inspection       InspectionConfig       `yaml:"inspection"`
-	Job              JobConfig              `yaml:"job"`
-	SQLDataCollector SQLDataCollectorConfig `yaml:"sqlDataCollector"`
+	Inspection  InspectionConfig  `yaml:"inspection"`
+	Job         JobConfig         `yaml:"job"`
+	SQLAnalyzer SQLAnalyzerConfig `yaml:"sqlAnalyzer"`
 }
 
 var (

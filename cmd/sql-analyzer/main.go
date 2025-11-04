@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/oceanbase/ob-operator/api/v1alpha1"
-	sqldatacollector "github.com/oceanbase/ob-operator/internal/sql-data-collector"
+	sqlanalyzer "github.com/oceanbase/ob-operator/internal/sql-analyzer"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,7 +35,7 @@ func main() {
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		log.Fatalf("Failed to create log directory: %v", err)
 	}
-	logFile, err := os.OpenFile(filepath.Join(logDir, "sql-data-collector.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	logFile, err := os.OpenFile(filepath.Join(logDir, "sql-analyzer.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("Failed to open log file: %v", err)
 	}
@@ -93,7 +93,7 @@ func main() {
 
 	// Create the connection manager.
 	logger := logf.Log.WithName("collector")
-	connManager := sqldatacollector.NewConnectionManager(k8sClient, logger, obcluster)
+	connManager := sqlanalyzer.NewConnectionManager(k8sClient, logger, obcluster)
 	defer connManager.Close()
 
 	// Get an initial connection to retrieve the tenant ID.
@@ -130,37 +130,37 @@ func main() {
 		}
 	}
 
-	config := &sqldatacollector.Config{
+	config := &sqlanalyzer.Config{
 		Interval: time.Duration(intervalSeconds) * time.Second,
 	}
 
 	duckDBPath := filepath.Join(dataPath, "sql_audit")
 
 	// Initialize the DuckDB manager.
-	duckdbManager, err := sqldatacollector.NewDuckDBManager(duckDBPath)
+	duckdbManager, err := sqlanalyzer.NewDuckDBManager(duckDBPath)
 	if err != nil {
 		log.Fatalf("Failed to create DuckDB manager: %v", err)
 	}
 	defer duckdbManager.Close()
 
 	// Initialize the PlanStore.
-	planStore, err := sqldatacollector.NewPlanStore(planDataDb)
+	planStore, err := sqlanalyzer.NewPlanStore(planDataDb)
 	if err != nil {
 		log.Fatalf("Failed to create PlanStore: %v", err)
 	}
 	defer planStore.Close()
 
 	// Create channels for plan collection
-	planIdentifierChan := make(chan sqldatacollector.PlanIdentifier, 100)
+	planIdentifierChan := make(chan sqlanalyzer.PlanIdentifier, 100)
 
 	// Initialize the PlanCollector.
-	planCollector := sqldatacollector.NewPlanCollector(planIdentifierChan)
+	planCollector := sqlanalyzer.NewPlanCollector(planIdentifierChan)
 
 	// Start plan workers
 	var wg sync.WaitGroup
 	wg.Add(PlanWorkerCount)
 	for i := 0; i < PlanWorkerCount; i++ {
-		worker := sqldatacollector.NewPlanWorker(connManager, planIdentifierChan, planStore, &wg)
+		worker := sqlanalyzer.NewPlanWorker(connManager, planIdentifierChan, planStore, &wg)
 		go worker.Start(ctx)
 	}
 
@@ -172,7 +172,7 @@ func main() {
 	log.Printf("Retrieved progress for %d observers from DuckDB.", len(lastRequestIDs))
 
 	// Initialize the OceanBase collector with the retrieved progress.
-	collector := sqldatacollector.NewCollector(config, obTenantID, lastRequestIDs)
+	collector := sqlanalyzer.NewCollector(config, obTenantID, lastRequestIDs)
 
 	// Run the collection loop.
 	ticker := time.NewTicker(config.Interval)
@@ -226,7 +226,7 @@ func main() {
 }
 
 // runCollection performs one full collection and insertion cycle.
-func runCollection(ctx context.Context, connMgr *sqldatacollector.ConnectionManager, coll *sqldatacollector.Collector, duckdbMgr *sqldatacollector.DuckDBManager, planColl *sqldatacollector.PlanCollector, compactionCounter *int) {
+func runCollection(ctx context.Context, connMgr *sqlanalyzer.ConnectionManager, coll *sqlanalyzer.Collector, duckdbMgr *sqlanalyzer.DuckDBManager, planColl *sqlanalyzer.PlanCollector, compactionCounter *int) {
 	log.Println("Running collection cycle...")
 
 	// Get a valid connection for this cycle.
@@ -265,12 +265,12 @@ func runCollection(ctx context.Context, connMgr *sqldatacollector.ConnectionMana
 }
 
 // getTenantIDByName queries the cluster for a tenant's ID based on its name.
-func getTenantIDByName(ctx context.Context, connMgr *sqldatacollector.ConnectionManager, tenantName string) (int64, error) {
+func getTenantIDByName(ctx context.Context, connMgr *sqlanalyzer.ConnectionManager, tenantName string) (int64, error) {
 	manager, err := connMgr.GetConnection(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get connection for tenant ID retrieval: %w", err)
 	}
-	var tenant sqldatacollector.Tenant
+	var tenant sqlanalyzer.Tenant
 	err = manager.QueryRow(ctx, &tenant, "SELECT tenant_id FROM __all_tenant WHERE tenant_name = ?", tenantName)
 	if err != nil {
 		if err == sql.ErrNoRows {
