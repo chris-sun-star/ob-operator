@@ -3,13 +3,13 @@ package sqlanalyzer
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 
 	"github.com/go-logr/logr"
 	"github.com/oceanbase/ob-operator/api/v1alpha1"
 	"github.com/oceanbase/ob-operator/internal/resource/utils"
 	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/operation"
+	logger "github.com/sirupsen/logrus"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -37,11 +37,11 @@ func (cm *ConnectionManager) GetConnection(ctx context.Context) (*operation.Ocea
 	defer cm.mu.Unlock()
 
 	if cm.cachedConnection != nil && cm.cachedConnection.Connector.IsAlive() {
-		log.Println("Using cached connection.")
+		logger.Println("Using cached connection.")
 		return cm.cachedConnection, nil
 	}
 
-	log.Println("Cached connection is not alive, creating a new one...")
+	logger.Println("Cached connection is not alive, creating a new one...")
 	if cm.cachedConnection != nil {
 		cm.cachedConnection.Close()
 	}
@@ -52,7 +52,7 @@ func (cm *ConnectionManager) GetConnection(ctx context.Context) (*operation.Ocea
 	}
 
 	cm.cachedConnection = manager
-	log.Println("Successfully created a new connection.")
+	logger.Println("Successfully created a new connection.")
 	return cm.cachedConnection, nil
 }
 
@@ -60,7 +60,7 @@ func (cm *ConnectionManager) GetConnection(ctx context.Context) (*operation.Ocea
 func (cm *ConnectionManager) Close() {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
-	log.Println("Closing ConnectionManager")
+	logger.Println("Closing ConnectionManager")
 	if cm.cachedConnection != nil {
 		cm.cachedConnection.Close()
 	}

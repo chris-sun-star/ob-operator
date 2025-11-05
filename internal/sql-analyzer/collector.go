@@ -3,11 +3,11 @@ package sqlanalyzer
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/operation"
+	logger "github.com/sirupsen/logrus"
 )
 
 // Config holds the configuration for the collector.
@@ -139,7 +139,7 @@ func (c *Collector) Collect(ctx context.Context, manager *operation.OceanbaseOpe
 		wg.Add(1)
 		go func(svrIP string, lastRequestID uint64) {
 			defer wg.Done()
-			log.Printf("Collecting from observer %s since request_id %d", svrIP, lastRequestID)
+			logger.Printf("Collecting from observer %s since request_id %d", svrIP, lastRequestID)
 			data, err := c.collectFromObserver(ctx, manager, svrIP, lastRequestID)
 			if err != nil {
 				errChan <- fmt.Errorf("failed to collect from observer %s: %w", svrIP, err)
@@ -162,7 +162,7 @@ func (c *Collector) Collect(ctx context.Context, manager *operation.OceanbaseOpe
 	}
 
 	for err := range errChan {
-		log.Println("Error during collection:", err) // Log errors but don't fail the whole batch
+		logger.Println("Error during collection:", err) // Log errors but don't fail the whole batch
 	}
 
 	// Step 3: Update the last request IDs for the next cycle.
@@ -174,7 +174,7 @@ func (c *Collector) Collect(ctx context.Context, manager *operation.OceanbaseOpe
 	}
 	c.mu.Unlock()
 
-	log.Printf("Collected %d new audit records.", len(allResults))
+	logger.Printf("Collected %d new audit records.", len(allResults))
 	return allResults, nil
 }
 

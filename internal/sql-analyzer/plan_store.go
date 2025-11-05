@@ -3,8 +3,9 @@ package sqlanalyzer
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"time"
+
+	logger "github.com/sirupsen/logrus"
 )
 
 // PlanStore handles operations with the DuckDB database for SQL plans.
@@ -15,7 +16,7 @@ type PlanStore struct {
 
 // NewPlanStore creates a new PlanStore.
 func NewPlanStore(path string) (*PlanStore, error) {
-	log.Printf("Using plan store at %s", path)
+	logger.Printf("Using plan store at %s", path)
 	db, err := sql.Open("duckdb", path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open in-memory duckdb: %w", err)
@@ -27,7 +28,7 @@ func NewPlanStore(path string) (*PlanStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get DuckDB version: %w", err)
 	}
-	log.Printf("DuckDB version: %s", version)
+	logger.Printf("DuckDB version: %s", version)
 
 	// Create table if not exists
 	createTableSQL := `CREATE TABLE IF NOT EXISTS sql_plan (
@@ -111,7 +112,7 @@ const (
 func (s *PlanStore) Store(plan SQLPlan) error {
 	parsedGmtCreate, err := time.Parse("2006-01-02 15:04:05.000000", plan.GmtCreate)
 	if err != nil {
-		log.Printf("Error parsing GmtCreate \"%s\": %v. Using zero time.", plan.GmtCreate, err)
+		logger.Printf("Error parsing GmtCreate \"%s\": %v. Using zero time.", plan.GmtCreate, err)
 		parsedGmtCreate = time.Time{}
 	}
 
@@ -123,7 +124,6 @@ func (s *PlanStore) Store(plan SQLPlan) error {
 		plan.Cardinality, plan.RealCardinality, plan.IoCost, plan.CpuCost, plan.Bytes, plan.Rowset, plan.OtherTag,
 		plan.PartitionStart, plan.Other, plan.AccessPredicates, plan.FilterPredicates, plan.StartupPredicates,
 		plan.Projection, plan.SpecialPredicates, plan.QblockName, plan.Remarks, plan.OtherXML}
-
 
 	if _, err := s.db.Exec(stmt, valueArgs...); err != nil {
 		return err

@@ -5,15 +5,16 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
-	duckdb "github.com/marcboeker/go-duckdb"
 	"github.com/google/uuid"
+	duckdb "github.com/marcboeker/go-duckdb"
+
+	logger "github.com/sirupsen/logrus"
 )
 
 const (
@@ -43,7 +44,7 @@ func NewDuckDBManager(path string) (*DuckDBManager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get DuckDB version: %w", err)
 	}
-	log.Printf("DuckDB version: %s", version)
+	logger.Printf("DuckDB version: %s", version)
 
 	// Ensure the data directory exists
 	if err := os.MkdirAll(path, 0755); err != nil {
@@ -80,7 +81,7 @@ func (m *DuckDBManager) GetLastRequestIDs() (map[string]uint64, error) {
 
 	rows, err := m.db.Query(query)
 	if err != nil {
-		log.Printf("Error querying latest parquet file %s: %v", mostRecentFile, err)
+		logger.Printf("Error querying latest parquet file %s: %v", mostRecentFile, err)
 		return make(map[string]uint64), nil
 	}
 	defer rows.Close()
@@ -229,7 +230,7 @@ func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
 				collectTime,
 			)
 			if err != nil {
-				log.Printf("Failed to append row for SvrIP %s, MaxRequestId %d. SQL: %s", r.SvrIP, r.MaxRequestId, r.QuerySql)
+				logger.Printf("Failed to append row for SvrIP %s, MaxRequestId %d. SQL: %s", r.SvrIP, r.MaxRequestId, r.QuerySql)
 				return fmt.Errorf("failed to append row to temp table: %w", err)
 			}
 		}
@@ -313,13 +314,12 @@ func (m *DuckDBManager) Compact() error {
 	// Delete the original files that were compacted.
 	for _, file := range filesToCompact {
 		if err := os.Remove(file); err != nil {
-			log.Printf("Failed to delete old file %s: %v", file, err)
+			logger.Printf("Failed to delete old file %s: %v", file, err)
 		}
 	}
 
 	return nil
 }
-
 
 // Close closes the database connection.
 func (m *DuckDBManager) Close() {
@@ -343,7 +343,7 @@ func (m *DuckDBManager) DeleteOldData(retentionDays int) error {
 	for _, filePath := range files {
 		fileTime, err := parseTimeFromFileName(filePath)
 		if err != nil {
-			log.Printf("Skipping file %s with invalid date format: %v", filePath, err)
+			logger.Printf("Skipping file %s with invalid date format: %v", filePath, err)
 			continue
 		}
 

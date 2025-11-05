@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"io"
-	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -14,14 +12,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/oceanbase/ob-operator/api/v1alpha1"
-	sqlanalyzer "github.com/oceanbase/ob-operator/internal/sql-analyzer"
+	"github.com/go-logr/logr"
+	logger "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	"github.com/oceanbase/ob-operator/api/v1alpha1"
+	sqlanalyzer "github.com/oceanbase/ob-operator/internal/sql-analyzer"
+	"github.com/oceanbase/ob-operator/pkg/log"
 )
 
 const (
@@ -29,22 +29,36 @@ const (
 	PlanWorkerCount     = 4
 )
 
+func init() {
+	logLevel := os.Getenv("LOG_LEVEL")
+	if logLevel == "" {
+		logLevel = "info"
+	}
+	logFile := os.Getenv("LOG_FILE")
+	if logFile == "" {
+		logFile = "log/sql-analyzer.log"
+	}
+	log.InitLogger(
+		log.LoggerConfig{
+			Level:      logLevel,
+			Filename:   logFile,
+			MaxSize:    256,
+			MaxAge:     7,
+			MaxBackups: 5,
+			LocalTime:  true,
+			Compress:   true,
+		},
+	)
+}
+
 func main() {
+
+	// Init
+	// launch collector
+	// launch server
+
 	// Configure logging
-	logDir := "./log"
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		log.Fatalf("Failed to create log directory: %v", err)
-	}
-	logFile, err := os.OpenFile(filepath.Join(logDir, "sql-analyzer.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		log.Fatalf("Failed to open log file: %v", err)
-	}
-	multiWriter := io.MultiWriter(os.Stdout, logFile)
-	log.SetOutput(multiWriter)
-
-	logf.SetLogger(zap.New(zap.UseDevMode(true), zap.WriteTo(multiWriter)))
-
-	log.Println("SQL Data Collector starting...")
+	logger.Info("SQL Data Collector starting...")
 
 	// Read configuration from environment variables.
 	obClusterName := os.Getenv("OB_CLUSTER_NAME")
@@ -53,26 +67,26 @@ func main() {
 	dataPath := os.Getenv("DATA_PATH")
 
 	if obClusterName == "" || obClusterNamespace == "" || obTenant == "" {
-		log.Fatal("OB_CLUSTER_NAME, OB_CLUSTER_NAMESPACE, and OB_TENANT environment variables must be set.")
+		logger.Fatalf("OB_CLUSTER_NAME, OB_CLUSTER_NAMESPACE, and OB_TENANT environment variables must be set.")
 	}
 	if dataPath == "" {
 		dataPath = "."
 	}
 	planDir := filepath.Join(dataPath, "sql_plan")
 	if err := os.MkdirAll(planDir, 0755); err != nil {
-		log.Fatalf("Failed to create plan data directory: %v", err)
+		logger.Fatalf("Failed to create plan data directory: %v", err)
 	}
 	planDataDb := filepath.Join(planDir, "sql_plan.duckdb")
 
 	// Create a Kubernetes client.
 	k8sConfig, err := config.GetConfig()
 	if err != nil {
-		log.Fatalf("Failed to get Kubernetes config: %v", err)
+		logger.Fatalf("Failed to get Kubernetes config: %v", err)
 	}
 	v1alpha1.AddToScheme(scheme.Scheme)
 	k8sClient, err := client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
 	if err != nil {
-		log.Fatalf("Failed to create Kubernetes client: %v", err)
+		logger.Fatalf("Failed to create Kubernetes client: %v", err)
 	}
 
 	// Set up a context that is canceled on interruption signals.
@@ -81,19 +95,18 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigChan
-		log.Println("Shutdown signal received, stopping collector...")
+		logger.Println("Shutdown signal received, stopping collector...")
 		cancel()
 	}()
 
 	// Get the OBCluster resource.
 	obcluster := &v1alpha1.OBCluster{}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Name: obClusterName, Namespace: obClusterNamespace}, obcluster); err != nil {
-		log.Fatalf("Failed to get OBCluster resource: %v", err)
+		logger.Fatalf("Failed to get OBCluster resource: %v", err)
 	}
 
 	// Create the connection manager.
-	logger := logf.Log.WithName("collector")
-	connManager := sqlanalyzer.NewConnectionManager(k8sClient, logger, obcluster)
+	connManager := sqlanalyzer.NewConnectionManager(k8sClient, logr.FromContextOrDiscard(ctx), obcluster)
 	defer connManager.Close()
 
 	// Get an initial connection to retrieve the tenant ID.
@@ -102,10 +115,10 @@ func main() {
 	for {
 		tenantID, err := getTenantIDByName(ctx, connManager, obTenant)
 		if err != nil {
-			log.Printf("Failed to get tenant ID for tenant %s: %v. Retrying in 10 seconds...", obTenant, err)
+			logger.Printf("Failed to get tenant ID for tenant %s: %v. Retrying in 10 seconds...", obTenant, err)
 		} else {
 			obTenantID = tenantID
-			log.Printf("Found tenant '%s' with ID %d", obTenant, obTenantID)
+			logger.Printf("Found tenant '%s' with ID %d", obTenant, obTenantID)
 			break // Success
 		}
 
@@ -114,7 +127,7 @@ func main() {
 		case <-time.After(10 * time.Second):
 			continue
 		case <-ctx.Done():
-			log.Println("Collector stopped during tenant ID retrieval.")
+			logger.Println("Collector stopped during tenant ID retrieval.")
 			return
 		}
 	}
@@ -126,7 +139,7 @@ func main() {
 		if val, err := strconv.Atoi(intervalStr); err == nil && val > 0 {
 			intervalSeconds = val
 		} else {
-			log.Printf("Invalid COLLECTION_INTERVAL_SECONDS value '%s', using default of 30 seconds.", intervalStr)
+			logger.Printf("Invalid COLLECTION_INTERVAL_SECONDS value '%s', using default of 30 seconds.", intervalStr)
 		}
 	}
 
@@ -139,14 +152,14 @@ func main() {
 	// Initialize the DuckDB manager.
 	duckdbManager, err := sqlanalyzer.NewDuckDBManager(duckDBPath)
 	if err != nil {
-		log.Fatalf("Failed to create DuckDB manager: %v", err)
+		logger.Fatalf("Failed to create DuckDB manager: %v", err)
 	}
 	defer duckdbManager.Close()
 
 	// Initialize the PlanStore.
 	planStore, err := sqlanalyzer.NewPlanStore(planDataDb)
 	if err != nil {
-		log.Fatalf("Failed to create PlanStore: %v", err)
+		logger.Fatalf("Failed to create PlanStore: %v", err)
 	}
 	defer planStore.Close()
 
@@ -167,9 +180,9 @@ func main() {
 	// Retrieve the last known request IDs from DuckDB to resume progress.
 	lastRequestIDs, err := duckdbManager.GetLastRequestIDs()
 	if err != nil {
-		log.Fatalf("Failed to get last request IDs from DuckDB: %v", err)
+		logger.Fatalf("Failed to get last request IDs from DuckDB: %v", err)
 	}
-	log.Printf("Retrieved progress for %d observers from DuckDB.", len(lastRequestIDs))
+	logger.Printf("Retrieved progress for %d observers from DuckDB.", len(lastRequestIDs))
 
 	// Initialize the OceanBase collector with the retrieved progress.
 	collector := sqlanalyzer.NewCollector(config, obTenantID, lastRequestIDs)
@@ -182,14 +195,14 @@ func main() {
 	retentionStr := os.Getenv("DATA_RETENTION_DAYS")
 	retentionDays, err := strconv.Atoi(retentionStr)
 	if err != nil {
-		log.Fatalf("Invalid or missing DATA_RETENTION_DAYS environment variable: %v", err)
+		logger.Fatalf("Invalid or missing DATA_RETENTION_DAYS environment variable: %v", err)
 	}
 
 	go func() {
 		// Run cleanup once at startup
-		log.Println("Running initial cleanup of old data...")
+		logger.Println("Running initial cleanup of old data...")
 		if err := duckdbManager.DeleteOldData(retentionDays); err != nil {
-			log.Printf("Error during initial data cleanup: %v", err)
+			logger.Printf("Error during initial data cleanup: %v", err)
 		}
 
 		// Then run periodically
@@ -198,9 +211,9 @@ func main() {
 		for {
 			select {
 			case <-cleanupTicker.C:
-				log.Println("Running periodic cleanup of old data...")
+				logger.Println("Running periodic cleanup of old data...")
 				if err := duckdbManager.DeleteOldData(retentionDays); err != nil {
-					log.Printf("Error during periodic data cleanup: %v", err)
+					logger.Printf("Error during periodic data cleanup: %v", err)
 				}
 			case <-ctx.Done():
 				return
@@ -217,7 +230,7 @@ func main() {
 		case <-ticker.C:
 			runCollection(ctx, connManager, collector, duckdbManager, planCollector, &compactionCounter)
 		case <-ctx.Done():
-			log.Println("Collector stopped.")
+			logger.Println("Collector stopped.")
 			close(planIdentifierChan)
 			wg.Wait()
 			return
@@ -227,26 +240,26 @@ func main() {
 
 // runCollection performs one full collection and insertion cycle.
 func runCollection(ctx context.Context, connMgr *sqlanalyzer.ConnectionManager, coll *sqlanalyzer.Collector, duckdbMgr *sqlanalyzer.DuckDBManager, planColl *sqlanalyzer.PlanCollector, compactionCounter *int) {
-	log.Println("Running collection cycle...")
+	logger.Println("Running collection cycle...")
 
 	// Get a valid connection for this cycle.
 	manager, err := connMgr.GetConnection(ctx)
 	if err != nil {
-		log.Printf("Error getting connection: %v", err)
+		logger.Printf("Error getting connection: %v", err)
 		return
 	}
 
 	results, err := coll.Collect(ctx, manager)
 	if err != nil {
-		log.Printf("Error during collection: %v", err)
+		logger.Printf("Error during collection: %v", err)
 		return
 	}
 
 	if len(results) > 0 {
 		if err := duckdbMgr.InsertBatch(results); err != nil {
-			log.Printf("Error inserting data into DuckDB: %v", err)
+			logger.Printf("Error inserting data into DuckDB: %v", err)
 		} else {
-			log.Printf("Successfully inserted %d records.", len(results))
+			logger.Printf("Successfully inserted %d records.", len(results))
 			(*compactionCounter)++
 
 			// Collect and store SQL plans asynchronously
@@ -255,9 +268,9 @@ func runCollection(ctx context.Context, connMgr *sqlanalyzer.ConnectionManager, 
 	}
 
 	if *compactionCounter >= CompactionThreshold {
-		log.Println("Compaction threshold reached, running compaction...")
+		logger.Println("Compaction threshold reached, running compaction...")
 		if err := duckdbMgr.Compact(); err != nil {
-			log.Printf("Error during compaction: %v", err)
+			logger.Printf("Error during compaction: %v", err)
 		} else {
 			*compactionCounter = 0
 		}
