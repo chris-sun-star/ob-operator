@@ -2,6 +2,7 @@ package collector
 
 import (
 	"context"
+	"fmt" // Added import
 	"path/filepath"
 	"sync"
 	"time"
@@ -74,7 +75,7 @@ func (c *Collector) Init() error {
 		return fmt.Errorf("failed to get OBCluster resource: %w", err)
 	}
 
-	connectionManager := oceanbase.NewConnectionManager(logger.StandardLogger(), obcluster)
+	connectionManager := oceanbase.NewConnectionManager(logr.FromContextOrDiscard(c.Ctx), obcluster)
 	c.ConnectionManager = connectionManager
 
 	lastRequestIDs, err := sqlAuditStore.GetLastRequestIDs()
