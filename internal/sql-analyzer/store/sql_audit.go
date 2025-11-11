@@ -1,4 +1,4 @@
-package sqlanalyzer
+package store
 
 import (
 	"context"
@@ -8,55 +8,46 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	duckdb "github.com/marcboeker/go-duckdb"
+	"github.com/pkg/errors"
+
+	"github.com/oceanbase/ob-operator/internal/sql-analyzer/const/parquet"
+	sqlconst "github.com/oceanbase/ob-operator/internal/sql-analyzer/const/sql"
+	"github.com/oceanbase/ob-operator/internal/sql-analyzer/model"
 
 	logger "github.com/sirupsen/logrus"
 )
 
-const (
-	SmallFilePattern     = "[0-9]*.parquet"
-	CompactedFilePattern = "compacted-*.parquet"
-	FileTimeFormat       = "2006-01-02-15-04-05"
-)
-
-// DuckDBManager handles operations with the DuckDB database.
-type DuckDBManager struct {
+type SqlAuditStore struct {
+	ctx  context.Context
 	db   *sql.DB
-	path string // path to the directory storing daily parquet files
+	path string
 }
 
-// NewDuckDBManager creates a new DuckDBManager.
-// The path is the directory where the daily parquet files will be stored.
-func NewDuckDBManager(path string) (*DuckDBManager, error) {
+func NewSqlAuditStore(c context.Context, path string) (*SqlAuditStore, error) {
 	// Use an in-memory DuckDB database for operations.
 	db, err := sql.Open("duckdb", "") // In-memory
 	if err != nil {
 		return nil, fmt.Errorf("failed to open in-memory duckdb: %w", err)
 	}
 
-	// Get and log DuckDB version
-	var version string
-	err = db.QueryRow("SELECT version()").Scan(&version)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get DuckDB version: %w", err)
-	}
-	logger.Printf("DuckDB version: %s", version)
-
 	// Ensure the data directory exists
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create data directory %s: %w", path, err)
 	}
 
-	return &DuckDBManager{db: db, path: path}, nil
+	store := &SqlAuditStore{db: db, path: path, ctx: c}
+	store.StartCleanupWorker()
+	return store, nil
 }
 
-// GetLastRequestIDs retrieves the last request ID for each server from the most recent parquet file.
-func (m *DuckDBManager) GetLastRequestIDs() (map[string]uint64, error) {
-	files, err := filepath.Glob(filepath.Join(m.path, "*.parquet"))
+func (s *SqlAuditStore) GetLastRequestIDs() (map[string]uint64, error) {
+	files, err := filepath.Glob(filepath.Join(s.path, "*.parquet"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to glob parquet files: %w", err)
 	}
@@ -79,7 +70,7 @@ func (m *DuckDBManager) GetLastRequestIDs() (map[string]uint64, error) {
 	// Query only the most recent file.
 	query := fmt.Sprintf("SELECT svr_ip, MAX(max_request_id) FROM read_parquet('%s') GROUP BY svr_ip", mostRecentFile)
 
-	rows, err := m.db.Query(query)
+	rows, err := s.db.Query(query)
 	if err != nil {
 		logger.Printf("Error querying latest parquet file %s: %v", mostRecentFile, err)
 		return make(map[string]uint64), nil
@@ -98,73 +89,19 @@ func (m *DuckDBManager) GetLastRequestIDs() (map[string]uint64, error) {
 	return lastRequestIDs, nil
 }
 
-// InsertBatch inserts a batch of SQL audit data into the database.
-func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
+func (s *SqlAuditStore) InsertBatch(results []model.SqlAudit) error {
 	if len(results) == 0 {
 		return nil
 	}
 
-	conn, err := m.db.Conn(context.Background())
+	conn, err := s.db.Conn(context.Background())
 	if err != nil {
 		return fmt.Errorf("failed to get connection: %w", err)
 	}
 	defer conn.Close()
 
-	// Create a temporary table for this batch.
 	tempTableName := "sql_audit_batch_" + uuid.New().String()[:8] // Use a unique temp table name
-	createTempTableSQL := `CREATE TEMP TABLE ` + tempTableName + ` (
-        svr_ip VARCHAR, svr_port BIGINT, tenant_id BIGINT, tenant_name VARCHAR, user_id BIGINT, user_name VARCHAR,
-        db_id BIGINT, db_name VARCHAR, sql_id VARCHAR, plan_id BIGINT,
-        query_sql TEXT, client_ip VARCHAR, event VARCHAR,
-        format_sql_id VARCHAR, effective_tenant_id BIGINT, trace_id VARCHAR, sid BIGINT,
-        user_client_ip VARCHAR, tx_id VARCHAR,
-        executions BIGINT, min_request_time BIGINT, max_request_time BIGINT,
-        max_request_id BIGINT, min_request_id BIGINT,
-        elapsed_time_sum BIGINT, elapsed_time_max BIGINT, elapsed_time_min BIGINT,
-        execute_time_sum BIGINT, execute_time_max BIGINT, execute_time_min BIGINT,
-        queue_time_sum BIGINT, queue_time_max BIGINT, queue_time_min BIGINT,
-        get_plan_time_sum BIGINT, get_plan_time_max BIGINT, get_plan_time_min BIGINT,
-        affected_rows_sum BIGINT, affected_rows_max BIGINT, affected_rows_min BIGINT,
-        return_rows_sum BIGINT, return_rows_max BIGINT, return_rows_min BIGINT,
-        partition_count_sum BIGINT, partition_count_max BIGINT, partition_count_min BIGINT,
-        retry_count_sum BIGINT, retry_count_max BIGINT, retry_count_min BIGINT,
-        disk_reads_sum BIGINT, disk_reads_max BIGINT, disk_reads_min BIGINT,
-        rpc_count_sum BIGINT, rpc_count_max BIGINT, rpc_count_min BIGINT,
-        memstore_read_row_count_sum BIGINT, memstore_read_row_count_max BIGINT, memstore_read_row_count_min BIGINT,
-        ssstore_read_row_count_sum BIGINT, ssstore_read_row_count_max BIGINT, ssstore_read_row_count_min BIGINT,
-        request_memory_used_sum BIGINT, request_memory_used_max BIGINT, request_memory_used_min BIGINT,
-        wait_time_micro_sum BIGINT, wait_time_micro_max BIGINT, wait_time_micro_min BIGINT,
-        total_wait_time_micro_sum BIGINT, total_wait_time_micro_max BIGINT, total_wait_time_micro_min BIGINT,
-        net_time_sum BIGINT, net_time_max BIGINT, net_time_min BIGINT,
-        net_wait_time_sum BIGINT, net_wait_time_max BIGINT, net_wait_time_min BIGINT,
-        decode_time_sum BIGINT, decode_time_max BIGINT, decode_time_min BIGINT,
-        application_wait_time_sum BIGINT, application_wait_time_max BIGINT, application_wait_time_min BIGINT,
-        concurrency_wait_time_sum BIGINT, concurrency_wait_time_max BIGINT, concurrency_wait_time_min BIGINT,
-        user_io_wait_time_sum BIGINT, user_io_wait_time_max BIGINT, user_io_wait_time_min BIGINT,
-        schedule_time_sum BIGINT, schedule_time_max BIGINT, schedule_time_min BIGINT,
-        row_cache_hit_sum BIGINT, row_cache_hit_max BIGINT, row_cache_hit_min BIGINT,
-        bloom_filter_cache_hit_sum BIGINT, bloom_filter_cache_hit_max BIGINT, bloom_filter_cache_hit_min BIGINT,
-        block_cache_hit_sum BIGINT, block_cache_hit_max BIGINT, block_cache_hit_min BIGINT,
-        index_block_cache_hit_sum BIGINT, index_block_cache_hit_max BIGINT, index_block_cache_hit_min BIGINT,
-        expected_worker_count_sum BIGINT, expected_worker_count_max BIGINT, expected_worker_count_min BIGINT,
-        used_worker_count_sum BIGINT, used_worker_count_max BIGINT, used_worker_count_min BIGINT,
-        table_scan_sum BIGINT, table_scan_max BIGINT, table_scan_min BIGINT,
-        consistency_level_strong_count BIGINT,
-        consistency_level_weak_count BIGINT,
-        fail_count_sum BIGINT,
-		ret_code_4012_count_sum BIGINT, ret_code_4013_count_sum BIGINT, ret_code_5001_count_sum BIGINT,
-		ret_code_5024_count_sum BIGINT, ret_code_5167_count_sum BIGINT, ret_code_5217_count_sum BIGINT,
-		ret_code_6002_count_sum BIGINT,
-		event_0_wait_time_sum BIGINT, event_1_wait_time_sum BIGINT, event_2_wait_time_sum BIGINT,
-		event_3_wait_time_sum BIGINT,
-		plan_type_local_count BIGINT, plan_type_remote_count BIGINT, plan_type_distributed_count BIGINT,
-		inner_sql_count BIGINT,
-		miss_plan_count BIGINT,
-		executor_rpc_count BIGINT,
-        collect_time TIMESTAMPTZ,
-        collect_date DATE
-    )`
-	if _, err := conn.ExecContext(context.Background(), createTempTableSQL); err != nil {
+	if _, err := conn.ExecContext(context.Background(), fmt.Sprintf(sqlconst.CreateSqlAuditTempTableTemplate, tempTableName)); err != nil {
 		return fmt.Errorf("failed to create temp table: %w", err)
 	}
 
@@ -230,41 +167,37 @@ func (m *DuckDBManager) InsertBatch(results []SQLAudit) error {
 				collectTime,
 			)
 			if err != nil {
-				logger.Printf("Failed to append row for SvrIP %s, MaxRequestId %d. SQL: %s", r.SvrIP, r.MaxRequestId, r.QuerySql)
-				return fmt.Errorf("failed to append row to temp table: %w", err)
+				return errors.Wrapf(err, "Failed to append row for SvrIP %s, SvrPort %d. MinRequestId: %d, MaxRequestID: %d", r.SvrIP, r.SvrPort, r.MinRequestId, r.MaxRequestId)
 			}
 		}
 		return nil
 	})
+
 	if err != nil {
-		return fmt.Errorf("failed to append data: %w", err)
+		return errors.Wrap(err, "Failed to append data")
 	}
 
 	// Determine the target Parquet file based on the current timestamp.
-	currentTime := time.Now().Format(FileTimeFormat)
-	targetParquetFile := filepath.Join(m.path, fmt.Sprintf("%s-%s.parquet", currentTime, uuid.New().String()[:8]))
+	currentTime := time.Now().Format(parquet.FileTimeFormat)
+	targetParquetFile := filepath.Join(s.path, fmt.Sprintf("%s-%s.parquet", currentTime, uuid.New().String()[:8]))
 
 	// Now, copy the data from the temp table to the new parquet file.
-	copySQL := fmt.Sprintf(
+	copySql := fmt.Sprintf(
 		"COPY %s TO '%s' (FORMAT PARQUET)",
 		tempTableName, targetParquetFile,
 	)
-	if _, err := conn.ExecContext(context.Background(), copySQL); err != nil {
-		return fmt.Errorf("failed to copy to parquet: %w", err)
-	}
-
-	return nil
+	_, err = conn.ExecContext(s.ctx, copySql)
+	return err
 }
 
-// Compact merges small parquet files into a single file.
-func (m *DuckDBManager) Compact() error {
-	conn, err := m.db.Conn(context.Background())
+func (s *SqlAuditStore) Compact() error {
+	conn, err := s.db.Conn(s.ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get connection: %w", err)
+		return errors.Wrap(err, "Failed to get connection")
 	}
 	defer conn.Close()
 
-	smallFiles, err := filepath.Glob(filepath.Join(m.path, SmallFilePattern))
+	smallFiles, err := filepath.Glob(filepath.Join(s.path, parquet.SmallFilePattern))
 	if err != nil {
 		return fmt.Errorf("failed to glob small parquet files: %w", err)
 	}
@@ -291,18 +224,18 @@ func (m *DuckDBManager) Compact() error {
 
 	// Create a temporary table to hold the data from the small files.
 	tempTableName := "compaction_table_" + uuid.New().String()[:8]
-	createTempTableSQL := fmt.Sprintf("CREATE TEMP TABLE %s AS SELECT * FROM read_parquet(['%s'])", tempTableName, strings.Join(filesToCompact, "','"))
-	if _, err := conn.ExecContext(context.Background(), createTempTableSQL); err != nil {
+	createTempTableSql := fmt.Sprintf("CREATE TEMP TABLE %s AS SELECT * FROM read_parquet(['%s'])", tempTableName, strings.Join(filesToCompact, "','"))
+	if _, err := conn.ExecContext(context.Background(), createTempTableSql); err != nil {
 		return fmt.Errorf("failed to create compaction table from small files: %w", err)
 	}
 
 	// Define the compacted file path and a temporary path for atomic operation.
-	compactedFile := filepath.Join(m.path, "compacted-"+timestamp.Format(FileTimeFormat)+".parquet")
+	compactedFile := filepath.Join(s.path, "compacted-"+timestamp.Format(parquet.FileTimeFormat)+".parquet")
 	tempCompactedFile := compactedFile + ".tmp"
 
 	// Copy the data from the temporary table to the temporary compacted file.
-	copySQL := fmt.Sprintf("COPY %s TO '%s' (FORMAT PARQUET)", tempTableName, tempCompactedFile)
-	if _, err := conn.ExecContext(context.Background(), copySQL); err != nil {
+	copySql := fmt.Sprintf("COPY %s TO '%s' (FORMAT PARQUET)", tempTableName, tempCompactedFile)
+	if _, err := conn.ExecContext(context.Background(), copySql); err != nil {
 		return fmt.Errorf("failed to copy to temporary compacted file: %w", err)
 	}
 
@@ -322,20 +255,20 @@ func (m *DuckDBManager) Compact() error {
 }
 
 // Close closes the database connection.
-func (m *DuckDBManager) Close() {
-	if m.db != nil {
-		m.db.Close()
+func (s *SqlAuditStore) Close() {
+	if s.db != nil {
+		s.db.Close()
 	}
 }
 
 // DeleteOldData deletes data from parquet files older than the retention period.
-func (m *DuckDBManager) DeleteOldData(retentionDays int) error {
+func (s *SqlAuditStore) DeleteOldData(retentionDays int) error {
 	if retentionDays <= 0 {
 		return nil
 	}
 	cutoffDate := time.Now().AddDate(0, 0, -retentionDays)
 
-	files, err := filepath.Glob(filepath.Join(m.path, "*.parquet"))
+	files, err := filepath.Glob(filepath.Join(s.path, "*.parquet"))
 	if err != nil {
 		return fmt.Errorf("failed to glob parquet files: %w", err)
 	}
@@ -357,6 +290,38 @@ func (m *DuckDBManager) DeleteOldData(retentionDays int) error {
 	return nil
 }
 
+func (s *SqlAuditStore) StartCleanupWorker() {
+	// Start the cleanup routine for old data
+	retentionStr := os.Getenv("DATA_RETENTION_DAYS")
+	retentionDays, err := strconv.Atoi(retentionStr)
+	if err != nil {
+		logger.Fatalf("Invalid or missing DATA_RETENTION_DAYS environment variable: %v", err)
+	}
+
+	go func() {
+		// Run cleanup once at startup
+		logger.Println("Running initial cleanup of old data...")
+		if err := s.DeleteOldData(retentionDays); err != nil {
+			logger.Printf("Error during initial data cleanup: %v", err)
+		}
+
+		// Then run periodically
+		cleanupTicker := time.NewTicker(24 * time.Hour)
+		defer cleanupTicker.Stop()
+		for {
+			select {
+			case <-cleanupTicker.C:
+				logger.Println("Running periodic cleanup of old data...")
+				if err := s.DeleteOldData(retentionDays); err != nil {
+					logger.Printf("Error during periodic data cleanup: %v", err)
+				}
+			case <-s.ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
 func parseTimeFromFileName(fileName string) (time.Time, error) {
 	baseName := filepath.Base(fileName)
 	var dateStr string
@@ -370,5 +335,5 @@ func parseTimeFromFileName(fileName string) (time.Time, error) {
 			return time.Time{}, fmt.Errorf("invalid small file name format")
 		}
 	}
-	return time.Parse(FileTimeFormat, dateStr)
+	return time.Parse(parquet.FileTimeFormat, dateStr)
 }

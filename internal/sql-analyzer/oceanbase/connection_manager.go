@@ -1,4 +1,4 @@
-package sqlanalyzer
+package oceanbase
 
 import (
 	"context"
@@ -10,12 +10,10 @@ import (
 	"github.com/oceanbase/ob-operator/internal/resource/utils"
 	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/operation"
 	logger "github.com/sirupsen/logrus"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // ConnectionManager handles the connection to the OceanBase cluster.
 type ConnectionManager struct {
-	k8sClient        client.Client
 	logger           logr.Logger
 	obcluster        *v1alpha1.OBCluster
 	cachedConnection *operation.OceanbaseOperationManager
@@ -23,9 +21,8 @@ type ConnectionManager struct {
 }
 
 // NewConnectionManager creates a new ConnectionManager.
-func NewConnectionManager(k8sClient client.Client, logger logr.Logger, obcluster *v1alpha1.OBCluster) *ConnectionManager {
+func NewConnectionManager(logger logr.Logger, obcluster *v1alpha1.OBCluster) *ConnectionManager {
 	return &ConnectionManager{
-		k8sClient: k8sClient,
 		logger:    logger,
 		obcluster: obcluster,
 	}
@@ -46,7 +43,8 @@ func (cm *ConnectionManager) GetConnection(ctx context.Context) (*operation.Ocea
 		cm.cachedConnection.Close()
 	}
 
-	manager, err := utils.GetSysOperationClient(cm.k8sClient, &cm.logger, cm.obcluster)
+	// create a k8s client
+	manager, err := utils.GetSysOperationClient(nil, &cm.logger, cm.obcluster)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get OceanBase operation manager: %w", err)
 	}
