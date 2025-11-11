@@ -19,7 +19,7 @@ func (c *Collector) getMaxRequestIDs() (map[string]uint64, error) {
 		MaxRequestID uint64 `db:"max_request_id"`
 	}
 
-	cnx, err := c.ConnectionManager.GetConnection(c.Ctx)
+	cnx, err := c.ConnectionManager.GetSysReadonlyConnection()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get oceanbase connection")
 	}
@@ -122,7 +122,7 @@ func (c *Collector) PushPlan(plan *model.SqlPlanIdentifier) {
 	} else if existsInDuckDB {
 		logger.Debugf("Plan %v found in DuckDB, adding to cache and skipping.", plan)
 		c.lruCache.Add(*plan, struct{}{}) // Add to cache with empty struct
-		return // Already collected, no need to push to channel
+		return                            // Already collected, no need to push to channel
 	}
 
 	// If not in cache, and not in DuckDB, then add to cache and push to channel.
@@ -132,7 +132,7 @@ func (c *Collector) PushPlan(plan *model.SqlPlanIdentifier) {
 
 func (c *Collector) collectSqlAuditByOBServer(svrIP string, lastRequestID uint64) ([]model.SqlAudit, error) {
 	var results []model.SqlAudit
-	cnx, err := c.ConnectionManager.GetConnection(c.Ctx)
+	cnx, err := c.ConnectionManager.GetSysReadonlyConnection()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get oceanbase connection")
 	}

@@ -11,7 +11,7 @@ import (
 
 // getTenantIDByName queries the cluster for a tenant's ID based on its name.
 func getTenantIDByName(ctx context.Context, connMgr *oceanbase.ConnectionManager, tenantName string) (uint64, error) {
-	manager, err := connMgr.GetConnection(ctx)
+	manager, err := connMgr.GetSysReadonlyConnection()
 	if err != nil {
 		return 0, fmt.Errorf("failed to get connection for tenant ID retrieval: %w", err)
 	}

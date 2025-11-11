@@ -40,7 +40,7 @@ func (w *PlanWorker) Start(ctx context.Context, idx int) {
 			return
 		case ident := <-w.inputChan:
 			logger.Printf("Fetching plan for tenant %d, server %s, port %d, plan %d in worker %d", ident.TenantID, ident.SvrIP, ident.SvrPort, ident.PlanID, idx)
-			cnx, err := w.connManager.GetConnection(ctx)
+			cnx, err := w.connManager.GetSysReadonlyConnection()
 			if err != nil {
 				logger.Printf("failed to get connection for plan worker: %v", err)
 				// Remove from cache if failed

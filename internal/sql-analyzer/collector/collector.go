@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-logr/logr"
 	lru "github.com/hashicorp/golang-lru/v2" // New import
 	logger "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
@@ -86,7 +85,7 @@ func (c *Collector) Init() error {
 		return fmt.Errorf("failed to get OBCluster resource: %w", err)
 	}
 
-	connectionManager := oceanbase.NewConnectionManager(logr.FromContextOrDiscard(c.Ctx), obcluster)
+	connectionManager := oceanbase.NewConnectionManager(c.Ctx, obcluster)
 	c.ConnectionManager = connectionManager
 
 	lastRequestIDs, err := sqlAuditStore.GetLastRequestIDs()
@@ -122,7 +121,6 @@ func (c *Collector) Init() error {
 func (c *Collector) Stop() {
 	defer c.SqlAuditStore.Close()
 	defer c.SqlPlanStore.Close()
-	defer c.ConnectionManager.Close()
 }
 
 func (c *Collector) Start() {
