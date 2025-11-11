@@ -37,7 +37,6 @@ func (c *Collector) getMaxRequestIDs() (map[string]uint64, error) {
 
 // getTenantIDByName queries the cluster for a tenant's ID based on its name.
 func (c *Collector) collectSqlAuditData() {
-	// Step 1: Find observers with new data.
 	maxRequestIDs, err := c.getMaxRequestIDs()
 	if err != nil {
 		logger.Errorf("Failed to get max request ids %v", err)
@@ -47,7 +46,6 @@ func (c *Collector) collectSqlAuditData() {
 	resultsChan := make(chan []model.SqlAudit, len(maxRequestIDs))
 	errChan := make(chan error, len(maxRequestIDs))
 
-	// Step 2: For each observer with new data, dispatch a collection goroutine.
 	for svrIP, maxRequestID := range maxRequestIDs {
 		lastRequestID, ok := c.RequestIdMap[svrIP]
 		if ok && lastRequestID == maxRequestID {
@@ -73,7 +71,6 @@ func (c *Collector) collectSqlAuditData() {
 	close(resultsChan)
 	close(errChan)
 
-	// Consolidate results and errors.
 	var allResults []model.SqlAudit
 	for results := range resultsChan {
 		allResults = append(allResults, results...)
@@ -83,7 +80,6 @@ func (c *Collector) collectSqlAuditData() {
 		logger.Println("Error during collection:", err) // Log errors but don't fail the whole batch
 	}
 
-	// Step 3: Update the last request IDs for the next cycle.
 	for _, audit := range allResults {
 		c.PushPlan(&model.SqlPlanIdentifier{
 			TenantID: c.TenantID,
@@ -98,7 +94,6 @@ func (c *Collector) collectSqlAuditData() {
 	}
 	logger.Printf("Collected %d new audit records.", len(allResults))
 
-	// TODO persist sql audit data and send plan identities to plan channel
 	if len(allResults) > 0 {
 		if err := c.SqlAuditStore.InsertBatch(allResults); err != nil {
 			logger.Printf("Error inserting data into DuckDB: %v", err)
@@ -110,11 +105,28 @@ func (c *Collector) collectSqlAuditData() {
 }
 
 func (c *Collector) PushPlan(plan *model.SqlPlanIdentifier) {
-	if _, ok := c.CollectedSqlPlans[*plan]; ok {
-		logger.Debugf("Plan %v already collected, skipping.", plan)
+	c.cacheMutex.Lock()
+	defer c.cacheMutex.Unlock()
+
+	// Check LRU cache first
+	if c.lruCache.Contains(*plan) {
+		logger.Debugf("Plan %v already in cache, skipping.", plan)
 		return
 	}
-	c.CollectedSqlPlans[*plan] = struct{}{}
+
+	// If not in cache, check DuckDB.
+	existsInDuckDB, err := c.SqlPlanStore.PlanExists(*plan)
+	if err != nil {
+		logger.Errorf("Error checking plan existence in DuckDB for %v: %v", plan, err)
+		// If we can't check DuckDB, assume it's not collected and try to collect.
+	} else if existsInDuckDB {
+		logger.Debugf("Plan %v found in DuckDB, adding to cache and skipping.", plan)
+		c.lruCache.Add(*plan, struct{}{}) // Add to cache with empty struct
+		return // Already collected, no need to push to channel
+	}
+
+	// If not in cache, and not in DuckDB, then add to cache and push to channel.
+	c.lruCache.Add(*plan, struct{}{}) // Add to cache with empty struct
 	c.PlanIdentifierChan <- plan
 }
 

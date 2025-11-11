@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	lru "github.com/hashicorp/golang-lru/v2" // New import
 	logger "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -19,6 +20,11 @@ import (
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/store"
 )
 
+const (
+	// COLLECTING_TIMEOUT = 10 * time.Second // Removed
+	LRU_CACHE_SIZE = 10000
+)
+
 type Collector struct {
 	Ctx               context.Context
 	Config            *config.Config
@@ -27,8 +33,8 @@ type Collector struct {
 	SqlPlanStore      *store.PlanStore
 	RequestIdMap      map[string]uint64
 
-	//TODO This should be a cache with limited number
-	CollectedSqlPlans  map[model.SqlPlanIdentifier]struct{}
+	lruCache           *lru.Cache[model.SqlPlanIdentifier, struct{}] // Changed value type to struct{}
+	cacheMutex         sync.Mutex
 	TenantID           uint64
 	PlanIdentifierChan chan *model.SqlPlanIdentifier
 	CompactionChan     chan struct{}
@@ -40,8 +46,13 @@ func NewCollector(ctx context.Context, config *config.Config) *Collector {
 		Ctx:                ctx,
 		Config:             config,
 		PlanIdentifierChan: make(chan *model.SqlPlanIdentifier, config.QueueSize),
-		CollectedSqlPlans:  make(map[model.SqlPlanIdentifier]struct{}),
 		CompactionChan:     make(chan struct{}, 1),
+	}
+	var err error
+	c.lruCache, err = lru.New[model.SqlPlanIdentifier, struct{}](LRU_CACHE_SIZE)
+	if err != nil {
+		// This error should ideally not happen with a positive size, but handle it defensively.
+		logger.Fatalf("Failed to create LRU cache: %v", err)
 	}
 	return c
 }
@@ -93,8 +104,11 @@ func (c *Collector) Init() error {
 	if err != nil {
 		return fmt.Errorf("failed to load plan identities from duckdb: %w", err)
 	}
+
+	c.cacheMutex.Lock()
+	defer c.cacheMutex.Unlock()
 	for _, plan := range existingPlans {
-		c.CollectedSqlPlans[plan] = struct{}{}
+		c.lruCache.Add(plan, struct{}{}) // Add with struct{} as value
 	}
 
 	tenantID, err := getTenantIDByName(c.Ctx, connectionManager, obtenant.Spec.TenantName)
@@ -116,7 +130,7 @@ func (c *Collector) Start() {
 	wg.Add(c.Config.WorkerNum)
 
 	for i := 0; i < c.Config.WorkerNum; i++ {
-		worker := NewPlanWorker(c.ConnectionManager, c.PlanIdentifierChan, c.SqlPlanStore, &wg)
+		worker := NewPlanWorker(c, c.ConnectionManager, c.PlanIdentifierChan, c.SqlPlanStore, &wg) // Pass 'c'
 		go worker.Start(c.Ctx, i)
 	}
 

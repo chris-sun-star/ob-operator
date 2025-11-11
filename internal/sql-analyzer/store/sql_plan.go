@@ -83,6 +83,16 @@ func (s *PlanStore) Store(plan model.SqlPlan) error {
 	return nil
 }
 
+func (s *PlanStore) PlanExists(ident model.SqlPlanIdentifier) (bool, error) {
+	var count int
+	query := `SELECT COUNT(*) FROM sql_plan WHERE TENANT_ID = ? AND SVR_IP = ? AND SVR_PORT = ? AND PLAN_ID = ?`
+	err := s.db.QueryRow(query, ident.TenantID, ident.SvrIP, ident.SvrPort, ident.PlanID).Scan(&count)
+	if err != nil {
+		return false, errors.Wrap(err, "failed to query plan existence")
+	}
+	return count > 0, nil
+}
+
 // Close closes the database connection.
 func (s *PlanStore) Close() {
 	if s.db != nil {
