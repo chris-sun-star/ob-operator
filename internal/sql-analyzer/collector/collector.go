@@ -27,9 +27,10 @@ type Collector struct {
 	RequestIdMap      map[string]uint64
 
 	//TODO This should be a cache with limited number
-	CollectedSqlPlans  []model.SqlPlanIdentifier
+	CollectedSqlPlans  map[model.SqlPlanIdentifier]struct{}
 	TenantID           uint64
 	PlanIdentifierChan chan *model.SqlPlanIdentifier
+	CompactionChan     chan struct{}
 }
 
 // NewCollector creates a new Collector.
@@ -38,20 +39,22 @@ func NewCollector(ctx context.Context, config *config.Config) *Collector {
 		Ctx:                ctx,
 		Config:             config,
 		PlanIdentifierChan: make(chan *model.SqlPlanIdentifier, config.QueueSize),
+		CollectedSqlPlans:  make(map[model.SqlPlanIdentifier]struct{}),
+		CompactionChan:     make(chan struct{}, 1),
 	}
 	return c
 }
 
-func (c *Collector) Init() {
+func (c *Collector) Init() error {
 	sqlAuditStore, err := store.NewSqlAuditStore(c.Ctx, filepath.Join(c.Config.DataPath, "sql_audit"))
 	if err != nil {
-		logger.Fatalf("Failed to initialize sql audit store: %v", err)
+		return fmt.Errorf("failed to initialize sql audit store: %w", err)
 	}
 	c.SqlAuditStore = sqlAuditStore
 
 	planStore, err := store.NewPlanStore(c.Ctx, filepath.Join(c.Config.DataPath, "sql_plan"), false)
 	if err != nil {
-		logger.Fatalf("Failed to initialize sql plan store: %v", err)
+		return fmt.Errorf("failed to initialize sql plan store: %w", err)
 	}
 	c.SqlPlanStore = planStore
 
@@ -62,21 +65,21 @@ func (c *Collector) Init() {
 	})
 
 	if err != nil {
-		logger.Fatalf("Failed to get OBTenant resource: %v", err)
+		return fmt.Errorf("failed to get OBTenant resource: %w", err)
 	}
 
 	// Get the OBCluster resource.
 	obcluster, err := clients.GetOBCluster(c.Ctx, c.Config.Namespace, obtenant.Spec.ClusterName)
 	if err != nil {
-		logger.Fatalf("Failed to get OBCluster resource: %v", err)
+		return fmt.Errorf("failed to get OBCluster resource: %w", err)
 	}
 
-	connectionManager := oceanbase.NewConnectionManager(logr.FromContextOrDiscard(c.Ctx), obcluster)
+	connectionManager := oceanbase.NewConnectionManager(logger.StandardLogger(), obcluster)
 	c.ConnectionManager = connectionManager
 
 	lastRequestIDs, err := sqlAuditStore.GetLastRequestIDs()
 	if err != nil {
-		logger.Fatalf("Failed to load request id from duckdb: %v", err)
+		return fmt.Errorf("failed to load request id from duckdb: %w", err)
 	} else {
 		for k, v := range lastRequestIDs {
 			logger.Infof("Retrieved progress for %s with request id %d from DuckDB.", k, v)
@@ -85,18 +88,20 @@ func (c *Collector) Init() {
 	c.RequestIdMap = lastRequestIDs
 
 	// what if there's a huge number of plans
-	collectedSqlPlans, err := planStore.LoadExistingPlans()
+	existingPlans, err := planStore.LoadExistingPlans()
 	if err != nil {
-		logger.Fatalf("Failed to load plan identities from duckdb: %v", err)
+		return fmt.Errorf("failed to load plan identities from duckdb: %w", err)
 	}
-	c.CollectedSqlPlans = collectedSqlPlans
+	for _, plan := range existingPlans {
+		c.CollectedSqlPlans[plan] = struct{}{}
+	}
 
 	tenantID, err := getTenantIDByName(c.Ctx, connectionManager, obtenant.Spec.TenantName)
 	if err != nil {
-		logger.Fatalf("Failed to get tenant id from oceanbase: %v", err)
+		return fmt.Errorf("failed to get tenant id from oceanbase: %w", err)
 	}
 	c.TenantID = tenantID
-
+	return nil
 }
 
 func (c *Collector) Stop() {
@@ -114,6 +119,26 @@ func (c *Collector) Start() {
 		go worker.Start(c.Ctx, i)
 	}
 
+	// Start compaction worker
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-c.CompactionChan:
+				logger.Println("Compaction signal received, running compaction...")
+				if err := c.SqlAuditStore.Compact(); err != nil {
+					logger.Errorf("Failed to compact sql audit data: %v", err)
+				} else {
+					logger.Println("Sql audit data compacted successfully.")
+				}
+			case <-c.Ctx.Done():
+				logger.Println("Compaction worker stopped.")
+				return
+			}
+		}
+	}()
+
 	// Run the collection loop.
 	ticker := time.NewTicker(c.Config.Interval)
 	defer ticker.Stop()
@@ -125,18 +150,19 @@ func (c *Collector) Start() {
 		select {
 		case <-ticker.C:
 			c.collectSqlAuditData()
-			if compactionCounter%parquet.CompactionThreshold == 0 {
-				// TODO make compaction async
-				err := c.SqlAuditStore.Compact()
-				if err != nil {
-					logger.Errorf("Failed to compact sql audit data %v", err)
+			compactionCounter++
+			if compactionCounter >= parquet.CompactionThreshold {
+				select {
+				case c.CompactionChan <- struct{}{}: // Send compaction signal
+					compactionCounter = 0 // Reset counter after sending signal
+				default:
+					logger.Warn("Compaction channel is full, skipping compaction signal.")
 				}
 			}
-			compactionCounter = (compactionCounter + 1) % parquet.CompactionThreshold
 		case <-c.Ctx.Done():
-			logger.Println("Collector stopped.")
+			logger.Println("Collector stopped. Stopping plan workers...")
 			close(c.PlanIdentifierChan)
-			wg.Wait()
+			wg.Wait() // Wait for all workers (plan and compaction) to finish
 			return
 		}
 	}

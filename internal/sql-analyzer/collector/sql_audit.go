@@ -110,7 +110,11 @@ func (c *Collector) collectSqlAuditData() {
 }
 
 func (c *Collector) PushPlan(plan *model.SqlPlanIdentifier) {
-	// TODO filter out the existing plan
+	if _, ok := c.CollectedSqlPlans[*plan]; ok {
+		logger.Debugf("Plan %v already collected, skipping.", plan)
+		return
+	}
+	c.CollectedSqlPlans[*plan] = struct{}{}
 	c.PlanIdentifierChan <- plan
 }
 

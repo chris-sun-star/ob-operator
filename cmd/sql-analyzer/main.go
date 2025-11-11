@@ -99,6 +99,9 @@ func main() {
 	}
 
 	collector := collector.NewCollector(ctx, config)
+	if err := collector.Init(); err != nil {
+		logger.Fatalf("Failed to initialize collector: %v", err)
+	}
 	collector.Start()
 
 	startHttpServer()

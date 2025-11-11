@@ -57,7 +57,7 @@ func (s *HTTPServer) Run() error {
 }
 
 func (s *HTTPServer) RegisterRouter() error {
-	router.InitRoutes(s.Router)
+	router.Register(s.Router)
 	return nil
 }
 
