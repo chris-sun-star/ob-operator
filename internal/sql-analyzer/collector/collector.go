@@ -160,7 +160,7 @@ func (c *Collector) Start() {
 		case <-ticker.C:
 			c.collectSqlAuditData()
 			compactionCounter++
-			if compactionCounter >= parquet.CompactionThreshold {
+			if compactionCounter >= c.Config.CompactionThreshold {
 				select {
 				case c.CompactionChan <- struct{}{}: // Send compaction signal
 					compactionCounter = 0 // Reset counter after sending signal

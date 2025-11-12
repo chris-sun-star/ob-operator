@@ -499,64 +499,106 @@ func createSQLAnalyzerDeployment(ctx context.Context, tenant *v1alpha1.OBTenant)
 		return errors.Wrapf(err, "Get obcluster %s %s", tenant.Namespace, tenant.Spec.ClusterName)
 	}
 
-	deploymentName := fmt.Sprintf("sql-analyzer-%s-%s", tenant.Namespace, tenant.Name)
-
-	serviceAccountName := os.Getenv("SERVICE_ACCOUNT")
-	if serviceAccountName == "" {
-		logger.Errorf("SERVICE_ACCOUNT environment variable not set, cannot create sql-analyzer deployment")
-		return oberr.NewInternal("SERVICE_ACCOUNT environment variable not set")
+	// Common metadata for all resources
+	objectMeta := v1.ObjectMeta{
+		Namespace: tenant.Namespace,
+		Labels: map[string]string{
+			"app":    "sql-analyzer",
+			"tenant": tenant.Name,
+		},
+		OwnerReferences: []metav1.OwnerReference{
+			{
+				APIVersion: tenant.APIVersion,
+				Kind:       tenant.Kind,
+				Name:       tenant.Name,
+				UID:        tenant.GetUID(),
+			},
+		},
 	}
 
-	image := config.GetConfig().SQLAnalyzer.Image
-	dataPath := "/data"
-
-	replicas := int32(1)
-
-	ownerReferenceList := make([]metav1.OwnerReference, 0)
-	ownerReference := metav1.OwnerReference{
-		APIVersion: tenant.APIVersion,
-		Kind:       tenant.Kind,
-		Name:       tenant.Name,
-		UID:        tenant.GetUID(),
+	// 1. Create ServiceAccount
+	saName := fmt.Sprintf("sql-analyzer-%s", tenant.Name)
+	sa := &corev1.ServiceAccount{
+		ObjectMeta: objectMeta,
 	}
-	ownerReferenceList = append(ownerReferenceList, ownerReference)
+	sa.Name = saName
+	_, err = k8sclient.ClientSet.CoreV1().ServiceAccounts(tenant.Namespace).Create(ctx, sa, v1.CreateOptions{})
+	if err != nil && !kubeerrors.IsAlreadyExists(err) {
+		return errors.Wrap(err, "failed to create ServiceAccount for sql-analyzer")
+	}
 
+	// 2. Create Role
+	roleName := fmt.Sprintf("sql-analyzer-%s-role", tenant.Name)
+	role := &appsv1.Role{
+		ObjectMeta: objectMeta,
+		Rules: []appsv1.PolicyRule{
+			{
+				APIGroups: []string{"oceanbase.oceanbase.com"},
+				Resources: []string{"obclusters", "obtenants", "observers"},
+				Verbs:     []string{"get", "list", "watch"},
+			},
+		},
+	}
+	role.Name = roleName
+	_, err = k8sclient.ClientSet.RbacV1().Roles(tenant.Namespace).Create(ctx, role, v1.CreateOptions{})
+	if err != nil && !kubeerrors.IsAlreadyExists(err) {
+		return errors.Wrap(err, "failed to create Role for sql-analyzer")
+	}
+
+	// 3. Create RoleBinding
+	rbName := fmt.Sprintf("sql-analyzer-%s-rb", tenant.Name)
+	rb := &appsv1.RoleBinding{
+		ObjectMeta: objectMeta,
+		Subjects: []appsv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      saName,
+				Namespace: tenant.Namespace,
+			},
+		},
+		RoleRef: appsv1.RoleRef{
+			Kind:     "Role",
+			Name:     roleName,
+			APIGroup: "rbac.authorization.k8s.io",
+		},
+	}
+	rb.Name = rbName
+	_, err = k8sclient.ClientSet.RbacV1().RoleBindings(tenant.Namespace).Create(ctx, rb, v1.CreateOptions{})
+	if err != nil && !kubeerrors.IsAlreadyExists(err) {
+		return errors.Wrap(err, "failed to create RoleBinding for sql-analyzer")
+	}
+
+	// 4. Create PVC
+	pvcName := "pvc-sql-" + tenant.Name
+	pvcMeta := objectMeta
+	pvcMeta.Name = pvcName
 	pvcSpec := corev1.PersistentVolumeClaimSpec{}
 	requestsResources := corev1.ResourceList{}
 	requestsResources["storage"] = config.GetConfig().SQLAnalyzer.StorageSize
 	storageClassName := obcluster.Spec.OBServerTemplate.Storage.DataStorage.StorageClass
 	pvcSpec.StorageClassName = &(storageClassName)
-	accessModes := []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
-	pvcSpec.AccessModes = accessModes
+	pvcSpec.AccessModes = []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
 	pvcSpec.Resources.Requests = requestsResources
 
 	pvc := &corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:            "pvc-sql-" + tenant.Name,
-			Namespace:       tenant.Namespace,
-			OwnerReferences: ownerReferenceList,
-			Labels: map[string]string{
-				"app":    "sql-analyzer",
-				"tenant": tenant.Name,
-			},
-		},
-		Spec: pvcSpec,
+		ObjectMeta: pvcMeta,
+		Spec:       pvcSpec,
 	}
 	_, err = k8sclient.ClientSet.CoreV1().PersistentVolumeClaims(tenant.Namespace).Create(ctx, pvc, v1.CreateOptions{})
-	if err != nil {
+	if err != nil && !kubeerrors.IsAlreadyExists(err) {
 		return errors.Wrap(err, "Create single pvc of observer")
 	}
 
+	// 5. Create Deployment
+	deploymentName := fmt.Sprintf("sql-analyzer-%s", tenant.Name)
+	deploymentMeta := objectMeta
+	deploymentMeta.Name = deploymentName
+	image := config.GetConfig().SQLAnalyzer.Image
+	dataPath := "/data"
+	replicas := int32(1)
+
 	deployment := &appsv1.Deployment{
-		ObjectMeta: v1.ObjectMeta{
-			Name:            deploymentName,
-			Namespace:       tenant.Namespace,
-			OwnerReferences: ownerReferenceList,
-			Labels: map[string]string{
-				"app":    "sql-analyzer",
-				"tenant": tenant.Name,
-			},
-		},
+		ObjectMeta: deploymentMeta,
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &v1.LabelSelector{
@@ -573,7 +615,7 @@ func createSQLAnalyzerDeployment(ctx context.Context, tenant *v1alpha1.OBTenant)
 					},
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: serviceAccountName,
+					ServiceAccountName: saName, // Use the newly created ServiceAccount
 					Volumes: []corev1.Volume{
 						{
 							Name: "data-volume",
@@ -597,16 +639,16 @@ func createSQLAnalyzerDeployment(ctx context.Context, tenant *v1alpha1.OBTenant)
 							},
 							Env: []corev1.EnvVar{
 								{
-									Name:  "OB_CLUSTER_NAME",
-									Value: tenant.Spec.ClusterName,
+									Name:  "OBTENANT",
+									Value: tenant.Name,
 								},
 								{
-									Name:  "OB_CLUSTER_NAMESPACE",
-									Value: tenant.Namespace,
-								},
-								{
-									Name:  "OB_TENANT",
-									Value: tenant.Spec.TenantName,
+									Name: "NAMESPACE",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{
+											FieldPath: "metadata.namespace",
+										},
+									},
 								},
 								{
 									Name:  "DATA_PATH",
@@ -615,6 +657,14 @@ func createSQLAnalyzerDeployment(ctx context.Context, tenant *v1alpha1.OBTenant)
 								{
 									Name:  "DATA_RETENTION_DAYS",
 									Value: fmt.Sprintf("%d", config.GetConfig().SQLAnalyzer.RetentionDays),
+								},
+								{
+									Name:  "COLLECTION_INTERVAL_SECONDS",
+									Value: fmt.Sprintf("%d", config.GetConfig().SQLAnalyzer.CollectionIntervalSeconds),
+								},
+								{
+									Name:  "COMPACTION_INTERVAL_SECONDS",
+									Value: fmt.Sprintf("%d", config.GetConfig().SQLAnalyzer.CompactionIntervalSeconds),
 								},
 							},
 						},
@@ -625,11 +675,8 @@ func createSQLAnalyzerDeployment(ctx context.Context, tenant *v1alpha1.OBTenant)
 	}
 
 	_, err = k8sclient.ClientSet.AppsV1().Deployments(tenant.Namespace).Create(ctx, deployment, v1.CreateOptions{})
-	if err != nil {
+	if err != nil && !kubeerrors.IsAlreadyExists(err) {
 		logger.Errorf("failed to create deployment %s: %v", deployment.Name, err)
-		if kubeerrors.IsAlreadyExists(err) {
-			return nil
-		}
 		return oberr.NewInternal(err.Error())
 	}
 	logger.Infof("create sql-analyzer deployment %s for tenant %s", deploymentName, tenant.Name)

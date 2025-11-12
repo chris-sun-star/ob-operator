@@ -46,4 +46,6 @@ sqlAnalyzer:
   image: "quay.io/oceanbase/sql-analyzer:0.1.0"
   retentionDays: 7
   storageSize: 20Gi
+  collectionIntervalSeconds: 30
+  compactionIntervalSeconds: 3600
 

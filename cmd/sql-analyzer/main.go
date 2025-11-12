@@ -18,8 +18,7 @@ import (
 )
 
 const (
-	CompactionThreshold = 120
-	PlanWorkerCount     = 4
+	PlanWorkerCount = 4
 )
 
 func init() {
@@ -78,21 +77,38 @@ func main() {
 	}()
 
 	// Configure collection interval
-	intervalSeconds := 30
+	collectionIntervalSeconds := 30
 	intervalStr := os.Getenv("COLLECTION_INTERVAL_SECONDS")
 	if intervalStr != "" {
 		if val, err := strconv.Atoi(intervalStr); err == nil && val > 0 {
-			intervalSeconds = val
+			collectionIntervalSeconds = val
 		} else {
 			logger.Printf("Invalid COLLECTION_INTERVAL_SECONDS value '%s', using default of 30 seconds.", intervalStr)
 		}
 	}
 
+	// Configure compaction interval
+	compactionIntervalSeconds := 3600
+	compactionIntervalStr := os.Getenv("COMPACTION_INTERVAL_SECONDS")
+	if compactionIntervalStr != "" {
+		if val, err := strconv.Atoi(compactionIntervalStr); err == nil && val > 0 {
+			compactionIntervalSeconds = val
+		} else {
+			logger.Printf("Invalid COMPACTION_INTERVAL_SECONDS value '%s', using default of 3600 seconds.", compactionIntervalStr)
+		}
+	}
+
+	compactionThreshold := compactionIntervalSeconds / collectionIntervalSeconds
+	if compactionThreshold < 1 {
+		compactionThreshold = 1 // Ensure compaction runs at least after one collection cycle if interval is short
+	}
+
 	config := &config.Config{
-		Namespace: namespace,
-		OBTenant:  obtenant,
-		Interval:  time.Duration(intervalSeconds) * time.Second,
-		DataPath:  dataPath,
+		Namespace:           namespace,
+		OBTenant:            obtenant,
+		Interval:            time.Duration(collectionIntervalSeconds) * time.Second,
+		DataPath:            dataPath,
+		CompactionThreshold: compactionThreshold,
 		// config via environment variable
 		QueueSize: 100,
 		WorkerNum: 4,

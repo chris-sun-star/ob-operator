@@ -40,9 +40,11 @@ type JobConfig struct {
 }
 
 type SQLAnalyzerConfig struct {
-	Image         string            `yaml:"image"`
-	RetentionDays int               `yaml:"retentionDays"`
-	StorageSize   resource.Quantity `yaml:"storageSize"`
+	Image                     string            `yaml:"image"`
+	RetentionDays             int               `yaml:"retentionDays"`
+	StorageSize               resource.Quantity `yaml:"storageSize"`
+	CollectionIntervalSeconds int               `yaml:"collectionIntervalSeconds"`
+	CompactionIntervalSeconds int               `yaml:"compactionIntervalSeconds"`
 }
 
 type Config struct {
