@@ -44,18 +44,14 @@ func (w *PlanWorker) Start(ctx context.Context, idx int) {
 			if err != nil {
 				logger.Printf("failed to get connection for plan worker: %v", err)
 				// Remove from cache if failed
-				w.collector.cacheMutex.Lock()
-				w.collector.lruCache.Remove(*ident) // Remove from cache
-				w.collector.cacheMutex.Unlock()
+				w.collector.PlanCache.Remove(*ident) // Remove from cache
 				continue
 			}
 			var plans []model.SqlPlan
 			if err := cnx.QueryList(ctx, &plans, sqlconst.SelectSqlPlan, ident.TenantID, ident.SvrIP, ident.SvrPort, ident.PlanID); err != nil {
 				logger.Printf("failed to query sql plan: %v", err)
 				// Remove from cache if failed
-				w.collector.cacheMutex.Lock()
-				w.collector.lruCache.Remove(*ident) // Remove from cache
-				w.collector.cacheMutex.Unlock()
+				w.collector.PlanCache.Remove(*ident) // Remove from cache
 				continue
 			}
 			logger.Printf("Found %d plan details for tenant %d, server %s, port %d, plan %d", len(plans), ident.TenantID, ident.SvrIP, ident.SvrPort, ident.PlanID)
@@ -68,14 +64,12 @@ func (w *PlanWorker) Start(ctx context.Context, idx int) {
 				}
 			}
 			// Update cache status based on storage result
-			w.collector.cacheMutex.Lock()
 			if allStored {
-				w.collector.lruCache.Add(*ident, struct{}{}) // Add to cache with empty struct
+				w.collector.PlanCache.Add(*ident, struct{}{}) // Add to cache with empty struct
 			} else {
 				// If not all stored, remove from cache
-				w.collector.lruCache.Remove(*ident) // Remove from cache
+				w.collector.PlanCache.Remove(*ident) // Remove from cache
 			}
-			w.collector.cacheMutex.Unlock()
 		}
 	}
 }

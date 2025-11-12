@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru/v2" // New import
 	logger "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/oceanbase/ob-operator/internal/clients"
+	"github.com/oceanbase/ob-operator/internal/sql-analyzer/cache"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/config"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/const/parquet"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/model"
@@ -25,15 +25,13 @@ const (
 )
 
 type Collector struct {
-	Ctx               context.Context
-	Config            *config.Config
-	ConnectionManager *oceanbase.ConnectionManager
-	SqlAuditStore     *store.SqlAuditStore
-	SqlPlanStore      *store.PlanStore
-	RequestIdMap      map[string]uint64
-
-	lruCache           *lru.Cache[model.SqlPlanIdentifier, struct{}] // Changed value type to struct{}
-	cacheMutex         sync.Mutex
+	Ctx                context.Context
+	Config             *config.Config
+	ConnectionManager  *oceanbase.ConnectionManager
+	SqlAuditStore      *store.SqlAuditStore
+	SqlPlanStore       *store.PlanStore
+	RequestIdMap       map[string]uint64
+	PlanCache          *cache.SafeLRUCache[model.SqlPlanIdentifier, struct{}]
 	TenantID           uint64
 	PlanIdentifierChan chan *model.SqlPlanIdentifier
 	CompactionChan     chan struct{}
@@ -48,7 +46,7 @@ func NewCollector(ctx context.Context, config *config.Config) *Collector {
 		CompactionChan:     make(chan struct{}, 1),
 	}
 	var err error
-	c.lruCache, err = lru.New[model.SqlPlanIdentifier, struct{}](LRU_CACHE_SIZE)
+	c.PlanCache, err = cache.NewSafeLRUCache[model.SqlPlanIdentifier, struct{}](LRU_CACHE_SIZE)
 	if err != nil {
 		// This error should ideally not happen with a positive size, but handle it defensively.
 		logger.Fatalf("Failed to create LRU cache: %v", err)
@@ -104,10 +102,8 @@ func (c *Collector) Init() error {
 		return fmt.Errorf("failed to load plan identities from duckdb: %w", err)
 	}
 
-	c.cacheMutex.Lock()
-	defer c.cacheMutex.Unlock()
 	for _, plan := range existingPlans {
-		c.lruCache.Add(plan, struct{}{}) // Add with struct{} as value
+		c.PlanCache.Add(plan, struct{}{}) // Add with struct{} as value
 	}
 
 	tenantID, err := getTenantIDByName(c.Ctx, connectionManager, obtenant.Spec.TenantName)

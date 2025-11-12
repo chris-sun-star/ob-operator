@@ -105,28 +105,26 @@ func (c *Collector) collectSqlAuditData() {
 }
 
 func (c *Collector) PushPlan(plan *model.SqlPlanIdentifier) {
-	c.cacheMutex.Lock()
-	defer c.cacheMutex.Unlock()
-
-	// Check LRU cache first
-	if c.lruCache.Contains(*plan) {
+	// Check cache first. This is thread-safe.
+	if c.PlanCache.Contains(*plan) {
 		logger.Debugf("Plan %v already in cache, skipping.", plan)
 		return
 	}
 
-	// If not in cache, check DuckDB.
+	// If not in cache, check DuckDB without holding any lock.
 	existsInDuckDB, err := c.SqlPlanStore.PlanExists(*plan)
 	if err != nil {
 		logger.Errorf("Error checking plan existence in DuckDB for %v: %v", plan, err)
-		// If we can't check DuckDB, assume it's not collected and try to collect.
+		// If we can't check DuckDB, we'll proceed to collect it, but first add to cache.
 	} else if existsInDuckDB {
 		logger.Debugf("Plan %v found in DuckDB, adding to cache and skipping.", plan)
-		c.lruCache.Add(*plan, struct{}{}) // Add to cache with empty struct
-		return                            // Already collected, no need to push to channel
+		// Add to cache and skip pushing to channel.
+		c.PlanCache.Add(*plan, struct{}{})
+		return
 	}
 
-	// If not in cache, and not in DuckDB, then add to cache and push to channel.
-	c.lruCache.Add(*plan, struct{}{}) // Add to cache with empty struct
+	// If not in cache and not in DuckDB, then add to cache and push to the channel.
+	c.PlanCache.Add(*plan, struct{}{})
 	c.PlanIdentifierChan <- plan
 }
 
