@@ -18,7 +18,6 @@ import (
 
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
-	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 type ToolConfig struct {

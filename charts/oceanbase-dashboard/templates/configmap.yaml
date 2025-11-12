@@ -18,6 +18,9 @@ data:
         ttlSecondsAfterFinished: {{ .Values.job.inspection.ttlSecondsAfterFinished }}
       normal:
         ttlSecondsAfterFinished: {{ .Values.job.normal.ttlSecondsAfterFinished }}
-    sqlDataCollector:
-      image: {{ .Values.sqlDataCollector.image }}
-      retentionDays: {{ .Values.sqlDataCollector.retentionDays }}
+    sqlAnalyzer:
+      image: {{ .Values.sqlAnalyzer.image }}
+      retentionDays: {{ .Values.sqlAnalyzer.retentionDays }}
+      storageSize: {{ .Values.sqlAnalyzer.storageSize }}
+      collectionIntervalSeconds: {{ .Values.sqlAnalyzer.collectionIntervalSeconds }}
+      compactionIntervalSeconds: {{ .Values.sqlAnalyzer.compactionIntervalSeconds }}
