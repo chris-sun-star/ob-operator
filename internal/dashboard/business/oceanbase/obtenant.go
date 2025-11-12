@@ -575,7 +575,11 @@ func createSQLAnalyzerDeployment(ctx context.Context, tenant *v1alpha1.OBTenant)
 	pvcMeta.Name = pvcName
 	pvcSpec := corev1.PersistentVolumeClaimSpec{}
 	requestsResources := corev1.ResourceList{}
-	requestsResources["storage"] = config.GetConfig().SQLAnalyzer.StorageSize
+	storageSize, err := resource.ParseQuantity(config.GetConfig().SQLAnalyzer.StorageSize)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse sql-analyzer storage size")
+	}
+	requestsResources["storage"] = storageSize
 	storageClassName := obcluster.Spec.OBServerTemplate.Storage.DataStorage.StorageClass
 	pvcSpec.StorageClassName = &(storageClassName)
 	pvcSpec.AccessModes = []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
