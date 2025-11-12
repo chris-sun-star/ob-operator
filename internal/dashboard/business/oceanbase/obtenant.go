@@ -16,7 +16,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"os"
 	"sort"
 	"strings"
 
@@ -26,6 +25,7 @@ import (
 	logger "github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -481,12 +481,13 @@ func CreateOBTenant(ctx context.Context, nn types.NamespacedName, p *param.Creat
 		return nil, err
 	}
 
-	if p.EnableSQLAnalyzer {
-		if err := createSQLAnalyzerDeployment(ctx, tenant); err != nil {
-			// Log the error, but don't fail the tenant creation
-			logger.Errorf("failed to create sql-analyzer deployment: %v", err)
-		}
+	// TODO: create deployment only when enabled
+	//if p.EnableSQLAnalyzer {
+	if err := createSQLAnalyzerDeployment(ctx, tenant); err != nil {
+		// Log the error, but don't fail the tenant creation
+		logger.Errorf("failed to create sql-analyzer deployment: %v", err)
 	}
+	//}
 
 	return buildDetailFromApiType(ctx, tenant), nil
 }
@@ -529,9 +530,9 @@ func createSQLAnalyzerDeployment(ctx context.Context, tenant *v1alpha1.OBTenant)
 
 	// 2. Create Role
 	roleName := fmt.Sprintf("sql-analyzer-%s-role", tenant.Name)
-	role := &appsv1.Role{
+	role := &rbacv1.Role{
 		ObjectMeta: objectMeta,
-		Rules: []appsv1.PolicyRule{
+		Rules: []rbacv1.PolicyRule{
 			{
 				APIGroups: []string{"oceanbase.oceanbase.com"},
 				Resources: []string{"obclusters", "obtenants", "observers"},
@@ -547,16 +548,16 @@ func createSQLAnalyzerDeployment(ctx context.Context, tenant *v1alpha1.OBTenant)
 
 	// 3. Create RoleBinding
 	rbName := fmt.Sprintf("sql-analyzer-%s-rb", tenant.Name)
-	rb := &appsv1.RoleBinding{
+	rb := &rbacv1.RoleBinding{
 		ObjectMeta: objectMeta,
-		Subjects: []appsv1.Subject{
+		Subjects: []rbacv1.Subject{
 			{
 				Kind:      "ServiceAccount",
 				Name:      saName,
 				Namespace: tenant.Namespace,
 			},
 		},
-		RoleRef: appsv1.RoleRef{
+		RoleRef: rbacv1.RoleRef{
 			Kind:     "Role",
 			Name:     roleName,
 			APIGroup: "rbac.authorization.k8s.io",
