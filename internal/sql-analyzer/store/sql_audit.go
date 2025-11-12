@@ -89,8 +89,8 @@ func (s *SqlAuditStore) GetLastRequestIDs() (map[string]uint64, error) {
 	return lastRequestIDs, nil
 }
 
-func (s *SqlAuditStore) InsertBatch(results []model.SqlAudit) error {
-	if len(results) == 0 {
+func (s *SqlAuditStore) InsertBatch(resultsSlices [][]model.SqlAudit) error {
+	if len(resultsSlices) == 0 {
 		return nil
 	}
 
@@ -119,55 +119,57 @@ func (s *SqlAuditStore) InsertBatch(results []model.SqlAudit) error {
 
 		collectTime := time.Now()
 
-		for _, r := range results {
-			err := appender.AppendRow(
-				r.SvrIP, r.SvrPort, r.TenantId, r.TenantName, r.UserId, r.UserName, r.DbId, r.DBName, r.SqlId, r.PlanId,
-				r.QuerySql, r.ClientIp, r.Event, r.FormatSqlId, r.EffectiveTenantId, r.TraceId, r.Sid, r.UserClientIp, r.TxId,
-				r.Executions, r.MinRequestTime, r.MaxRequestTime, r.MaxRequestId, r.MinRequestId,
-				r.ElapsedTimeSum, r.ElapsedTimeMax, r.ElapsedTimeMin,
-				r.ExecuteTimeSum, r.ExecuteTimeMax, r.ExecuteTimeMin,
-				r.QueueTimeSum, r.QueueTimeMax, r.QueueTimeMin,
-				r.GetPlanTimeSum, r.GetPlanTimeMax, r.GetPlanTimeMin,
-				r.AffectedRowsSum, r.AffectedRowsMax, r.AffectedRowsMin,
-				r.ReturnRowsSum, r.ReturnRowsMax, r.ReturnRowsMin,
-				r.PartitionCountSum, r.PartitionCountMax, r.PartitionCountMin,
-				r.RetryCountSum, r.RetryCountMax, r.RetryCountMin,
-				r.DiskReadsSum, r.DiskReadsMax, r.DiskReadsMin,
-				r.RpcCountSum, r.RpcCountMax, r.RpcCountMin,
-				r.MemstoreReadRowCountSum, r.MemstoreReadRowCountMax, r.MemstoreReadRowCountMin,
-				r.SSStoreReadRowCountSum, r.SSStoreReadRowCountMax, r.SSStoreReadRowCountMin,
-				r.RequestMemoryUsedSum, r.RequestMemoryUsedMax, r.RequestMemoryUsedMin,
-				r.WaitTimeMicroSum, r.WaitTimeMicroMax, r.WaitTimeMicroMin,
-				r.TotalWaitTimeMicroSum, r.TotalWaitTimeMicroMax, r.TotalWaitTimeMicroMin,
-				r.NetTimeSum, r.NetTimeMax, r.NetTimeMin,
-				r.NetWaitTimeSum, r.NetWaitTimeMax, r.NetWaitTimeMin,
-				r.DecodeTimeSum, r.DecodeTimeMax, r.DecodeTimeMin,
-				r.ApplicationWaitTimeSum, r.ApplicationWaitTimeMax, r.ApplicationWaitTimeMin,
-				r.ConcurrencyWaitTimeSum, r.ConcurrencyWaitTimeMax, r.ConcurrencyWaitTimeMin,
-				r.UserIoWaitTimeSum, r.UserIoWaitTimeMax, r.UserIoWaitTimeMin,
-				r.ScheduleTimeSum, r.ScheduleTimeMax, r.ScheduleTimeMin,
-				r.RowCacheHitSum, r.RowCacheHitMax, r.RowCacheHitMin,
-				r.BloomFilterCacheHitSum, r.BloomFilterCacheHitMax, r.BloomFilterCacheHitMin,
-				r.BlockCacheHitSum, r.BlockCacheHitMax, r.BlockCacheHitMin,
-				r.IndexBlockCacheHitSum, r.IndexBlockCacheHitMax, r.IndexBlockCacheHitMin,
-				r.ExpectedWorkerCountSum, r.ExpectedWorkerCountMax, r.ExpectedWorkerCountMin,
-				r.UsedWorkerCountSum, r.UsedWorkerCountMax, r.UsedWorkerCountMin,
-				r.TableScanSum, r.TableScanMax, r.TableScanMin,
-				r.ConsistencyLevelStrongCount,
-				r.ConsistencyLevelWeakCount,
-				r.FailCountSum,
-				r.RetCode4012CountSum, r.RetCode4013CountSum, r.RetCode5001CountSum, r.RetCode5024CountSum,
-				r.RetCode5167CountSum, r.RetCode5217CountSum, r.RetCode6002CountSum,
-				r.Event0WaitTimeSum, r.Event1WaitTimeSum, r.Event2WaitTimeSum, r.Event3WaitTimeSum,
-				r.PlanTypeLocalCount, r.PlanTypeRemoteCount, r.PlanTypeDistributedCount,
-				r.InnerSqlCount,
-				r.MissPlanCount,
-				r.ExecutorRpcCount,
-				collectTime,
-				collectTime,
-			)
-			if err != nil {
-				return errors.Wrapf(err, "Failed to append row for SvrIP %s, SvrPort %d. MinRequestId: %d, MaxRequestID: %d", r.SvrIP, r.SvrPort, r.MinRequestId, r.MaxRequestId)
+		for _, results := range resultsSlices {
+			for _, r := range results {
+				err := appender.AppendRow(
+					r.SvrIP, r.SvrPort, r.TenantId, r.TenantName, r.UserId, r.UserName, r.DbId, r.DBName, r.SqlId, r.PlanId,
+					r.QuerySql, r.ClientIp, r.Event, r.FormatSqlId, r.EffectiveTenantId, r.TraceId, r.Sid, r.UserClientIp, r.TxId,
+					r.Executions, r.MinRequestTime, r.MaxRequestTime, r.MaxRequestId, r.MinRequestId,
+					r.ElapsedTimeSum, r.ElapsedTimeMax, r.ElapsedTimeMin,
+					r.ExecuteTimeSum, r.ExecuteTimeMax, r.ExecuteTimeMin,
+					r.QueueTimeSum, r.QueueTimeMax, r.QueueTimeMin,
+					r.GetPlanTimeSum, r.GetPlanTimeMax, r.GetPlanTimeMin,
+					r.AffectedRowsSum, r.AffectedRowsMax, r.AffectedRowsMin,
+					r.ReturnRowsSum, r.ReturnRowsMax, r.ReturnRowsMin,
+					r.PartitionCountSum, r.PartitionCountMax, r.PartitionCountMin,
+					r.RetryCountSum, r.RetryCountMax, r.RetryCountMin,
+					r.DiskReadsSum, r.DiskReadsMax, r.DiskReadsMin,
+					r.RpcCountSum, r.RpcCountMax, r.RpcCountMin,
+					r.MemstoreReadRowCountSum, r.MemstoreReadRowCountMax, r.MemstoreReadRowCountMin,
+					r.SSStoreReadRowCountSum, r.SSStoreReadRowCountMax, r.SSStoreReadRowCountMin,
+					r.RequestMemoryUsedSum, r.RequestMemoryUsedMax, r.RequestMemoryUsedMin,
+					r.WaitTimeMicroSum, r.WaitTimeMicroMax, r.WaitTimeMicroMin,
+					r.TotalWaitTimeMicroSum, r.TotalWaitTimeMicroMax, r.TotalWaitTimeMicroMin,
+					r.NetTimeSum, r.NetTimeMax, r.NetTimeMin,
+					r.NetWaitTimeSum, r.NetWaitTimeMax, r.NetWaitTimeMin,
+					r.DecodeTimeSum, r.DecodeTimeMax, r.DecodeTimeMin,
+					r.ApplicationWaitTimeSum, r.ApplicationWaitTimeMax, r.ApplicationWaitTimeMin,
+					r.ConcurrencyWaitTimeSum, r.ConcurrencyWaitTimeMax, r.ConcurrencyWaitTimeMin,
+					r.UserIoWaitTimeSum, r.UserIoWaitTimeMax, r.UserIoWaitTimeMin,
+					r.ScheduleTimeSum, r.ScheduleTimeMax, r.ScheduleTimeMin,
+					r.RowCacheHitSum, r.RowCacheHitMax, r.RowCacheHitMin,
+					r.BloomFilterCacheHitSum, r.BloomFilterCacheHitMax, r.BloomFilterCacheHitMin,
+					r.BlockCacheHitSum, r.BlockCacheHitMax, r.BlockCacheHitMin,
+					r.IndexBlockCacheHitSum, r.IndexBlockCacheHitMax, r.IndexBlockCacheHitMin,
+					r.ExpectedWorkerCountSum, r.ExpectedWorkerCountMax, r.ExpectedWorkerCountMin,
+					r.UsedWorkerCountSum, r.UsedWorkerCountMax, r.UsedWorkerCountMin,
+					r.TableScanSum, r.TableScanMax, r.TableScanMin,
+					r.ConsistencyLevelStrongCount,
+					r.ConsistencyLevelWeakCount,
+					r.FailCountSum,
+					r.RetCode4012CountSum, r.RetCode4013CountSum, r.RetCode5001CountSum, r.RetCode5024CountSum,
+					r.RetCode5167CountSum, r.RetCode5217CountSum, r.RetCode6002CountSum,
+					r.Event0WaitTimeSum, r.Event1WaitTimeSum, r.Event2WaitTimeSum, r.Event3WaitTimeSum,
+					r.PlanTypeLocalCount, r.PlanTypeRemoteCount, r.PlanTypeDistributedCount,
+					r.InnerSqlCount,
+					r.MissPlanCount,
+					r.ExecutorRpcCount,
+					collectTime,
+					collectTime,
+				)
+				if err != nil {
+					return errors.Wrapf(err, "Failed to append row for SvrIP %s, SvrPort %d. MinRequestId: %d, MaxRequestID: %d", r.SvrIP, r.SvrPort, r.MinRequestId, r.MaxRequestId)
+				}
 			}
 		}
 		return nil

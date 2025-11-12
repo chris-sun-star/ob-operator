@@ -71,34 +71,38 @@ func (c *Collector) collectSqlAuditData() {
 	close(resultsChan)
 	close(errChan)
 
-	var allResults []model.SqlAudit
+	var allResults [][]model.SqlAudit
 	for results := range resultsChan {
-		allResults = append(allResults, results...)
+		allResults = append(allResults, results)
 	}
 
 	for err := range errChan {
 		logger.Println("Error during collection:", err) // Log errors but don't fail the whole batch
 	}
 
-	for _, audit := range allResults {
-		c.PushPlan(&model.SqlPlanIdentifier{
-			TenantID: c.TenantID,
-			SvrIP:    audit.SvrIP,
-			SvrPort:  audit.SvrPort,
-			PlanID:   audit.PlanId,
-		})
-		lastRequestID, ok := c.RequestIdMap[audit.SvrIP]
-		if !ok || lastRequestID < audit.MaxRequestId {
-			c.RequestIdMap[audit.SvrIP] = audit.MaxRequestId
+	totalRecords := 0
+	for _, results := range allResults {
+		totalRecords += len(results)
+		for _, audit := range results {
+			c.PushPlan(&model.SqlPlanIdentifier{
+				TenantID: c.TenantID,
+				SvrIP:    audit.SvrIP,
+				SvrPort:  audit.SvrPort,
+				PlanID:   audit.PlanId,
+			})
+			lastRequestID, ok := c.RequestIdMap[audit.SvrIP]
+			if !ok || lastRequestID < audit.MaxRequestId {
+				c.RequestIdMap[audit.SvrIP] = audit.MaxRequestId
+			}
 		}
 	}
-	logger.Printf("Collected %d new audit records.", len(allResults))
+	logger.Printf("Collected %d new audit records.", totalRecords)
 
-	if len(allResults) > 0 {
+	if totalRecords > 0 {
 		if err := c.SqlAuditStore.InsertBatch(allResults); err != nil {
 			logger.Printf("Error inserting data into DuckDB: %v", err)
 		} else {
-			logger.Printf("Saved %d sql audit records", len(allResults))
+			logger.Printf("Saved %d sql audit records", totalRecords)
 		}
 	}
 

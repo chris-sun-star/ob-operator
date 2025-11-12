@@ -15,8 +15,8 @@ import (
 )
 
 type PlanStore struct {
-	ctx context.Context
-	db  *sql.DB
+	ctx  context.Context
+	db   *sql.DB
 }
 
 func (s *PlanStore) initSqlPlanTable() error {
