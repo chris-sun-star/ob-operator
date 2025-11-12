@@ -132,7 +132,7 @@ func (c *Collector) PushPlan(plan *model.SqlPlanIdentifier) {
 
 func (c *Collector) collectSqlAuditByOBServer(svrIP string, lastRequestID uint64) ([]model.SqlAudit, error) {
 	var results []model.SqlAudit
-	cnx, err := c.ConnectionManager.GetSysReadonlyConnection()
+	cnx, err := c.ConnectionManager.GetSysReadonlyConnectionByIP(svrIP)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get oceanbase connection")
 	}
