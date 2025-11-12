@@ -11,4 +11,6 @@ type Config struct {
 	QueueSize           int
 	WorkerNum           int
 	CompactionThreshold int
+	SqlAuditLimit            int
+	SlowSqlThresholdMilliSeconds int
 }

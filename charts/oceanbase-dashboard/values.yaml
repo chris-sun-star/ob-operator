@@ -48,4 +48,10 @@ sqlAnalyzer:
   storageSize: 20Gi
   collectionIntervalSeconds: 30
   compactionIntervalSeconds: 3600
+  cpuRequest: "100m"
+  cpuLimit: "500m"
+  memoryRequest: "256Mi"
+  memoryLimit: "512Mi"
+  sqlAuditLimit: 10000
+  slowSqlThresholdMilliSeconds: 1000
 

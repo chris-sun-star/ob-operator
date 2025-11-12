@@ -94,12 +94,36 @@ func main() {
 		compactionThreshold = 1 // Ensure compaction runs at least after one collection cycle if interval is short
 	}
 
+	// Configure SQL audit limit
+	sqlAuditLimit := 10000
+	sqlAuditLimitStr := os.Getenv("SQL_AUDIT_LIMIT")
+	if sqlAuditLimitStr != "" {
+		if val, err := strconv.Atoi(sqlAuditLimitStr); err == nil && val > 0 {
+			sqlAuditLimit = val
+		} else {
+			logger.Printf("Invalid SQL_AUDIT_LIMIT value '%s', using default of 10000.", sqlAuditLimitStr)
+		}
+	}
+
+	// Configure slow SQL threshold
+	slowSqlThresholdMilliSeconds := 1000 // milliseconds
+	slowSqlThresholdMilliSecondsStr := os.Getenv("SLOW_SQL_THRESHOLD_MILLISECONDS")
+	if slowSqlThresholdMilliSecondsStr != "" {
+		if val, err := strconv.Atoi(slowSqlThresholdMilliSecondsStr); err == nil && val >= 0 {
+			slowSqlThresholdMilliSeconds = val
+		} else {
+			logger.Printf("Invalid SLOW_SQL_THRESHOLD_MILLISECONDS value '%s', using default of 1000ms.", slowSqlThresholdMilliSecondsStr)
+		}
+	}
+
 	config := &config.Config{
 		Namespace:           namespace,
 		OBTenant:            obtenant,
 		Interval:            time.Duration(collectionIntervalSeconds) * time.Second,
 		DataPath:            dataPath,
 		CompactionThreshold: compactionThreshold,
+		SqlAuditLimit:       sqlAuditLimit,
+		SlowSqlThreshold:    slowSqlThresholdMilliSeconds,
 		// config via environment variable
 		QueueSize: 100,
 		WorkerNum: 4,

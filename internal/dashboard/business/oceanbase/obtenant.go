@@ -580,11 +580,7 @@ func createSQLAnalyzerDeployment(ctx context.Context, tenant *v1alpha1.OBTenant)
 	pvcMeta.Name = pvcName
 	pvcSpec := corev1.PersistentVolumeClaimSpec{}
 	requestsResources := corev1.ResourceList{}
-	storageSize, err := resource.ParseQuantity(config.GetConfig().SQLAnalyzer.StorageSize)
-	if err != nil {
-		return errors.Wrap(err, "failed to parse sql-analyzer storage size")
-	}
-	requestsResources["storage"] = storageSize
+	requestsResources["storage"] = config.GetConfig().SQLAnalyzer.StorageSize
 	storageClassName := obcluster.Spec.OBServerTemplate.Storage.DataStorage.StorageClass
 	pvcSpec.StorageClassName = &(storageClassName)
 	pvcSpec.AccessModes = []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
@@ -606,6 +602,35 @@ func createSQLAnalyzerDeployment(ctx context.Context, tenant *v1alpha1.OBTenant)
 	image := config.GetConfig().SQLAnalyzer.Image
 	dataPath := "/data"
 	replicas := int32(1)
+
+	// Parse resource requirements
+	cpuRequest, err := resource.ParseQuantity(config.GetConfig().SQLAnalyzer.CPURequest)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse sql-analyzer cpu request")
+	}
+	cpuLimit, err := resource.ParseQuantity(config.GetConfig().SQLAnalyzer.CPULimit)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse sql-analyzer cpu limit")
+	}
+	memoryRequest, err := resource.ParseQuantity(config.GetConfig().SQLAnalyzer.MemoryRequest)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse sql-analyzer memory request")
+	}
+	memoryLimit, err := resource.ParseQuantity(config.GetConfig().SQLAnalyzer.MemoryLimit)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse sql-analyzer memory limit")
+	}
+
+	resources := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    cpuRequest,
+			corev1.ResourceMemory: memoryRequest,
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    cpuLimit,
+			corev1.ResourceMemory: memoryLimit,
+		},
+	}
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: deploymentMeta,
@@ -641,6 +666,7 @@ func createSQLAnalyzerDeployment(ctx context.Context, tenant *v1alpha1.OBTenant)
 							Name:            "sql-analyzer",
 							Image:           image,
 							ImagePullPolicy: corev1.PullIfNotPresent,
+							Resources:       resources, // Set resource requirements
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "data-volume",
@@ -675,6 +701,14 @@ func createSQLAnalyzerDeployment(ctx context.Context, tenant *v1alpha1.OBTenant)
 								{
 									Name:  "COMPACTION_INTERVAL_SECONDS",
 									Value: fmt.Sprintf("%d", config.GetConfig().SQLAnalyzer.CompactionIntervalSeconds),
+								},
+								{
+									Name:  "SQL_AUDIT_LIMIT",
+									Value: fmt.Sprintf("%d", config.GetConfig().SQLAnalyzer.SqlAuditLimit),
+								},
+								{
+									Name:  "SLOW_SQL_THRESHOLD_MILLISECONDS",
+									Value: fmt.Sprintf("%d", config.GetConfig().SQLAnalyzer.SlowSqlThresholdMilliSeconds),
 								},
 							},
 						},
