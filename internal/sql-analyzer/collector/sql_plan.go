@@ -58,7 +58,7 @@ func (w *PlanWorker) Start(ctx context.Context, idx int) {
 			allStored := true
 			for _, plan := range plans {
 				if err := w.planStore.Store(plan); err != nil {
-					logger.Printf("Error inserting plan into DuckDB: %v", err)
+					logger.WithField("plan", plan).Errorf("Error inserting plan into DuckDB: %v", err)
 					allStored = false
 					break // Stop processing further plans for this identifier if one fails
 				}
