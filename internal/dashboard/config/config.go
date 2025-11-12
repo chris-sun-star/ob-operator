@@ -18,6 +18,7 @@ import (
 
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 type ToolConfig struct {
@@ -39,17 +40,17 @@ type JobConfig struct {
 }
 
 type SQLAnalyzerConfig struct {
-	Image                     string            `yaml:"image"`
-	RetentionDays             int               `yaml:"retentionDays"`
-	StorageSize               resource.Quantity `yaml:"storageSize"`
-	CollectionIntervalSeconds int               `yaml:"collectionIntervalSeconds"`
-	CompactionIntervalSeconds int               `yaml:"compactionIntervalSeconds"`
-	CPURequest                resource.Quantity `yaml:"cpuRequest"`
-	CPULimit                  resource.Quantity `yaml:"cpuLimit"`
-	MemoryRequest             resource.Quantity `yaml:"memoryRequest"`
-	MemoryLimit               resource.Quantity `yaml:"memoryLimit"`
-	SqlAuditLimit             int               `yaml:"sqlAuditLimit"`
-	SlowSqlThreshold          int               `yaml:"slowSqlThreshold"`
+	Image                        string            `yaml:"image"`
+	RetentionDays                int               `yaml:"retentionDays"`
+	StorageSize                  resource.Quantity `yaml:"storageSize"`
+	CollectionIntervalSeconds    int               `yaml:"collectionIntervalSeconds"`
+	CompactionIntervalSeconds    int               `yaml:"compactionIntervalSeconds"`
+	CPURequest                   resource.Quantity `yaml:"cpuRequest"`
+	CPULimit                     resource.Quantity `yaml:"cpuLimit"`
+	MemoryRequest                resource.Quantity `yaml:"memoryRequest"`
+	MemoryLimit                  resource.Quantity `yaml:"memoryLimit"`
+	SqlAuditLimit                int               `yaml:"sqlAuditLimit"`
+	SlowSqlThresholdMilliSeconds int               `yaml:"SlowSqlThresholdMilliSeconds"`
 }
 
 type Config struct {

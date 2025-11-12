@@ -117,13 +117,13 @@ func main() {
 	}
 
 	config := &config.Config{
-		Namespace:           namespace,
-		OBTenant:            obtenant,
-		Interval:            time.Duration(collectionIntervalSeconds) * time.Second,
-		DataPath:            dataPath,
-		CompactionThreshold: compactionThreshold,
-		SqlAuditLimit:       sqlAuditLimit,
-		SlowSqlThreshold:    slowSqlThresholdMilliSeconds,
+		Namespace:                    namespace,
+		OBTenant:                     obtenant,
+		Interval:                     time.Duration(collectionIntervalSeconds) * time.Second,
+		DataPath:                     dataPath,
+		CompactionThreshold:          compactionThreshold,
+		SqlAuditLimit:                sqlAuditLimit,
+		SlowSqlThresholdMilliSeconds: slowSqlThresholdMilliSeconds,
 		// config via environment variable
 		QueueSize: 100,
 		WorkerNum: 4,
