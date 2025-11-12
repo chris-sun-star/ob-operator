@@ -26,19 +26,10 @@ func init() {
 	if logLevel == "" {
 		logLevel = "info"
 	}
-	logFile := os.Getenv("LOG_FILE")
-	if logFile == "" {
-		logFile = "log/sql-analyzer.log"
-	}
 	log.InitLogger(
 		log.LoggerConfig{
-			Level:      logLevel,
-			Filename:   logFile,
-			MaxSize:    256,
-			MaxAge:     7,
-			MaxBackups: 5,
-			LocalTime:  true,
-			Compress:   true,
+			Level:  logLevel,
+			Output: os.Stdout, // Log to standard output
 		},
 	)
 }
