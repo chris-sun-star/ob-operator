@@ -580,7 +580,11 @@ func createSQLAnalyzerDeployment(ctx context.Context, tenant *v1alpha1.OBTenant)
 	pvcMeta.Name = pvcName
 	pvcSpec := corev1.PersistentVolumeClaimSpec{}
 	requestsResources := corev1.ResourceList{}
-	requestsResources["storage"] = config.GetConfig().SQLAnalyzer.StorageSize
+	storageSize, err := resource.ParseQuantity(config.GetConfig().SQLAnalyzer.StorageSize)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse sql-analyzer storage size")
+	}
+	requestsResources["storage"] = storageSize
 	storageClassName := obcluster.Spec.OBServerTemplate.Storage.DataStorage.StorageClass
 	pvcSpec.StorageClassName = &(storageClassName)
 	pvcSpec.AccessModes = []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
@@ -603,14 +607,32 @@ func createSQLAnalyzerDeployment(ctx context.Context, tenant *v1alpha1.OBTenant)
 	dataPath := "/data"
 	replicas := int32(1)
 
+	// Parse resource requirements
+	cpuRequest, err := resource.ParseQuantity(config.GetConfig().SQLAnalyzer.CPURequest)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse sql-analyzer cpu request")
+	}
+	cpuLimit, err := resource.ParseQuantity(config.GetConfig().SQLAnalyzer.CPULimit)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse sql-analyzer cpu limit")
+	}
+	memoryRequest, err := resource.ParseQuantity(config.GetConfig().SQLAnalyzer.MemoryRequest)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse sql-analyzer memory request")
+	}
+	memoryLimit, err := resource.ParseQuantity(config.GetConfig().SQLAnalyzer.MemoryLimit)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse sql-analyzer memory limit")
+	}
+
 	resources := corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
-			corev1.ResourceCPU:    config.GetConfig().SQLAnalyzer.CPURequest,
-			corev1.ResourceMemory: config.GetConfig().SQLAnalyzer.MemoryRequest,
+			corev1.ResourceCPU:    cpuRequest,
+			corev1.ResourceMemory: memoryRequest,
 		},
 		Limits: corev1.ResourceList{
-			corev1.ResourceCPU:    config.GetConfig().SQLAnalyzer.CPULimit,
-			corev1.ResourceMemory: config.GetConfig().SQLAnalyzer.MemoryLimit,
+			corev1.ResourceCPU:    cpuLimit,
+			corev1.ResourceMemory: memoryLimit,
 		},
 	}
 

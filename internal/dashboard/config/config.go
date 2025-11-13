@@ -40,17 +40,17 @@ type JobConfig struct {
 }
 
 type SQLAnalyzerConfig struct {
-	Image                        string            `yaml:"image"`
-	RetentionDays                int               `yaml:"retentionDays"`
-	StorageSize                  resource.Quantity `yaml:"storageSize"`
-	CollectionIntervalSeconds    int               `yaml:"collectionIntervalSeconds"`
-	CompactionIntervalSeconds    int               `yaml:"compactionIntervalSeconds"`
-	CPURequest                   resource.Quantity `yaml:"cpuRequest"`
-	CPULimit                     resource.Quantity `yaml:"cpuLimit"`
-	MemoryRequest                resource.Quantity `yaml:"memoryRequest"`
-	MemoryLimit                  resource.Quantity `yaml:"memoryLimit"`
-	SqlAuditLimit                int               `yaml:"sqlAuditLimit"`
-	SlowSqlThresholdMilliSeconds int               `yaml:"SlowSqlThresholdMilliSeconds"`
+	Image                        string `yaml:"image"`
+	RetentionDays                int    `yaml:"retentionDays"`
+	StorageSize                  string `yaml:"storageSize"`
+	CollectionIntervalSeconds    int    `yaml:"collectionIntervalSeconds"`
+	CompactionIntervalSeconds    int    `yaml:"compactionIntervalSeconds"`
+	CPURequest                   string `yaml:"cpuRequest"`
+	CPULimit                     string `yaml:"cpuLimit"`
+	MemoryRequest                string `yaml:"memoryRequest"`
+	MemoryLimit                  string `yaml:"memoryLimit"`
+	SqlAuditLimit                int    `yaml:"sqlAuditLimit"`
+	SlowSqlThresholdMilliSeconds int    `yaml:"slowSqlThresholdMilliSeconds"`
 }
 
 type Config struct {
