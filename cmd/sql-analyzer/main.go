@@ -46,15 +46,18 @@ func init() {
 	)
 }
 
-func startHttpServer() {
-	httpServer := webserver.NewHTTPServer()
+func startHttpServer(ctx context.Context) *webserver.HTTPServer {
+	httpServer := webserver.NewHTTPServer(ctx)
 	router.Register(httpServer.Router)
 	logger.Info("Successfully registered router")
-	err := httpServer.Run()
-	if err != nil {
-		logger.WithError(err).Errorln("Start server failed")
-		os.Exit(1)
-	}
+	go func() {
+		err := httpServer.Run()
+		if err != nil {
+			logger.WithError(err).Errorln("Start server failed")
+			os.Exit(1)
+		}
+	}()
+	return httpServer
 }
 
 func main() {
@@ -73,11 +76,6 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigChan
-		logger.Println("Shutdown signal received, stopping...")
-		cancel()
-	}()
 
 	// Configure collection interval
 	collectionIntervalSeconds := 30
@@ -145,7 +143,16 @@ func main() {
 	if err := collector.Init(); err != nil {
 		logger.Fatalf("Failed to initialize collector: %v", err)
 	}
-	collector.Start()
+	go collector.Start()
 
-	startHttpServer()
+	httpServer := startHttpServer(ctx)
+	// Wait for a shutdown signal
+	<-sigChan
+	logger.Println("Shutdown signal received, stopping...")
+	// Trigger graceful shutdown
+	cancel()
+	// Stop the collector
+	collector.Stop()
+	httpServer.Stop()
+	logger.Println("Shutdown complete.")
 }

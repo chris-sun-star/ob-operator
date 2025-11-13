@@ -13,6 +13,7 @@ See the Mulan PSL v2 for more details.
 package server
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -32,6 +33,7 @@ type HTTPServer struct {
 	Router     *gin.Engine
 	Server     *http.Server
 	Authorizer *Authorizer
+	ctx        context.Context
 }
 
 func (s *HTTPServer) Run() error {
@@ -53,12 +55,18 @@ func (s *HTTPServer) Run() error {
 	return nil
 }
 
-func NewHTTPServer() *HTTPServer {
+func (s *HTTPServer) Stop() error {
+	return s.Server.Shutdown(s.ctx)
+}
+
+func NewHTTPServer(ctx context.Context) *HTTPServer {
 	if os.Getenv("DEBUG_DASHBOARD") != "true" {
 		gin.SetMode(gin.ReleaseMode)
 	}
-	return &HTTPServer{
+	httpServer := &HTTPServer{
 		Router: gin.New(),
 		Server: &http.Server{},
+		ctx:    ctx,
 	}
+	return httpServer
 }
