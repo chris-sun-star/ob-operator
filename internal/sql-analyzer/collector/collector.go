@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	logger "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/oceanbase/ob-operator/internal/clients"
-	"github.com/oceanbase/ob-operator/internal/sql-analyzer/cache"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/config"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/model"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/oceanbase"
@@ -19,7 +19,6 @@ import (
 )
 
 const (
-	// COLLECTING_TIMEOUT = 10 * time.Second // Removed
 	LRU_CACHE_SIZE = 10000
 )
 
@@ -30,7 +29,7 @@ type Collector struct {
 	SqlAuditStore      *store.SqlAuditStore
 	SqlPlanStore       *store.PlanStore
 	RequestIdMap       map[string]uint64
-	PlanCache          *cache.SafeLRUCache[model.SqlPlanIdentifier, struct{}]
+	PlanCache          *lru.Cache[model.SqlPlanIdentifier, struct{}]
 	TenantID           uint64
 	PlanIdentifierChan chan *model.SqlPlanIdentifier
 	CompactionChan     chan struct{}
@@ -45,9 +44,8 @@ func NewCollector(ctx context.Context, config *config.Config) *Collector {
 		CompactionChan:     make(chan struct{}, 1),
 	}
 	var err error
-	c.PlanCache, err = cache.NewSafeLRUCache[model.SqlPlanIdentifier, struct{}](LRU_CACHE_SIZE)
+	c.PlanCache, err = lru.New[model.SqlPlanIdentifier, struct{}](LRU_CACHE_SIZE)
 	if err != nil {
-		// This error should ideally not happen with a positive size, but handle it defensively.
 		logger.Fatalf("Failed to create LRU cache: %v", err)
 	}
 	return c
@@ -66,7 +64,6 @@ func (c *Collector) Init() error {
 	}
 	c.SqlPlanStore = planStore
 
-	// init duckdb if necessary
 	obtenant, err := clients.GetOBTenant(c.Ctx, types.NamespacedName{
 		Namespace: c.Config.Namespace,
 		Name:      c.Config.OBTenant,
