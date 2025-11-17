@@ -10,20 +10,10 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details.
 */
 
-package router
+package model
 
-import (
-	"github.com/gin-gonic/gin"
-	"github.com/oceanbase/ob-operator/internal/sql-analyzer/handler"
-)
-
-func Register(r *gin.Engine) {
-	apiV1 := r.Group("/api/v1")
-	{
-		tenants := apiV1.Group("/tenants/:tenant_name")
-		{
-			// The openapi definition is in the handler
-			tenants.POST("/sql-stats", handler.Wrap(handler.QuerySqlStats))
-		}
-	}
+type APIResponse struct {
+	Data       any    `json:"data" binding:"required"`
+	Message    string `json:"message" binding:"required"`
+	Successful bool   `json:"successful" binding:"required"`
 }
