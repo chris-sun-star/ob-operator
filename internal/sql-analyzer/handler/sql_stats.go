@@ -15,6 +15,8 @@ package handler
 import (
 	"github.com/gin-gonic/gin"
 	apimodel "github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
+	"github.com/oceanbase/ob-operator/internal/sql-analyzer/business"
+	"github.com/oceanbase/ob-operator/internal/sql-analyzer/store"
 )
 
 // @Summary Query SQL statistics
@@ -24,24 +26,31 @@ import (
 // @Produce json
 // @Param tenant_name path string true "Tenant Name"
 // @Param request body apimodel.QuerySqlStatsRequest true "Query parameters"
-// @Success 200 {object} apimodel.APIResponse{data=apimodel.SqlStatsResponse} "A list of SQL audit statistics"
+// @Success 200 {object} apimodel.APIResponse{data=apimodel.SqlStatsResponse} "A list of aggregated SQL statistics"
 // @Failure 400 {object} apimodel.APIResponse "Error: Invalid request"
 // @Failure 500 {object} apimodel.APIResponse "Error: Internal server error"
 // @Router /api/v1/tenants/{tenant_name}/sql-stats [post]
 func QuerySqlStats(c *gin.Context) (*apimodel.SqlStatsResponse, error) {
-	tenantName := c.Param("tenant_name")
 	var req apimodel.QuerySqlStatsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		return nil, err
 	}
 
-	// TODO: Implement the logic to query data from DuckDB
-	// For now, just return an empty response.
-
-	resp := &apimodel.SqlStatsResponse{
-		Items:      []apimodel.SqlStatsItem{},
-		TotalCount: 0,
+	// Set default pagination
+	if req.PageNum <= 0 {
+		req.PageNum = 1
 	}
-	_ = tenantName // to avoid unused variable error for now
-	return resp, nil
+	if req.PageSize <= 0 {
+		req.PageSize = 10
+	}
+
+	// TODO: The data path should be configurable.
+	auditStore, err := store.NewSqlAuditStore(c.Request.Context(), "/data/sql_audit")
+	if err != nil {
+		return nil, err
+	}
+	defer auditStore.Close()
+
+	service := business.NewSqlStatsService(auditStore)
+	return service.QuerySqlStats(&req)
 }

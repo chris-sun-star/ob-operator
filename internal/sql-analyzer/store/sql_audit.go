@@ -118,7 +118,7 @@ func (s *SqlAuditStore) InsertBatch(resultsSlices [][]model.SqlAudit) error {
 	}
 
 	// Use the appender to load data into the temp table.
-	err = conn.Raw(func(driverConn interface{}) error {
+	err = conn.Raw(func(driverConn any) error {
 		duckdbConn, ok := driverConn.(driver.Conn)
 		if !ok {
 			return fmt.Errorf("failed to get raw duckdb connection")
@@ -266,6 +266,116 @@ func (s *SqlAuditStore) Compact() error {
 	}
 
 	return nil
+}
+
+// QueryOptions holds all the parameters for a dynamic query.
+type QueryOptions struct {
+	SelectExpressions []string
+	Filters           map[string]any
+	GroupByColumns    []string
+	OrderBy           string
+	SortOrder         string
+	Limit             int
+	Offset            int
+}
+
+func (s *SqlAuditStore) CountSqlAudits(opts *QueryOptions) (int64, error) {
+	var args []any
+	var whereClauses []string
+
+	for key, value := range opts.Filters {
+		whereClauses = append(whereClauses, fmt.Sprintf("%s ?", key))
+		args = append(args, value)
+	}
+
+	fromClause := fmt.Sprintf("FROM read_parquet('%s/*.parquet')", s.path)
+	whereClause := ""
+	if len(whereClauses) > 0 {
+		whereClause = "WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
+	groupByClause := ""
+	if len(opts.GroupByColumns) > 0 {
+		groupByClause = "GROUP BY " + strings.Join(opts.GroupByColumns, ", ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM (SELECT 1 %s %s %s)", fromClause, whereClause, groupByClause)
+	var totalCount int64
+	err := s.db.QueryRowContext(s.ctx, countQuery, args...).Scan(&totalCount)
+	if err != nil {
+		return 0, fmt.Errorf("failed to query total count: %w", err)
+	}
+	return totalCount, nil
+}
+
+func (s *SqlAuditStore) QuerySqlAudits(opts *QueryOptions) ([]map[string]any, error) {
+	var args []any
+	var whereClauses []string
+
+	for key, value := range opts.Filters {
+		whereClauses = append(whereClauses, fmt.Sprintf("%s ?", key))
+		args = append(args, value)
+	}
+
+	fromClause := fmt.Sprintf("FROM read_parquet('%s/*.parquet')", s.path)
+	whereClause := ""
+	if len(whereClauses) > 0 {
+		whereClause = "WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
+	groupByClause := ""
+	if len(opts.GroupByColumns) > 0 {
+		groupByClause = "GROUP BY " + strings.Join(opts.GroupByColumns, ", ")
+	}
+
+	selectClause := "SELECT " + strings.Join(opts.SelectExpressions, ", ")
+
+	var orderByClause string
+	if opts.OrderBy != "" {
+		safeOrderBy := strings.ReplaceAll(opts.OrderBy, ";", "")
+		safeSortOrder := "ASC"
+		if strings.ToUpper(opts.SortOrder) == "DESC" {
+			safeSortOrder = "DESC"
+		}
+		orderByClause = fmt.Sprintf("ORDER BY %s %s", safeOrderBy, safeSortOrder)
+	}
+
+	limitClause := fmt.Sprintf("LIMIT %d OFFSET %d", opts.Limit, opts.Offset)
+
+	dataQuery := fmt.Sprintf("%s %s %s %s %s %s", selectClause, fromClause, whereClause, groupByClause, orderByClause, limitClause)
+
+	rows, err := s.db.QueryContext(s.ctx, dataQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query sql audits: %w", err)
+	}
+	defer rows.Close()
+
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get columns: %w", err)
+	}
+
+	var results []map[string]any
+	for rows.Next() {
+		columns := make([]any, len(cols))
+		columnPointers := make([]any, len(cols))
+		for i := range columns {
+			columnPointers[i] = &columns[i]
+		}
+
+		if err := rows.Scan(columnPointers...); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		m := make(map[string]any)
+		for i, colName := range cols {
+			val := columnPointers[i].(*any)
+			m[colName] = *val
+		}
+		results = append(results, m)
+	}
+
+	return results, nil
 }
 
 // Close closes the database connection.
