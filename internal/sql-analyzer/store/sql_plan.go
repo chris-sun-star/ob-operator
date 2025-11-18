@@ -28,8 +28,8 @@ import (
 )
 
 type PlanStore struct {
-	ctx  context.Context
-	db   *sql.DB
+	ctx context.Context
+	db  *sql.DB
 }
 
 func (s *PlanStore) initSqlPlanTable() error {
@@ -53,7 +53,9 @@ func NewPlanStore(c context.Context, path string, readOnly bool) (*PlanStore, er
 	for i := 0; i < 30; i++ {
 		db, err = sql.Open("duckdb", dsn)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to open duckdb at path %s", path)
+			logger.Warnf("Failed to acquire lock on duckdb, retrying in 2 seconds... Error: %v", err)
+			time.Sleep(2 * time.Second)
+			continue
 		}
 
 		// sql.Open doesn't actually connect. We need to try to get a connection.
