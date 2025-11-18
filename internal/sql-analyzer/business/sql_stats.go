@@ -14,6 +14,7 @@ package business
 
 import (
 	"fmt"
+	"math/big"
 
 	apimodel "github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/store"
@@ -343,15 +344,21 @@ func (s *SqlStatsService) transformResults(results []map[string]any) []apimodel.
 			case "cause_type":
 				item.CauseType, _ = val.(int64)
 			default:
+				// If it's a requested metric, add it to the statistics slice
 				var floatVal float64
 				switch v := val.(type) {
 				case int64:
 					floatVal = float64(v)
 				case float64:
 					floatVal = v
+				case uint64:
+					floatVal = float64(v)
+				case *big.Int:
+					if v != nil {
+						floatVal, _ = v.Float64()
+					}
 				default:
-					// Attempt to convert other numeric types if necessary, or log a warning
-					// For now, default to 0.0
+					// For now, default to 0.0 if type assertion fails
 					floatVal = 0.0
 				}
 				item.Statistics = append(item.Statistics, apimodel.StatisticItem{
