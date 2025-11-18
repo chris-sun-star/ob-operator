@@ -37,6 +37,7 @@ type HTTPServer struct {
 }
 
 func (s *HTTPServer) Run() error {
+	s.Server.Handler = s.Router
 	envPort := os.Getenv("LISTEN_PORT")
 	var address string
 	if envPort == "" {
