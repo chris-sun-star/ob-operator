@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -42,13 +43,39 @@ func NewPlanStore(c context.Context, path string, readOnly bool) (*PlanStore, er
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create data directory %s: %w", path, err)
 	}
-	db, err := sql.Open("duckdb", filepath.Join(path, "sql_plan.duckdb"))
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to open duckdb at path %s", path)
+
+	dsn := filepath.Join(path, "sql_plan.duckdb")
+	var db *sql.DB
+	var err error
+	var conn *sql.Conn
+
+	// Retry loop to handle database lock during rolling updates
+	for i := 0; i < 30; i++ {
+		db, err = sql.Open("duckdb", dsn)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to open duckdb at path %s", path)
+		}
+
+		// sql.Open doesn't actually connect. We need to try to get a connection.
+		conn, err = db.Conn(c)
+		if err == nil {
+			break // Success
+		}
+
+		db.Close() // Close the db handle on failure
+		logger.Warnf("Failed to acquire lock on duckdb, retrying in 2 seconds... Error: %v", err)
+		time.Sleep(2 * time.Second)
 	}
+
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to open duckdb after retries at path %s", path)
+	}
+	conn.Close() // Close the temporary connection, the pool will manage connections from here.
+
 	s := &PlanStore{db: db, ctx: c}
 	err = s.initSqlPlanTable()
 	if err != nil {
+		db.Close()
 		return nil, err
 	}
 	return s, nil
