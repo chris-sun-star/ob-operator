@@ -255,21 +255,15 @@ func (s *SqlAuditStore) Compact() error {
 		return fmt.Errorf("failed to parse timestamp from file %s: %w", lastFileInBatch, err)
 	}
 
-	// Create a temporary table to hold the data from the small files.
-	tempTableName := "compaction_table_" + uuid.New().String()[:8]
-	createTempTableSql := fmt.Sprintf("CREATE TEMP TABLE %s AS SELECT * FROM read_parquet(['%s'])", tempTableName, strings.Join(filesToCompact, "','"))
-	if _, err := conn.ExecContext(context.Background(), createTempTableSql); err != nil {
-		return fmt.Errorf("failed to create compaction table from small files: %w", err)
-	}
-
 	// Define the compacted file path and a temporary path for atomic operation.
 	compactedFile := filepath.Join(s.path, "compacted-"+timestamp.Format(parquet.FileTimeFormat)+".parquet")
 	tempCompactedFile := compactedFile + ".tmp"
 
-	// Copy the data from the temporary table to the temporary compacted file.
-	copySql := fmt.Sprintf("COPY %s TO '%s' (FORMAT PARQUET)", tempTableName, tempCompactedFile)
+	// Use a single, streaming COPY command instead of loading into a temp table.
+	copySql := fmt.Sprintf("COPY (SELECT * FROM read_parquet(['%s'])) TO '%s' (FORMAT PARQUET)", strings.Join(filesToCompact, "','"), tempCompactedFile)
+
 	if _, err := conn.ExecContext(context.Background(), copySql); err != nil {
-		return fmt.Errorf("failed to copy to temporary compacted file: %w", err)
+		return fmt.Errorf("failed to compact files: %w", err)
 	}
 
 	// Atomically rename the temporary compacted file to the final name.
