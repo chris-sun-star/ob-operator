@@ -216,20 +216,39 @@ func (s *SqlAuditStore) Compact() error {
 		return fmt.Errorf("failed to glob small parquet files: %w", err)
 	}
 
-	if len(smallFiles) <= 1 {
+	// Filter out invalid small files by running a quick check on each one.
+	var validSmallFiles []string
+	for _, file := range smallFiles {
+		var count int64
+		// This is a fast way to check if the file is readable by DuckDB.
+		err := s.db.QueryRowContext(s.ctx, fmt.Sprintf("SELECT count(*) FROM read_parquet('%s')", file)).Scan(&count)
+		if err != nil {
+			logger.Warnf("File %s appears to be invalid, deleting. Error: %v", file, err)
+			if removeErr := os.Remove(file); removeErr != nil {
+				logger.Errorf("Failed to delete invalid file %s: %v", file, removeErr)
+			}
+			continue // Skip to the next file
+		}
+		validSmallFiles = append(validSmallFiles, file)
+	}
+
+	if len(validSmallFiles) <= 1 {
 		return nil // Nothing to compact
 	}
 
-	sort.Slice(smallFiles, func(i, j int) bool {
-		timeI, errI := parseTimeFromFileName(smallFiles[i])
-		timeJ, errJ := parseTimeFromFileName(smallFiles[j])
+	sort.Slice(validSmallFiles, func(i, j int) bool {
+		timeI, errI := parseTimeFromFileName(validSmallFiles[i])
+		timeJ, errJ := parseTimeFromFileName(validSmallFiles[j])
 		if errI != nil || errJ != nil {
 			return false
 		}
 		return timeI.Before(timeJ)
 	})
 
-	filesToCompact := smallFiles[:len(smallFiles)-1]
+	filesToCompact := validSmallFiles[:len(validSmallFiles)-1]
+	if len(filesToCompact) == 0 {
+		return nil
+	}
 	lastFileInBatch := filesToCompact[len(filesToCompact)-1]
 	timestamp, err := parseTimeFromFileName(lastFileInBatch)
 	if err != nil {
