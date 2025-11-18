@@ -14,8 +14,8 @@ package model
 
 // QuerySqlStatsRequest defines the request body for querying SQL statistics.
 type QuerySqlStatsRequest struct {
-	StartTime       string   `json:"startTime" binding:"required" example:"2025-11-17T10:00:00Z"`
-	EndTime         string   `json:"endTime" binding:"required" example:"2025-11-17T11:00:00Z"`
+	StartTime       int64    `json:"startTime" binding:"required" example:"1731808800"`
+	EndTime         int64    `json:"endTime" binding:"required" example:"1731812400"`
 	UserName        string   `json:"userName,omitempty" example:"user1"`
 	DatabaseName    string   `json:"databaseName,omitempty" example:"db1"`
 	FilterInnerSql  bool     `json:"filterInnerSql,omitempty"`

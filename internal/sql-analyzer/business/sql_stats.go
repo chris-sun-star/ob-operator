@@ -367,12 +367,12 @@ func (s *SqlStatsService) transformResults(results []map[string]any) []apimodel.
 
 func (s *SqlStatsService) buildFilters(req *apimodel.QuerySqlStatsRequest) map[string]interface{} {
 	filters := make(map[string]interface{})
-	if req.StartTime != "" {
+	if req.StartTime > 0 {
 		// The data in parquet is stored as microseconds, so we need to convert
-		filters["max_request_time >="] = req.StartTime
+		filters["max_request_time >="] = req.StartTime * 1000000
 	}
-	if req.EndTime != "" {
-		filters["min_request_time <="] = req.EndTime
+	if req.EndTime > 0 {
+		filters["min_request_time <="] = req.EndTime * 1000000
 	}
 	if req.UserName != "" {
 		filters["user_name ="] = req.UserName
