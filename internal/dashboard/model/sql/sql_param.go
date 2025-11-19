@@ -13,22 +13,23 @@ See the Mulan PSL v2 for more details.
 package sql
 
 type BaseSqlRequestParam struct {
-	Namespace   string `json:"namespace" binding:"required"`
-	OBClusterCR string `json:"obcluster" binding:"required"`
-	OBTenantCR  string `json:"obtenant,omitempty"`
-	OBUser      string `json:"user,omitempty"`
-	OBDatabase  string `json:"database,omitempty"`
-	StartTime   int64  `json:"startTime,omitempty"`
-	EndTime     int64  `json:"endTime,omitempty"`
+	Namespace string `json:"namespace" binding:"required"`
+	OBTenant  string `json:"obtenant" binding:"required"`
+	User      string `json:"user,omitempty"`
+	Database  string `json:"database,omitempty"`
+	StartTime int64  `json:"startTime,omitempty"`
+	EndTime   int64  `json:"endTime,omitempty"`
 }
 
 type SqlFilter struct {
 	BaseSqlRequestParam `json:",inline"`
-	Keyword             string `json:"keyword,omitempty"`
-	IncludeInnerSql     bool   `json:"includeInnerSql,omitempty"`
+	OutputColumns       []string `json:"outputColumns"`
+	Keyword             string   `json:"keyword,omitempty"`
+	IncludeInnerSql     bool     `json:"includeInnerSql,omitempty"`
+	SuspiciousOnly      bool     `json:"suspiciousOnly,omitempty"`
 }
 
-type SqlRequestStatisticParam struct {
+type gqlRequestStatisticParam struct {
 	BaseSqlRequestParam `json:",inline"`
 	StatisticScopes     []string `json:"statisticScopes" binding:"required"`
 }

@@ -27,7 +27,6 @@ type SqlDiagnoseInfo struct {
 }
 
 type SqlMetaInfo struct {
-	OBServer string `json:"observer" binding:"required"`
 	Tenant   string `json:"tenant" binding:"required"`
 	User     string `json:"user" binding:"required"`
 	Database string `json:"database" binding:"required"`

@@ -35,7 +35,7 @@ func ListSqlMetrics(_ *gin.Context) ([]sql.SqlMetricMetaCategory, error) {
 	return nil, httpErr.NewNotImplemented("")
 }
 
-// @ID ListTopSqls
+// @ID ListSqlStats
 // @Summary list top sqls
 // @Description list top sqls ordering by spcecific metrics
 // @Tags Sql
@@ -46,26 +46,9 @@ func ListSqlMetrics(_ *gin.Context) ([]sql.SqlMetricMetaCategory, error) {
 // @Failure 400 object response.APIResponse
 // @Failure 401 object response.APIResponse
 // @Failure 500 object response.APIResponse
-// @Router /api/v1/sql/topSqls [POST]
+// @Router /api/v1/sql/stats [POST]
 // @Security ApiKeyAuth
-func ListTopSqls(_ *gin.Context) ([]sql.SqlInfo, error) {
-	return nil, httpErr.NewNotImplemented("")
-}
-
-// @ID ListSuspiciousSqls
-// @Summary list suspicious sqls
-// @Description list suspicious sqls
-// @Tags Sql
-// @Accept application/json
-// @Produce application/json
-// @Param body body sql.SqlFilter true "sql filter"
-// @Success 200 object response.APIResponse{data=[]sql.SqlInfo}
-// @Failure 400 object response.APIResponse
-// @Failure 401 object response.APIResponse
-// @Failure 500 object response.APIResponse
-// @Router /api/v1/sql/suspiciousSqls [POST]
-// @Security ApiKeyAuth
-func ListSuspiciousSqls(_ *gin.Context) ([]sql.SqlInfo, error) {
+func ListSqlStats(_ *gin.Context) ([]sql.SqlInfo, error) {
 	return nil, httpErr.NewNotImplemented("")
 }
 
