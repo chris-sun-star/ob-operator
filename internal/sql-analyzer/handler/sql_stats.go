@@ -14,7 +14,7 @@ package handler
 
 import (
 	"github.com/gin-gonic/gin"
-	apimodel "github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
+	"github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/business"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/store"
 )
@@ -25,13 +25,13 @@ import (
 // @Accept json
 // @Produce json
 // @Param tenant_name path string true "Tenant Name"
-// @Param request body apimodel.QuerySqlStatsRequest true "Query parameters"
-// @Success 200 {object} apimodel.APIResponse{data=apimodel.SqlStatsResponse} "A list of aggregated SQL statistics"
-// @Failure 400 {object} apimodel.APIResponse "Error: Invalid request"
-// @Failure 500 {object} apimodel.APIResponse "Error: Internal server error"
+// @Param request body model.QuerySqlStatsRequest true "Query parameters"
+// @Success 200 {object} model.APIResponse{data=model.SqlStatsResponse} "A list of aggregated SQL statistics"
+// @Failure 400 {object} model.APIResponse "Error: Invalid request"
+// @Failure 500 {object} model.APIResponse "Error: Internal server error"
 // @Router /api/v1/tenants/{tenant_name}/sql-stats [post]
-func QuerySqlStats(c *gin.Context) (*apimodel.SqlStatsResponse, error) {
-	var req apimodel.QuerySqlStatsRequest
+func QuerySqlStats(c *gin.Context) (*model.SqlStatsResponse, error) {
+	var req model.QuerySqlStatsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		return nil, err
 	}

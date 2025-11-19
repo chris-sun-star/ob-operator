@@ -23,7 +23,7 @@ UNFMT_FILES ?= $(shell gofmt -l -s $(filter-out , $(GOFILES)))
 
 .PHONY: dashboard-doc-gen
 dashboard-doc-gen: dashboard-dep-install ## Generate swagger docs
-	swag init -g cmd/dashboard/main.go -o internal/dashboard/generated/swagger
+	swag init -g cmd/dashboard/main.go -o internal/dashboard/generated/swagger --exclude ./internal/sql-analyzer
 
 .PHONY: dashboard
 dashboard: dashboard-bindata-gen dashboard-doc-gen ## Build oceanbase-dashboard
