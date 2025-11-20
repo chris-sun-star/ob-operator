@@ -15,6 +15,7 @@ package handler
 import (
 	"github.com/gin-gonic/gin"
 
+	sqlbiz "github.com/oceanbase/ob-operator/internal/dashboard/business/sql"
 	"github.com/oceanbase/ob-operator/internal/dashboard/model/sql"
 	httpErr "github.com/oceanbase/ob-operator/pkg/errors"
 )
@@ -31,8 +32,9 @@ import (
 // @Failure 500 object response.APIResponse
 // @Router /api/v1/sql/metrics [GET]
 // @Security ApiKeyAuth
-func ListSqlMetrics(_ *gin.Context) ([]sql.SqlMetricMetaCategory, error) {
-	return nil, httpErr.NewNotImplemented("")
+func ListSqlMetrics(c *gin.Context) ([]sql.SqlMetricMetaCategory, error) {
+	lang := c.Query("language")
+	return sqlbiz.ListSqlMetrics(lang)
 }
 
 // @ID ListSqlStats
@@ -48,8 +50,13 @@ func ListSqlMetrics(_ *gin.Context) ([]sql.SqlMetricMetaCategory, error) {
 // @Failure 500 object response.APIResponse
 // @Router /api/v1/sql/stats [POST]
 // @Security ApiKeyAuth
-func ListSqlStats(_ *gin.Context) ([]sql.SqlInfo, error) {
-	return nil, httpErr.NewNotImplemented("")
+func ListSqlStats(c *gin.Context) ([]sql.SqlInfo, error) {
+	filter := &sql.SqlFilter{}
+	err := c.ShouldBindJSON(filter)
+	if err != nil {
+		return nil, httpErr.NewBadRequest(err.Error())
+	}
+	return sqlbiz.ListSqlStats(c.Request.Context(), filter)
 }
 
 // @ID RequestStatistics

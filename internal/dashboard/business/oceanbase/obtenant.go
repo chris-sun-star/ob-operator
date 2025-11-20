@@ -504,8 +504,8 @@ func createSQLAnalyzerDeployment(ctx context.Context, tenant *v1alpha1.OBTenant)
 	objectMeta := v1.ObjectMeta{
 		Namespace: tenant.Namespace,
 		Labels: map[string]string{
-			"app":    "sql-analyzer",
-			"tenant": tenant.Name,
+			"app":      "sql-analyzer",
+			"obtenant": tenant.Name,
 		},
 		OwnerReferences: []metav1.OwnerReference{
 			{

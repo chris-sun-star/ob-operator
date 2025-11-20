@@ -42,7 +42,7 @@ type SqlStatsItem struct {
 	TenantName string `json:"tenantName"`
 	UserId     int64  `json:"userId"`
 	UserName   string `json:"userName"`
-	DbId       uint64 `json:"dbId"`
+	DBId       uint64 `json:"dbId"`
 	DBName     string `json:"dbName"`
 	SqlId      string `json:"sqlId"`
 	PlanId     int64  `json:"planId"`

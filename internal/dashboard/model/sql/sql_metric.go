@@ -21,10 +21,11 @@ const (
 )
 
 type SqlMetricMeta struct {
-	Name             string         `json:"name" binding:"required"`
-	Description      string         `json:"description" binding:"required"`
-	DisplayByDefault bool           `json:"displayByDefault" binding:"required"`
-	Category         MetricCategory `json:"category" binding:"required"`
+	Key              string `json:"key" binding:"required"`
+	Name             string `json:"name" binding:"required"`
+	Description      string `json:"description" binding:"required"`
+	Unit             string `json:"unit" binding:"required"`
+	DisplayByDefault bool   `json:"displayByDefault" binding:"required"`
 }
 
 type SqlMetricMetaCategory struct {

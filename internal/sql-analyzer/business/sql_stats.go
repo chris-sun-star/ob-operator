@@ -307,7 +307,7 @@ func (s *SqlStatsService) transformResults(results []map[string]any) []apimodel.
 				item.UserName, _ = val.(string)
 			case "db_id":
 				if v, ok := val.(int64); ok {
-					item.DbId = uint64(v)
+					item.DBId = uint64(v)
 				}
 			case "db_name":
 				item.DBName, _ = val.(string)

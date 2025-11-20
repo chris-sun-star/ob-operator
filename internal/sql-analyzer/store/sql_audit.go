@@ -134,7 +134,7 @@ func (s *SqlAuditStore) InsertBatch(resultsSlices [][]model.SqlAudit) error {
 		for _, results := range resultsSlices {
 			for _, r := range results {
 				err := appender.AppendRow(
-					r.SvrIP, r.SvrPort, r.TenantId, r.TenantName, r.UserId, r.UserName, r.DbId, r.DBName, r.SqlId, r.PlanId,
+					r.SvrIP, r.SvrPort, r.TenantId, r.TenantName, r.UserId, r.UserName, r.DBId, r.DBName, r.SqlId, r.PlanId,
 					r.QuerySql, r.ClientIp, r.Event, r.FormatSqlId, r.EffectiveTenantId, r.TraceId, r.Sid, r.UserClientIp, r.TxId,
 					r.Executions, r.MinRequestTime, r.MaxRequestTime, r.MaxRequestId, r.MinRequestId,
 					r.ElapsedTimeSum, r.ElapsedTimeMax, r.ElapsedTimeMin,

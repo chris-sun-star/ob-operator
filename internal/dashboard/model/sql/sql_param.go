@@ -27,9 +27,11 @@ type SqlFilter struct {
 	Keyword             string   `json:"keyword,omitempty"`
 	IncludeInnerSql     bool     `json:"includeInnerSql,omitempty"`
 	SuspiciousOnly      bool     `json:"suspiciousOnly,omitempty"`
+	PageNum             int      `json:"pageNum,omitempty"`
+	PageSize            int      `json:"pageSize,omitempty"`
 }
 
-type gqlRequestStatisticParam struct {
+type SqlRequestStatisticParam struct {
 	BaseSqlRequestParam `json:",inline"`
 	StatisticScopes     []string `json:"statisticScopes" binding:"required"`
 }

@@ -20,7 +20,7 @@ type SqlAudit struct {
 	TenantName string `db:"tenant_name"`
 	UserId     int64  `db:"user_id"`
 	UserName   string `db:"user_name"`
-	DbId       uint64 `db:"db_id"`
+	DBId       uint64 `db:"db_id"`
 	DBName     string `db:"db_name"`
 	SqlId      string `db:"sql_id"`
 	PlanId     int64  `db:"plan_id"`
