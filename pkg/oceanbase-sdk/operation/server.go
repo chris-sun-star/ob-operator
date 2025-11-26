@@ -18,6 +18,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/const/config"
 	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/const/sql"
 	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/model"
 )
@@ -45,7 +46,7 @@ func (m *OceanbaseOperationManager) ListServers(ctx context.Context) ([]model.OB
 
 func (m *OceanbaseOperationManager) AddServer(ctx context.Context, serverInfo *model.ServerInfo) error {
 	server := fmt.Sprintf("%s:%d", serverInfo.Ip, serverInfo.Port)
-	err := m.ExecWithDefaultTimeout(ctx, sql.AddServer, server)
+	err := m.ExecWithTimeout(ctx, config.AddServerTimeout, sql.AddServer, server)
 	if err != nil {
 		m.Logger.Error(err, "Got exception when add server")
 		return errors.Wrap(err, "Add server")
