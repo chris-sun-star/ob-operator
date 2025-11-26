@@ -42,20 +42,14 @@ func init() {
 	if err != nil {
 		panic(errors.Wrap(err, "load sql metric config failed"))
 	}
-	metricConfigMap := make(map[string][]struct {
-		Name    string `yaml:"name"`
-		Metrics []struct {
-			Key      string `yaml:"key"`
-			Category string `yaml:"category"`
-		} `yaml:"metrics"`
-	})
-	err = yaml.Unmarshal(metricConfigContent, &metricConfigMap)
+	metricConfigs := make([]sql.SqlMetricMetaCategory, 0)
+	err = yaml.Unmarshal(metricConfigContent, &metricConfigs)
 	if err != nil {
 		panic(errors.Wrap(err, "parse sql metric config data failed"))
 	}
-	for _, category := range metricConfigMap[SQLMetricScope] {
+	for _, category := range metricConfigs {
 		for _, metric := range category.Metrics {
-			metricCategoryMap[metric.Key] = sql.MetricCategory(category.Name)
+			metricCategoryMap[metric.Key] = category.Category
 		}
 	}
 }
