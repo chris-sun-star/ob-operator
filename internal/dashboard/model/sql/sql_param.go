@@ -13,26 +13,33 @@ See the Mulan PSL v2 for more details.
 package sql
 
 type BaseSqlRequestParam struct {
-	Namespace string `json:"namespace" binding:"required"`
-	OBTenant  string `json:"obtenant" binding:"required"`
-	User      string `json:"user,omitempty"`
-	Database  string `json:"database,omitempty"`
-	StartTime int64  `json:"startTime,omitempty"`
-	EndTime   int64  `json:"endTime,omitempty"`
+	Namespace       string `json:"namespace" binding:"required"`
+	OBTenant        string `json:"obtenant" binding:"required"`
+	User            string `json:"user,omitempty"`
+	Database        string `json:"database,omitempty"`
+	IncludeInnerSql bool   `json:"includeInnerSql,omitempty"`
+	StartTime       int64  `json:"startTime,omitempty"`
+	EndTime         int64  `json:"endTime,omitempty"`
+}
+
+type Pagination struct {
+	SortByColumn string `json:"sortColumn"`
+	SortOrder    string `json:"sortOrder"`
+	PageNum      int    `json:"pageNum,omitempty"`
+	PageSize     int    `json:"pageSize,omitempty"`
 }
 
 type SqlFilter struct {
 	BaseSqlRequestParam `json:",inline"`
+	Pagination          `json:",inline"`
 	OutputColumns       []string `json:"outputColumns"`
 	Keyword             string   `json:"keyword,omitempty"`
-	IncludeInnerSql     bool     `json:"includeInnerSql,omitempty"`
 	SuspiciousOnly      bool     `json:"suspiciousOnly,omitempty"`
-	PageNum             int      `json:"pageNum,omitempty"`
-	PageSize            int      `json:"pageSize,omitempty"`
 }
 
 type SqlRequestStatisticParam struct {
 	BaseSqlRequestParam `json:",inline"`
+	Pagination          `json:",inline"`
 	StatisticScopes     []string `json:"statisticScopes" binding:"required"`
 }
 

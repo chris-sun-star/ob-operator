@@ -14,6 +14,7 @@ package sql
 
 import (
 	"context"
+	"time"
 
 	"github.com/pkg/errors"
 	logger "github.com/sirupsen/logrus"
@@ -24,6 +25,7 @@ import (
 	bizconstant "github.com/oceanbase/ob-operator/internal/dashboard/business/constant"
 	"github.com/oceanbase/ob-operator/internal/dashboard/business/k8s"
 	"github.com/oceanbase/ob-operator/internal/dashboard/generated/bindata"
+	"github.com/oceanbase/ob-operator/internal/dashboard/model/response"
 	"github.com/oceanbase/ob-operator/internal/dashboard/model/sql"
 	sql_analyzer_model "github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
 )
@@ -93,6 +95,8 @@ func ListSqlStats(ctx context.Context, filter *sql.SqlFilter) ([]sql.SqlInfo, er
 		FilterInnerSql:  !filter.IncludeInnerSql,
 		QuerySqlKeyword: filter.Keyword,
 		OutputColumns:   filter.OutputColumns,
+		SortByColumn:    filter.SortByColumn,
+		SortOrder:       filter.SortOrder,
 		PageNum:         filter.PageNum,
 		PageSize:        filter.PageSize,
 	}
@@ -165,4 +169,82 @@ func ListSqlStats(ctx context.Context, filter *sql.SqlFilter) ([]sql.SqlInfo, er
 	}
 
 	return sqlInfos, nil
+}
+
+func ListRequestStatistics(c context.Context, param *sql.SqlRequestStatisticParam) ([]sql.RequestStatisticInfo, error) {
+	podIP, err := k8s.GetSQLAnalyzerPodIP(c, param.Namespace, param.OBTenant)
+	if err != nil {
+		return nil, err
+	}
+
+	obtenant, err := clients.GetOBTenant(c, types.NamespacedName{
+		Namespace: param.Namespace,
+		Name:      param.OBTenant,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "Get ob tenant")
+	}
+
+	req := sql_analyzer_model.RequestStatisticsRequest{
+		StartTime:      param.StartTime,
+		EndTime:        param.EndTime,
+		UserName:       param.User,
+		DatabaseName:   param.Database,
+		FilterInnerSql: !param.IncludeInnerSql,
+	}
+
+	resp, err := QueryRequestStatistics(podIP, obtenant.Spec.TenantName, req)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp == nil {
+		return []sql.RequestStatisticInfo{}, nil
+	}
+
+	var averageLatency float64
+	if resp.TotalExecutions > 0 {
+		averageLatency = resp.TotalLatency / resp.TotalExecutions
+	}
+
+	info := sql.RequestStatisticInfo{
+		Tenant:                 obtenant.Spec.TenantName,
+		User:                   param.User,
+		Database:               param.Database,
+		PlanCategoryStatistics: []sql.SqlStatisticMetric{}, // This field is not available from the sql-analyzer
+		TotalExecutions:        resp.TotalExecutions,
+		FailedExecutions:       resp.FailedExecutions,
+		TotalLatency:           resp.TotalLatency,
+		AverageLatency:         averageLatency,
+		ExecutionTrend:         []response.MetricValue{},
+		LatencyTrend:           []response.MetricValue{},
+	}
+
+	for _, trend := range resp.ExecutionTrend {
+		t, err := time.Parse("2006-01-02", trend.Date)
+		if err != nil {
+			logger.Errorf("Failed to parse date string %s: %v", trend.Date, err)
+			continue
+		}
+		timestamp := float64(t.Unix())
+		info.ExecutionTrend = append(info.ExecutionTrend, response.MetricValue{
+			Timestamp: timestamp,
+			Value:     trend.Value,
+		})
+	}
+
+	for _, trend := range resp.LatencyTrend {
+		t, err := time.Parse("2006-01-02", trend.Date)
+		if err != nil {
+			logger.Errorf("Failed to parse date string %s: %v", trend.Date, err)
+			continue
+		}
+		timestamp := float64(t.Unix())
+		info.LatencyTrend = append(info.LatencyTrend, response.MetricValue{
+			Timestamp: timestamp,
+			Value:     trend.Value,
+		})
+	}
+
+	return []sql.RequestStatisticInfo{info}, nil
 }

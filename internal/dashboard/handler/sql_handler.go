@@ -56,10 +56,10 @@ func ListSqlStats(c *gin.Context) ([]sql.SqlInfo, error) {
 	if err != nil {
 		return nil, httpErr.NewBadRequest(err.Error())
 	}
-	return sqlbiz.ListSqlStats(c.Request.Context(), filter)
+	return sqlbiz.ListSqlStats(c, filter)
 }
 
-// @ID RequestStatistics
+// @ID ListRequestStatistics
 // @Summary list request statistics
 // @Description list request statistics
 // @Tags Sql
@@ -72,8 +72,13 @@ func ListSqlStats(c *gin.Context) ([]sql.SqlInfo, error) {
 // @Failure 500 object response.APIResponse
 // @Router /api/v1/sql/requestStatistics [POST]
 // @Security ApiKeyAuth
-func RequestStatistics(_ *gin.Context) ([]sql.RequestStatisticInfo, error) {
-	return nil, httpErr.NewNotImplemented("")
+func ListRequestStatistics(c *gin.Context) ([]sql.RequestStatisticInfo, error) {
+	param := &sql.SqlRequestStatisticParam{}
+	err := c.ShouldBindJSON(param)
+	if err != nil {
+		return nil, httpErr.NewBadRequest(err.Error())
+	}
+	return sqlbiz.ListRequestStatistics(c, param)
 }
 
 // @ID QuerySqlDetailInfo

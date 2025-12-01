@@ -60,3 +60,40 @@ func QuerySqlStats(host string, tenantName string, req model.QuerySqlStatsReques
 
 	return &sqlStatsResp, nil
 }
+
+func QueryRequestStatistics(host string, tenantName string, req model.RequestStatisticsRequest) (*model.RequestStatisticsResponse, error) {
+	url := fmt.Sprintf("http://%s:8080/api/v1/tenants/%s/request-stats", host, tenantName)
+
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal request body")
+	}
+
+	httpReq, err := http.NewRequest("POST", url, bytes.NewBuffer(reqBody))
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create http request")
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to send request to sql-analyzer")
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to read response body")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("sql-analyzer returned non-200 status: %d, body: %s", resp.StatusCode, string(respBody))
+	}
+
+	var requestStatsResp model.RequestStatisticsResponse
+	if err := json.Unmarshal(respBody, &requestStatsResp); err != nil {
+		return nil, errors.Wrap(err, "failed to unmarshal response body")
+	}
+
+	return &requestStatsResp, nil
+}

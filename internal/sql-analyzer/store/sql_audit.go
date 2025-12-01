@@ -31,6 +31,7 @@ import (
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/const/parquet"
 	sqlconst "github.com/oceanbase/ob-operator/internal/sql-analyzer/const/sql"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/model"
+	sql_analyzer_api_model "github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
 
 	logger "github.com/sirupsen/logrus"
 )
@@ -473,4 +474,85 @@ func parseTimeFromFileName(fileName string) (time.Time, error) {
 		}
 	}
 	return time.Parse(parquet.FileTimeFormat, dateStr)
+}
+
+func (s *SqlAuditStore) QueryRequestStatistics(req sql_analyzer_api_model.RequestStatisticsRequest) (*sql_analyzer_api_model.RequestStatisticsResponse, error) {
+	var args []any
+	var whereClauses []string
+
+	if req.StartTime > 0 {
+		whereClauses = append(whereClauses, "max_request_time >= ?")
+		args = append(args, req.StartTime*1000) // convert to microseconds
+	}
+	if req.EndTime > 0 {
+		whereClauses = append(whereClauses, "max_request_time <= ?")
+		args = append(args, req.EndTime*1000) // convert to microseconds
+	}
+	if req.UserName != "" {
+		whereClauses = append(whereClauses, "user_name = ?")
+		args = append(args, req.UserName)
+	}
+	if req.DatabaseName != "" {
+		whereClauses = append(whereClauses, "db_name = ?")
+		args = append(args, req.DatabaseName)
+	}
+	if req.FilterInnerSql {
+		whereClauses = append(whereClauses, "inner_sql_count = 0")
+	}
+
+	fromClause := fmt.Sprintf("FROM read_parquet('%s/*.parquet')", s.path)
+	whereClause := ""
+	if len(whereClauses) > 0 {
+		whereClause = "WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
+	// Query for totals
+	totalsQuery := fmt.Sprintf(`
+		SELECT
+			sum(executions),
+			sum(fail_count_sum),
+			sum(elapsed_time_sum)
+		%s %s`, fromClause, whereClause)
+
+	var totalExecutions, failedExecutions, totalLatency sql.NullFloat64
+	err := s.db.QueryRowContext(s.ctx, totalsQuery, args...).Scan(&totalExecutions, &failedExecutions, &totalLatency)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query request statistics totals: %w", err)
+	}
+
+	resp := &sql_analyzer_api_model.RequestStatisticsResponse{
+		TotalExecutions:  totalExecutions.Float64,
+		FailedExecutions: failedExecutions.Float64,
+		TotalLatency:     totalLatency.Float64,
+		ExecutionTrend:   []sql_analyzer_api_model.DailyTrend{},
+		LatencyTrend:     []sql_analyzer_api_model.DailyTrend{},
+	}
+
+	// Query for trends
+	trendsQuery := fmt.Sprintf(`
+		SELECT
+			strftime(to_timestamp(CAST(max_request_time / 1000000 AS BIGINT)), '%%Y-%%m-%%d') AS day,
+			sum(executions),
+			sum(elapsed_time_sum)
+		%s %s
+		GROUP BY day
+		ORDER BY day`, fromClause, whereClause)
+
+	rows, err := s.db.QueryContext(s.ctx, trendsQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query request statistics trends: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var day string
+		var executions, latency float64
+		if err := rows.Scan(&day, &executions, &latency); err != nil {
+			return nil, fmt.Errorf("failed to scan trend row: %w", err)
+		}
+		resp.ExecutionTrend = append(resp.ExecutionTrend, sql_analyzer_api_model.DailyTrend{Date: day, Value: executions})
+		resp.LatencyTrend = append(resp.LatencyTrend, sql_analyzer_api_model.DailyTrend{Date: day, Value: latency})
+	}
+
+	return resp, nil
 }
