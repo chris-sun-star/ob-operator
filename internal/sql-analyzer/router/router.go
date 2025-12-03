@@ -25,6 +25,7 @@ func Register(r *gin.Engine) {
 			// The openapi definition is in the handler
 			tenants.POST("/sql-stats", handler.Wrap(handler.QuerySqlStats))
 			tenants.POST("/request-stats", handler.Wrap(handler.GetRequestStatistics))
+			tenants.POST("/sql-detail", handler.Wrap(handler.GetSqlDetailInfo))
 		}
 	}
 }

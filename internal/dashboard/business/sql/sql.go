@@ -171,6 +171,92 @@ func ListSqlStats(ctx context.Context, filter *sql.SqlFilter) ([]sql.SqlInfo, er
 	return sqlInfos, nil
 }
 
+func QuerySqlDetailInfo(ctx context.Context, param *sql.SqlDetailParam) (*sql.SqlDetailedInfo, error) {
+	podIP, err := k8s.GetSQLAnalyzerPodIP(ctx, param.Namespace, param.OBTenant)
+	if err != nil {
+		return nil, err
+	}
+
+	obtenant, err := clients.GetOBTenant(ctx, types.NamespacedName{
+		Namespace: param.Namespace,
+		Name:      param.OBTenant,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "Get ob tenant")
+	}
+
+	req := sql_analyzer_model.SqlDetailRequest{
+		StartTime:      param.StartTime,
+		EndTime:        param.EndTime,
+		SqlId:          param.SqlId,
+		Interval:       param.Interval,
+		LatencyColumns: param.LatencyColumns,
+	}
+
+	resp, err := QuerySqlDetail(podIP, obtenant.Spec.TenantName, req)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp == nil {
+		return nil, nil
+	}
+
+	detailedInfo := &sql.SqlDetailedInfo{
+		ExecutionTrend: []response.MetricData{},
+		LatencyTrend:   []response.MetricData{},
+		DiagnoseInfo:   []sql.SqlDiagnoseInfo{},
+		Plans:          []sql.PlanStatistic{},
+		Indexies:       []sql.IndexInfo{},
+	}
+
+	// Convert ExecutionTrend
+	localTrend := response.MetricData{
+		Metric: response.Metric{Name: "local_plan"},
+		Values: []response.MetricValue{},
+	}
+	remoteTrend := response.MetricData{
+		Metric: response.Metric{Name: "remote_plan"},
+		Values: []response.MetricValue{},
+	}
+	distributedTrend := response.MetricData{
+		Metric: response.Metric{Name: "distributed_plan"},
+		Values: []response.MetricValue{},
+	}
+
+	for _, trend := range resp.ExecutionTrend {
+		ts := float64(trend.Time)
+		localTrend.Values = append(localTrend.Values, response.MetricValue{Timestamp: ts, Value: trend.Local})
+		remoteTrend.Values = append(remoteTrend.Values, response.MetricValue{Timestamp: ts, Value: trend.Remote})
+		distributedTrend.Values = append(distributedTrend.Values, response.MetricValue{Timestamp: ts, Value: trend.Distributed})
+	}
+	detailedInfo.ExecutionTrend = append(detailedInfo.ExecutionTrend, localTrend, remoteTrend, distributedTrend)
+
+	// Convert LatencyTrend
+	latencyTrends := make(map[string]*response.MetricData)
+	for _, col := range param.LatencyColumns {
+		latencyTrends[col] = &response.MetricData{
+			Metric: response.Metric{Name: col},
+			Values: []response.MetricValue{},
+		}
+	}
+
+	for _, item := range resp.LatencyTrend {
+		ts := float64(item.Time)
+		for col, val := range item.Value {
+			if trend, ok := latencyTrends[col]; ok {
+				trend.Values = append(trend.Values, response.MetricValue{Timestamp: ts, Value: val})
+			}
+		}
+	}
+
+	for _, trend := range latencyTrends {
+		detailedInfo.LatencyTrend = append(detailedInfo.LatencyTrend, *trend)
+	}
+
+	return detailedInfo, nil
+}
+
 func ListRequestStatistics(c context.Context, param *sql.SqlRequestStatisticParam) ([]sql.RequestStatisticInfo, error) {
 	podIP, err := k8s.GetSQLAnalyzerPodIP(c, param.Namespace, param.OBTenant)
 	if err != nil {

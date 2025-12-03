@@ -556,3 +556,101 @@ func (s *SqlAuditStore) QueryRequestStatistics(req apimodel.RequestStatisticsReq
 
 	return resp, nil
 }
+
+func (s *SqlAuditStore) QuerySqlDetailInfo(req apimodel.SqlDetailRequest) (*apimodel.SqlDetailResponse, error) {
+	resp := &apimodel.SqlDetailResponse{
+		ExecutionTrend: []apimodel.PlanTypeTrend{},
+		LatencyTrend:   []apimodel.LatencyTrendItem{},
+	}
+
+	// Execution Trend
+	execTrendQuery := fmt.Sprintf(`
+		SELECT
+			epoch(time_bucket(make_interval(secs => %d), to_timestamp(CAST(max_request_time / 1000000 AS BIGINT)))) AS time_bucket,
+			sum(plan_type_local_count),
+			sum(plan_type_remote_count),
+			sum(plan_type_distributed_count)
+		FROM read_parquet('%s/*.parquet')
+		WHERE
+			sql_id = ?
+			AND max_request_time >= ?
+			AND max_request_time <= ?
+		GROUP BY time_bucket
+		ORDER BY time_bucket`, req.Interval, s.path)
+
+	rows, err := s.db.QueryContext(s.ctx, execTrendQuery, req.SqlId, req.StartTime*1000, req.EndTime*1000)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query execution trend: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var trend apimodel.PlanTypeTrend
+		if err := rows.Scan(&trend.Time, &trend.Local, &trend.Remote, &trend.Distributed); err != nil {
+			return nil, fmt.Errorf("failed to scan execution trend row: %w", err)
+		}
+		resp.ExecutionTrend = append(resp.ExecutionTrend, trend)
+	}
+
+	// Latency Trend
+	if len(req.LatencyColumns) > 0 {
+		var selectExpressions []string
+		for _, col := range req.LatencyColumns {
+			// Basic validation to prevent SQL injection
+			safeCol := strings.ReplaceAll(col, ";", "")
+			selectExpressions = append(selectExpressions, fmt.Sprintf("sum(%s) AS %s", safeCol, safeCol))
+		}
+
+		latencyTrendQuery := fmt.Sprintf(`
+			SELECT
+				epoch(time_bucket(make_interval(secs => %d), to_timestamp(CAST(max_request_time / 1000000 AS BIGINT)))) AS time_bucket,
+				%s
+			FROM read_parquet('%s/*.parquet')
+			WHERE
+				sql_id = ?
+				AND max_request_time >= ?
+				AND max_request_time <= ?
+			GROUP BY time_bucket
+			ORDER BY time_bucket`, req.Interval, strings.Join(selectExpressions, ", "), s.path)
+
+		rows, err := s.db.QueryContext(s.ctx, latencyTrendQuery, req.SqlId, req.StartTime*1000, req.EndTime*1000)
+		if err != nil {
+			return nil, fmt.Errorf("failed to query latency trend: %w", err)
+		}
+		defer rows.Close()
+
+		cols, err := rows.Columns()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get columns for latency trend: %w", err)
+		}
+
+		for rows.Next() {
+			columns := make([]interface{}, len(cols))
+			columnPointers := make([]interface{}, len(cols))
+			for i := range columns {
+				columnPointers[i] = &columns[i]
+			}
+
+			if err := rows.Scan(columnPointers...); err != nil {
+				return nil, fmt.Errorf("failed to scan latency trend row: %w", err)
+			}
+
+			item := apimodel.LatencyTrendItem{
+				Value: make(map[string]float64),
+			}
+			for i, colName := range cols {
+				val := columnPointers[i].(*interface{})
+				if colName == "time_bucket" {
+					item.Time = (*val).(int64)
+				} else {
+					if v, ok := (*val).(float64); ok {
+						item.Value[colName] = v
+					}
+				}
+			}
+			resp.LatencyTrend = append(resp.LatencyTrend, item)
+		}
+	}
+
+	return resp, nil
+}

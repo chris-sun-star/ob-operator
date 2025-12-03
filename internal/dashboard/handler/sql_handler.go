@@ -94,8 +94,12 @@ func ListRequestStatistics(c *gin.Context) ([]sql.RequestStatisticInfo, error) {
 // @Failure 500 object response.APIResponse
 // @Router /api/v1/sql/querySqlDetailInfo [POST]
 // @Security ApiKeyAuth
-func QuerySqlDetailInfo(_ *gin.Context) (*sql.SqlDetailedInfo, error) {
-	return nil, httpErr.NewNotImplemented("")
+func QuerySqlDetailInfo(c *gin.Context) (*sql.SqlDetailedInfo, error) {
+	param := &sql.SqlDetailParam{}
+	if err := c.ShouldBindJSON(param); err != nil {
+		return nil, httpErr.NewBadRequest(err.Error())
+	}
+	return sqlbiz.QuerySqlDetailInfo(c, param)
 }
 
 // @ID QueryPlanDetailInfo
