@@ -28,10 +28,10 @@ import (
 	duckdb "github.com/marcboeker/go-duckdb"
 	"github.com/pkg/errors"
 
+	apimodel "github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/const/parquet"
 	sqlconst "github.com/oceanbase/ob-operator/internal/sql-analyzer/const/sql"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/model"
-	sql_analyzer_api_model "github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
 
 	logger "github.com/sirupsen/logrus"
 )
@@ -476,7 +476,7 @@ func parseTimeFromFileName(fileName string) (time.Time, error) {
 	return time.Parse(parquet.FileTimeFormat, dateStr)
 }
 
-func (s *SqlAuditStore) QueryRequestStatistics(req sql_analyzer_api_model.RequestStatisticsRequest) (*sql_analyzer_api_model.RequestStatisticsResponse, error) {
+func (s *SqlAuditStore) QueryRequestStatistics(req apimodel.RequestStatisticsRequest) (*apimodel.RequestStatisticsResponse, error) {
 	var args []any
 	var whereClauses []string
 
@@ -511,7 +511,7 @@ func (s *SqlAuditStore) QueryRequestStatistics(req sql_analyzer_api_model.Reques
 		SELECT
 			sum(executions),
 			sum(fail_count_sum),
-			sum(elapsed_time_sum)
+			sum(elapsed_time_sum) / sum(executions)
 		%s %s`, fromClause, whereClause)
 
 	var totalExecutions, failedExecutions, totalLatency sql.NullFloat64
@@ -520,12 +520,12 @@ func (s *SqlAuditStore) QueryRequestStatistics(req sql_analyzer_api_model.Reques
 		return nil, fmt.Errorf("failed to query request statistics totals: %w", err)
 	}
 
-	resp := &sql_analyzer_api_model.RequestStatisticsResponse{
+	resp := &apimodel.RequestStatisticsResponse{
 		TotalExecutions:  totalExecutions.Float64,
 		FailedExecutions: failedExecutions.Float64,
 		TotalLatency:     totalLatency.Float64,
-		ExecutionTrend:   []sql_analyzer_api_model.DailyTrend{},
-		LatencyTrend:     []sql_analyzer_api_model.DailyTrend{},
+		ExecutionTrend:   []apimodel.DailyTrend{},
+		LatencyTrend:     []apimodel.DailyTrend{},
 	}
 
 	// Query for trends
@@ -533,7 +533,7 @@ func (s *SqlAuditStore) QueryRequestStatistics(req sql_analyzer_api_model.Reques
 		SELECT
 			strftime(to_timestamp(CAST(max_request_time / 1000000 AS BIGINT)), '%%Y-%%m-%%d') AS day,
 			sum(executions),
-			sum(elapsed_time_sum)
+			sum(elapsed_time_sum) / sum(executions)
 		%s %s
 		GROUP BY day
 		ORDER BY day`, fromClause, whereClause)
@@ -550,8 +550,8 @@ func (s *SqlAuditStore) QueryRequestStatistics(req sql_analyzer_api_model.Reques
 		if err := rows.Scan(&day, &executions, &latency); err != nil {
 			return nil, fmt.Errorf("failed to scan trend row: %w", err)
 		}
-		resp.ExecutionTrend = append(resp.ExecutionTrend, sql_analyzer_api_model.DailyTrend{Date: day, Value: executions})
-		resp.LatencyTrend = append(resp.LatencyTrend, sql_analyzer_api_model.DailyTrend{Date: day, Value: latency})
+		resp.ExecutionTrend = append(resp.ExecutionTrend, apimodel.DailyTrend{Date: day, Value: executions})
+		resp.LatencyTrend = append(resp.LatencyTrend, apimodel.DailyTrend{Date: day, Value: latency})
 	}
 
 	return resp, nil
