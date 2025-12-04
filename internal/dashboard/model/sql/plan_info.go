@@ -21,16 +21,21 @@ const (
 )
 
 type PlanMeta struct {
-	PlanHash      string       `json:"planHash" binding:"required"`
-	Category      PlanCategory `json:"category" binding:"required"`
-	MergedVersion int          `json:"mergedVersion" binding:"required"`
-	GeneratedTime int64        `json:"generatedTime" binding:"required"`
+	SvrIP         string `json:"svrIp" binding:"required"`
+	SvrPort       int64  `json:"svrPort" binding:"required"`
+	TenantId      uint64 `json:"tenantId" binding:"required"`
+	TenantName    string `json:"tenantName" binding:"required"`
+	PlanId        int64  `json:"planId" binding:"required"`
+	PlanHash      string `json:"planHash" binding:"required"`
+	GeneratedTime int64  `json:"generatedTime" binding:"required"`
 }
 
 type PlanStatistic struct {
 	PlanMeta `json:",inline"`
-	CpuTime  int64 `json:"cpuTime" binding:"required"`
-	Cost     int64 `json:"cost" binding:"required"`
+	IoCost   int64 `json:"ioCost"`
+	CpuCost  int64 `json:"cpuCost"`
+	Cost     int64 `json:"cost"`
+	RealCost int64 `json:"realCost"`
 }
 
 type PlanStatisticByServer struct {
