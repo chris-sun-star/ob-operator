@@ -14,7 +14,6 @@ package sql
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
@@ -29,6 +28,7 @@ import (
 	"github.com/oceanbase/ob-operator/internal/dashboard/model/response"
 	"github.com/oceanbase/ob-operator/internal/dashboard/model/sql"
 	sql_analyzer_model "github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
+	"github.com/oceanbase/ob-operator/internal/sql-analyzer/model"
 )
 
 const (
@@ -350,9 +350,11 @@ func QueryPlanDetailInfo(ctx context.Context, param *sql.PlanDetailParam) (*sql.
 		return nil, errors.Wrap(err, "Get ob tenant")
 	}
 
-	req := sql_analyzer_model.PlanDetailParam{
-		SqlId:    param.SqlId,
-		PlanHash: param.PlanHash,
+	req := model.SqlPlanIdentifier{
+		TenantID: param.TenantID,
+		SvrIP:    param.SvrIP,
+		SvrPort:  param.SvrPort,
+		PlanID:   param.PlanID,
 	}
 
 	plans, err := QueryPlanDetail(podIP, obtenant.Spec.TenantName, req)
@@ -388,14 +390,18 @@ func QueryPlanDetailInfo(ctx context.Context, param *sql.PlanDetailParam) (*sql.
 		}
 	}
 
+	planIdentity := sql.PlanIdentity{
+		SvrIP:    plans[0].SvrIP,
+		SvrPort:  plans[0].SvrPort,
+		TenantID: plans[0].TenantID,
+		PlanID:   plans[0].PlanID,
+	}
+
 	return &sql.PlanDetail{
 		PlanMeta: sql.PlanMeta{
-			SvrIP:      plans[0].SvrIP,
-			SvrPort:    plans[0].SvrPort,
-			TenantId:   plans[0].TenantID,
-			TenantName: obtenant.Spec.TenantName,
-			PlanId:     plans[0].PlanID,
-			PlanHash:   fmt.Sprintf("%d", plans[0].PlanHash),
+			PlanIdentity: planIdentity,
+			TenantName:   obtenant.Spec.TenantName,
+			PlanHash:     plans[0].PlanHash,
 		},
 		PlanStatistics: []sql.PlanStatisticByServer{}, // Empty for now
 		PlanDetail:     root,

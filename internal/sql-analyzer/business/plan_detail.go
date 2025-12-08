@@ -13,13 +13,10 @@ See the Mulan PSL v2 for more details.
 package business
 
 import (
-	apimodel "github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
 	analyticmodel "github.com/oceanbase/ob-operator/internal/sql-analyzer/model"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/store"
 )
 
-func GetPlanDetail(planStore *store.PlanStore, req apimodel.PlanDetailParam) ([]analyticmodel.SqlPlan, error) {
-	// Implement the business logic here
-	// For now, let's just call the store
-	return planStore.GetPlanBySqlIdAndPlanHash(req.SqlId, req.PlanHash)
+func GetPlanDetail(planStore *store.PlanStore, req analyticmodel.SqlPlanIdentifier) ([]analyticmodel.SqlPlan, error) {
+	return planStore.GetPlanDetail(req)
 }

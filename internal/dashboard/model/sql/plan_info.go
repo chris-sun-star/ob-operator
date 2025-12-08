@@ -20,13 +20,17 @@ const (
 	PlanCategoryDistributed PlanCategory = "distributed"
 )
 
+type PlanIdentity struct {
+	TenantID uint64 `json:"tenantID" binding:"required"`
+	SvrIP    string `json:"svrIP" binding:"required"`
+	SvrPort  int64  `json:"svrPort" binding:"required"`
+	PlanID   int64  `json:"planID" binding:"required"`
+}
+
 type PlanMeta struct {
-	SvrIP         string `json:"svrIp" binding:"required"`
-	SvrPort       int64  `json:"svrPort" binding:"required"`
-	TenantId      uint64 `json:"tenantId" binding:"required"`
+	PlanIdentity  `json:",inline"`
 	TenantName    string `json:"tenantName" binding:"required"`
-	PlanId        int64  `json:"planId" binding:"required"`
-	PlanHash      string `json:"planHash" binding:"required"`
+	PlanHash      uint64 `json:"planHash" binding:"required"`
 	GeneratedTime int64  `json:"generatedTime" binding:"required"`
 }
 
@@ -41,7 +45,7 @@ type PlanStatistic struct {
 type PlanStatisticByServer struct {
 	PlanStatistic `json:",inline"`
 	Server        string `json:"server" binding:"required"`
-	PlanId        int64  `json:"planId" binding:"required"`
+	PlanId        int64  `json:"planID" binding:"required"`
 }
 
 type PlanOperator struct {

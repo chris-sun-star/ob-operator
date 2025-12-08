@@ -1,4 +1,3 @@
-
 /*
 Copyright (c) 2023 OceanBase
 ob-operator is licensed under Mulan PSL v2.
@@ -136,7 +135,7 @@ func QuerySqlDetail(host string, tenantName string, req model.SqlDetailRequest) 
 	return &sqlDetailResp, nil
 }
 
-func QueryPlanDetail(host string, tenantName string, req model.PlanDetailParam) ([]analyticmodel.SqlPlan, error) {
+func QueryPlanDetail(host string, tenantName string, req analyticmodel.SqlPlanIdentifier) ([]analyticmodel.SqlPlan, error) {
 	url := fmt.Sprintf("http://%s:8080/api/v1/tenants/%s/plan_detail", host, tenantName)
 
 	reqBody, err := json.Marshal(req)
@@ -172,4 +171,3 @@ func QueryPlanDetail(host string, tenantName string, req model.PlanDetailParam) 
 
 	return planDetailResp, nil
 }
-

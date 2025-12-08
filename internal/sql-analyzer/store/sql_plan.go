@@ -135,8 +135,8 @@ func (s *PlanStore) PlanExists(ident model.SqlPlanIdentifier) (bool, error) {
 	return count > 0, nil
 }
 
-func (s *PlanStore) GetPlanBySqlIdAndPlanHash(sqlId string, planHash uint64) ([]model.SqlPlan, error) {
-	rows, err := s.db.Query(sqlconst.SelectPlanBySqlIDAndPlanHash, sqlId, fmt.Sprintf("%d", planHash))
+func (s *PlanStore) GetPlanDetail(ident model.SqlPlanIdentifier) ([]model.SqlPlan, error) {
+	rows, err := s.db.Query(sqlconst.SelectSqlPlanFromDuckdb, ident.TenantID, ident.SvrIP, ident.SvrPort, ident.PlanID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to query plans by sqlId and planHash")
 	}

@@ -14,10 +14,10 @@ package model
 
 // PlanIdentifier holds the identifiers for a plan.
 type SqlPlanIdentifier struct {
-	TenantID uint64
-	SvrIP    string
-	SvrPort  int64
-	PlanID   int64
+	TenantID uint64 `json:"tenantID" binding:"required"`
+	SvrIP    string `json:"svrIP" binding:"required"`
+	SvrPort  int64  `json:"svrPort" binding:"required"`
+	PlanID   int64  `json:"planID" binding:"required"`
 }
 
 type SqlPlan struct {
