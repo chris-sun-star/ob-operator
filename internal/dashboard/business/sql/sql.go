@@ -14,6 +14,7 @@ package sql
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
@@ -333,4 +334,70 @@ func ListRequestStatistics(c context.Context, param *sql.SqlRequestStatisticPara
 	}
 
 	return []sql.RequestStatisticInfo{info}, nil
+}
+
+func QueryPlanDetailInfo(ctx context.Context, param *sql.PlanDetailParam) (*sql.PlanDetail, error) {
+	podIP, err := k8s.GetSQLAnalyzerPodIP(ctx, param.Namespace, param.OBTenant)
+	if err != nil {
+		return nil, err
+	}
+
+	obtenant, err := clients.GetOBTenant(ctx, types.NamespacedName{
+		Namespace: param.Namespace,
+		Name:      param.OBTenant,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "Get ob tenant")
+	}
+
+	req := sql_analyzer_model.PlanDetailParam{
+		SqlId:    param.SqlId,
+		PlanHash: param.PlanHash,
+	}
+
+	plans, err := QueryPlanDetail(podIP, obtenant.Spec.TenantName, req)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(plans) == 0 {
+		return nil, nil
+	}
+
+	// Build plan tree
+	planMap := make(map[int64]*sql.PlanOperator)
+	var root *sql.PlanOperator
+
+	for _, plan := range plans {
+		planMap[plan.ID] = &sql.PlanOperator{
+			Operator:      plan.Operator,
+			Name:          plan.ObjectName,
+			EstimatedRows: int(plan.Cardinality),
+			Cost:          plan.Cost,
+		}
+	}
+
+	for _, plan := range plans {
+		if plan.ParentID == 0 {
+			root = planMap[plan.ID]
+		} else {
+			parent, ok := planMap[plan.ParentID]
+			if ok {
+				parent.ChildOperators = append(parent.ChildOperators, planMap[plan.ID])
+			}
+		}
+	}
+
+	return &sql.PlanDetail{
+		PlanMeta: sql.PlanMeta{
+			SvrIP:      plans[0].SvrIP,
+			SvrPort:    plans[0].SvrPort,
+			TenantId:   plans[0].TenantID,
+			TenantName: obtenant.Spec.TenantName,
+			PlanId:     plans[0].PlanID,
+			PlanHash:   fmt.Sprintf("%d", plans[0].PlanHash),
+		},
+		PlanStatistics: []sql.PlanStatisticByServer{}, // Empty for now
+		PlanDetail:     root,
+	}, nil
 }

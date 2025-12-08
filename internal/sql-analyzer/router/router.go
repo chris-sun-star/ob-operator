@@ -26,6 +26,8 @@ func Register(r *gin.Engine) {
 			tenants.POST("/sql-stats", handler.Wrap(handler.QuerySqlStats))
 			tenants.POST("/request-stats", handler.Wrap(handler.GetRequestStatistics))
 			tenants.POST("/sql-detail", handler.Wrap(handler.GetSqlDetailInfo))
+			// Add plan detail router
+			tenants.POST("/plan_detail", handler.Wrap(handler.GetPlanDetail))
 		}
 	}
 }

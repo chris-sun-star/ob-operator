@@ -115,6 +115,10 @@ func QuerySqlDetailInfo(c *gin.Context) (*sql.SqlDetailedInfo, error) {
 // @Failure 500 object response.APIResponse
 // @Router /api/v1/sql/queryPlanDetailInfo [POST]
 // @Security ApiKeyAuth
-func QueryPlanDetailInfo(_ *gin.Context) (*sql.PlanDetail, error) {
-	return nil, httpErr.NewNotImplemented("")
+func QueryPlanDetailInfo(c *gin.Context) (*sql.PlanDetail, error) {
+	param := &sql.PlanDetailParam{}
+	if err := c.ShouldBindJSON(param); err != nil {
+		return nil, httpErr.NewBadRequest(err.Error())
+	}
+	return sqlbiz.QueryPlanDetailInfo(c, param)
 }

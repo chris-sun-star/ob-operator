@@ -21,6 +21,7 @@ import (
 	"net/http"
 
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
+	analyticmodel "github.com/oceanbase/ob-operator/internal/sql-analyzer/model"
 	"github.com/pkg/errors"
 )
 
@@ -134,3 +135,41 @@ func QuerySqlDetail(host string, tenantName string, req model.SqlDetailRequest) 
 
 	return &sqlDetailResp, nil
 }
+
+func QueryPlanDetail(host string, tenantName string, req model.PlanDetailParam) ([]analyticmodel.SqlPlan, error) {
+	url := fmt.Sprintf("http://%s:8080/api/v1/tenants/%s/plan_detail", host, tenantName)
+
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal request body")
+	}
+
+	httpReq, err := http.NewRequest("POST", url, bytes.NewBuffer(reqBody))
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create http request")
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to send request to sql-analyzer")
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to read response body")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("sql-analyzer returned non-200 status: %d, body: %s", resp.StatusCode, string(respBody))
+	}
+
+	var planDetailResp []analyticmodel.SqlPlan
+	if err := json.Unmarshal(respBody, &planDetailResp); err != nil {
+		return nil, errors.Wrap(err, "failed to unmarshal response body")
+	}
+
+	return planDetailResp, nil
+}
+

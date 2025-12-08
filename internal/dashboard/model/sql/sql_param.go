@@ -54,4 +54,5 @@ type PlanDetailParam struct {
 	BaseSqlRequestParam `json:",inline"`
 	PlanHash            uint64 `json:"planHash" binding:"required"`
 	PlanId              int64  `json:"planId" binding:"required"`
+	SqlId               string `json:"sqlId" binding:"required"`
 }
