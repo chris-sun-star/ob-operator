@@ -24,7 +24,7 @@ const (
 		PLAN_ID            BIGINT,
 		SQL_ID             VARCHAR,
 		DB_ID              BIGINT,
-		PLAN_HASH          VARCHAR,
+		PLAN_HASH          UBIGINT,
 		GMT_CREATE         VARCHAR,
 		OPERATOR           VARCHAR,
 		OBJECT_NODE        VARCHAR,
