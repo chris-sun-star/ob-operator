@@ -403,7 +403,6 @@ func QueryPlanDetailInfo(ctx context.Context, param *sql.PlanDetailParam) (*sql.
 			TenantName:   obtenant.Spec.TenantName,
 			PlanHash:     plans[0].PlanHash,
 		},
-		PlanStatistics: []sql.PlanStatisticByServer{}, // Empty for now
-		PlanDetail:     root,
+		PlanDetail: root,
 	}, nil
 }

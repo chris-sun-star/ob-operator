@@ -42,12 +42,6 @@ type PlanStatistic struct {
 	RealCost int64 `json:"realCost"`
 }
 
-type PlanStatisticByServer struct {
-	PlanStatistic `json:",inline"`
-	Server        string `json:"server" binding:"required"`
-	PlanId        int64  `json:"planID" binding:"required"`
-}
-
 type PlanOperator struct {
 	Operator       string          `json:"operator" binding:"required"`
 	Name           string          `json:"name,omitempty"`
@@ -58,7 +52,6 @@ type PlanOperator struct {
 }
 
 type PlanDetail struct {
-	PlanMeta       `json:",inline"`
-	PlanStatistics []PlanStatisticByServer `json:"planStatistics" binding:"required"`
-	PlanDetail     *PlanOperator           `json:"planDetail" binding:"required"`
+	PlanMeta   `json:",inline"`
+	PlanDetail *PlanOperator `json:"planDetail" binding:"required"`
 }
