@@ -169,3 +169,48 @@ func (s *PlanStore) Close() {
 		s.db.Close()
 	}
 }
+
+func (s *PlanStore) GetPlanStatsBySqlId(sqlId string) ([]model.PlanStatistic, error) {
+	query := `
+		SELECT
+			TENANT_ID,
+			SVR_IP,
+			SVR_PORT,
+			PLAN_ID,
+			PLAN_HASH,
+			MIN(GMT_CREATE) as GMT_CREATE,
+			SUM(IO_COST) as IO_COST,
+			SUM(CPU_COST) as CPU_COST,
+			SUM(COST) as COST,
+			SUM(REAL_COST) as REAL_COST
+		FROM sql_plan
+		WHERE SQL_ID = ?
+		GROUP BY TENANT_ID, SVR_IP, SVR_PORT, PLAN_ID, PLAN_HASH
+	`
+	rows, err := s.db.Query(query, sqlId)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to query plan statistics by sqlId")
+	}
+	defer rows.Close()
+
+	stats := make([]model.PlanStatistic, 0)
+	for rows.Next() {
+		var stat model.PlanStatistic
+		if err := rows.Scan(
+			&stat.TenantID,
+			&stat.SvrIP,
+			&stat.SvrPort,
+			&stat.PlanID,
+			&stat.PlanHash,
+			&stat.GeneratedTime,
+			&stat.IoCost,
+			&stat.CpuCost,
+			&stat.Cost,
+			&stat.RealCost,
+		); err != nil {
+			return nil, errors.Wrap(err, "failed to scan plan statistic")
+		}
+		stats = append(stats, stat)
+	}
+	return stats, nil
+}

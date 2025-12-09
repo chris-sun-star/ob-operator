@@ -255,6 +255,27 @@ func QuerySqlDetailInfo(ctx context.Context, param *sql.SqlDetailParam) (*sql.Sq
 		detailedInfo.LatencyTrend = append(detailedInfo.LatencyTrend, *trend)
 	}
 
+	// Convert Plans
+	for _, planStat := range resp.Plans {
+		plan := sql.PlanStatistic{
+			PlanMeta: sql.PlanMeta{
+				PlanIdentity: sql.PlanIdentity{
+					TenantID: planStat.TenantID,
+					SvrIP:    planStat.SvrIP,
+					SvrPort:  planStat.SvrPort,
+					PlanID:   planStat.PlanID,
+				},
+				PlanHash:      planStat.PlanHash,
+				GeneratedTime: planStat.GeneratedTime,
+			},
+			IoCost:   planStat.IoCost,
+			CpuCost:  planStat.CpuCost,
+			Cost:     planStat.Cost,
+			RealCost: planStat.RealCost,
+		}
+		detailedInfo.Plans = append(detailedInfo.Plans, plan)
+	}
+
 	return detailedInfo, nil
 }
 
@@ -400,7 +421,6 @@ func QueryPlanDetailInfo(ctx context.Context, param *sql.PlanDetailParam) (*sql.
 	return &sql.PlanDetail{
 		PlanMeta: sql.PlanMeta{
 			PlanIdentity: planIdentity,
-			TenantName:   obtenant.Spec.TenantName,
 			PlanHash:     plans[0].PlanHash,
 		},
 		PlanDetail: root,

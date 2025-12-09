@@ -61,3 +61,16 @@ type SqlPlan struct {
 	Remarks           string `db:"REMARKS"`
 	OtherXML          string `db:"OTHER_XML"`
 }
+
+type PlanStatistic struct {
+	TenantID      uint64 `db:"TENANT_ID"`
+	SvrIP         string `db:"SVR_IP"`
+	SvrPort       int64  `db:"SVR_PORT"`
+	PlanID        int64  `db:"PLAN_ID"`
+	PlanHash      uint64 `db:"PLAN_HASH"`
+	GeneratedTime string `db:"GMT_CREATE"`
+	IoCost        int64  `db:"IO_COST"`
+	CpuCost       int64  `db:"CPU_COST"`
+	Cost          int64  `db:"COST"`
+	RealCost      int64  `db:"REAL_COST"`
+}

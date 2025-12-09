@@ -32,5 +32,11 @@ func GetSqlDetailInfo(c *gin.Context) (*model.SqlDetailResponse, error) {
 	}
 	defer auditStore.Close()
 
-	return business.GetSqlDetailInfo(auditStore, req)
+	planStore, err := store.NewPlanStore(c.Request.Context(), "/data", true)
+	if err != nil {
+		return nil, err
+	}
+	defer planStore.Close()
+
+	return business.GetSqlDetailInfo(auditStore, planStore, req)
 }

@@ -557,10 +557,11 @@ func (s *SqlAuditStore) QueryRequestStatistics(req apimodel.RequestStatisticsReq
 	return resp, nil
 }
 
-func (s *SqlAuditStore) QuerySqlDetailInfo(req apimodel.SqlDetailRequest) (*apimodel.SqlDetailResponse, error) {
+func (s *SqlAuditStore) QuerySqlDetailInfo(planStore *PlanStore, req apimodel.SqlDetailRequest) (*apimodel.SqlDetailResponse, error) {
 	resp := &apimodel.SqlDetailResponse{
 		ExecutionTrend: []apimodel.PlanTypeTrend{},
 		LatencyTrend:   []apimodel.LatencyTrendItem{},
+		Plans:          []apimodel.PlanStats{},
 	}
 
 	// Execution Trend
@@ -650,6 +651,28 @@ func (s *SqlAuditStore) QuerySqlDetailInfo(req apimodel.SqlDetailRequest) (*apim
 			}
 			resp.LatencyTrend = append(resp.LatencyTrend, item)
 		}
+	}
+
+	// Plans
+	planStats, err := planStore.GetPlanStatsBySqlId(req.SqlId)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, ps := range planStats {
+		gmt, _ := time.Parse("2006-01-02 15:04:05", ps.GeneratedTime)
+		resp.Plans = append(resp.Plans, apimodel.PlanStats{
+			TenantID:      ps.TenantID,
+			SvrIP:         ps.SvrIP,
+			SvrPort:       ps.SvrPort,
+			PlanID:        ps.PlanID,
+			PlanHash:      ps.PlanHash,
+			GeneratedTime: gmt.Unix(),
+			IoCost:        ps.IoCost,
+			CpuCost:       ps.CpuCost,
+			Cost:          ps.Cost,
+			RealCost:      ps.RealCost,
+		})
 	}
 
 	return resp, nil

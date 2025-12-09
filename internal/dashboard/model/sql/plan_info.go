@@ -29,7 +29,6 @@ type PlanIdentity struct {
 
 type PlanMeta struct {
 	PlanIdentity  `json:",inline"`
-	TenantName    string `json:"tenantName" binding:"required"`
 	PlanHash      uint64 `json:"planHash" binding:"required"`
 	GeneratedTime int64  `json:"generatedTime" binding:"required"`
 }
