@@ -280,10 +280,10 @@ func QuerySqlDetailInfo(ctx context.Context, param *dashboard_sql.SqlDetailParam
 	for _, idx := range resp.Indexes {
 		detailedInfo.Indexies = append(detailedInfo.Indexies, dashboard_sql.IndexInfo{
 			TableName: idx.TableName,
-			Category:  dashboard_sql.IndexCategory(idx.Category),
+			Category:  idx.Category,
 			IndexName: idx.IndexName,
 			Columns:   idx.Columns,
-			Status:    dashboard_sql.IndexStatus(idx.Status),
+			Status:    idx.Status,
 		})
 	}
 
