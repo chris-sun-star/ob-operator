@@ -39,9 +39,35 @@ type TableInfo struct {
 	TableID      int64  `json:"tableId"`
 }
 
+type IndexCategory string
+type IndexStatus string
+
+const (
+	IndexCategoryPrimaryKey   IndexCategory = "primaryKey"
+	IndexCategoryGlobalNormal IndexCategory = "globalNormal"
+	IndexCategoryGlobalUnique IndexCategory = "globalUnique"
+	IndexCategoryLocalNormal  IndexCategory = "localNormal"
+	IndexCategoryLocalUnique  IndexCategory = "localUnique"
+)
+
+const (
+	IndexStatusCreating  IndexStatus = "creating"
+	IndexStatusAvailable IndexStatus = "available"
+	IndexStatusError     IndexStatus = "error"
+)
+
+type IndexInfo struct {
+	TableName string        `json:"tableName" binding:"required"`
+	Category  IndexCategory `json:"category" binding:"required"`
+	IndexName string        `json:"indexName" binding:"required"`
+	Columns   []string      `json:"columns" binding:"required"`
+	Status    IndexStatus   `json:"status" binding:"required"`
+}
+
 type SqlDetailResponse struct {
 	ExecutionTrend []PlanTypeTrend    `json:"executionTrend"`
 	LatencyTrend   []LatencyTrendItem `json:"latencyTrend"`
 	Plans          []PlanStats        `json:"plans"`
 	Tables         []TableInfo        `json:"tables"`
+	Indexes        []IndexInfo        `json:"indexes"`
 }

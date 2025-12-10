@@ -2,10 +2,17 @@
 package handler
 
 import (
-	"github.com/gin-gonic/gin"
+	"os"
+	"path/filepath"
 
+	"github.com/gin-gonic/gin"
+	logger "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/oceanbase/ob-operator/internal/clients"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/business"
+	"github.com/oceanbase/ob-operator/internal/sql-analyzer/oceanbase"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/store"
 )
 
@@ -26,17 +33,46 @@ func GetSqlDetailInfo(c *gin.Context) (*model.SqlDetailResponse, error) {
 		return nil, err
 	}
 
-	auditStore, err := store.NewSqlAuditStore(c.Request.Context(), "/data/sql_audit")
+	dataPath := os.Getenv("DATA_PATH")
+	if dataPath == "" {
+		dataPath = "/data"
+	}
+
+	auditStore, err := store.NewSqlAuditStore(c.Request.Context(), filepath.Join(dataPath, "sql_audit"))
 	if err != nil {
 		return nil, err
 	}
 	defer auditStore.Close()
 
-	planStore, err := store.NewPlanStore(c.Request.Context(), "/data", true)
+	planStore, err := store.NewPlanStore(c.Request.Context(), filepath.Join(dataPath, "sql_plan"), true)
 	if err != nil {
 		return nil, err
 	}
 	defer planStore.Close()
 
-	return business.GetSqlDetailInfo(auditStore, planStore, req)
+	// Setup ConnectionManager
+	namespace := os.Getenv("NAMESPACE")
+	obTenantName := os.Getenv("OBTENANT")
+
+	var cm *oceanbase.ConnectionManager
+	if namespace != "" && obTenantName != "" {
+		obtenant, err := clients.GetOBTenant(c.Request.Context(), types.NamespacedName{
+			Namespace: namespace,
+			Name:      obTenantName,
+		})
+		if err != nil {
+			logger.Warnf("Failed to get OBTenant %s/%s: %v", namespace, obTenantName, err)
+		} else {
+			obcluster, err := clients.GetOBCluster(c.Request.Context(), namespace, obtenant.Spec.ClusterName)
+			if err != nil {
+				logger.Warnf("Failed to get OBCluster %s/%s: %v", namespace, obtenant.Spec.ClusterName, err)
+			} else {
+				cm = oceanbase.NewConnectionManager(c.Request.Context(), obcluster)
+			}
+		}
+	} else {
+		logger.Warn("NAMESPACE or OBTENANT env not set, skipping index query")
+	}
+
+	return business.GetSqlDetailInfo(c.Request.Context(), cm, auditStore, planStore, req)
 }

@@ -14,15 +14,11 @@ package sql
 
 import (
 	"context"
-	"database/sql"
-	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/pkg/errors"
 	logger "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/oceanbase/ob-operator/internal/clients"
@@ -33,8 +29,6 @@ import (
 	dashboard_sql "github.com/oceanbase/ob-operator/internal/dashboard/model/sql"
 	sql_analyzer_model "github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/model"
-	"github.com/oceanbase/ob-operator/pkg/k8s/client"
-	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/connector"
 )
 
 const (
@@ -178,24 +172,6 @@ func ListSqlStats(ctx context.Context, filter *dashboard_sql.SqlFilter) ([]dashb
 	return sqlInfos, nil
 }
 
-func getSysTenantDB(ctx context.Context, namespace, clusterName string) (*sql.DB, error) {
-	obCluster, err := clients.GetOBCluster(ctx, namespace, clusterName)
-	if err != nil {
-		return nil, err
-	}
-
-	k8sClient := client.GetClient()
-	secretName := obCluster.Spec.UserSecrets.Root
-	secret, err := k8sClient.ClientSet.CoreV1().Secrets(namespace).Get(ctx, secretName, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	password := string(secret.Data[clients.PasswordKey])
-	ds := connector.NewOceanBaseDataSource(obCluster.Name, 2881, "root", "sys", password, "oceanbase")
-	return sql.Open("mysql", ds.DataSourceName())
-}
-
 func QuerySqlDetailInfo(ctx context.Context, param *dashboard_sql.SqlDetailParam) (*dashboard_sql.SqlDetailedInfo, error) {
 	podIP, err := k8s.GetSQLAnalyzerPodIP(ctx, param.Namespace, param.OBTenant)
 	if err != nil {
@@ -301,75 +277,14 @@ func QuerySqlDetailInfo(ctx context.Context, param *dashboard_sql.SqlDetailParam
 	}
 
 	// Convert Indexes
-	if len(resp.Tables) > 0 {
-		db, err := getSysTenantDB(ctx, param.Namespace, obtenant.Spec.ClusterName)
-		if err != nil {
-			logger.Warnf("Failed to connect to sys tenant: %v", err)
-		} else {
-			defer db.Close()
-
-			for _, table := range resp.Tables {
-				query := `
-					SELECT
-						I.index_name,
-						I.index_type,
-						I.uniqueness,
-						I.status,
-						GROUP_CONCAT(C.column_name ORDER BY column_position SEPARATOR ',') AS column_name
-					FROM cdb_indexes I
-					LEFT JOIN cdb_ind_columns C
-						ON I.table_owner = C.table_owner
-						AND I.table_name = C.table_name
-						AND I.index_name = C.index_name
-						AND I.con_id = C.con_id
-					WHERE I.con_id = ?
-						AND I.table_owner = ?
-						AND I.table_name = ?
-					GROUP BY I.index_name, I.index_type, I.uniqueness, I.status;
-				`
-				rows, err := db.QueryContext(ctx, query, obtenant.Status.TenantRecordInfo.TenantID, table.DatabaseName, table.TableName)
-				if err != nil {
-					logger.Warnf("Failed to query indexes for table %s.%s: %v", table.DatabaseName, table.TableName, err)
-					continue
-				}
-
-				for rows.Next() {
-					var indexName, indexType, uniqueness, status, columns string
-					if err := rows.Scan(&indexName, &indexType, &uniqueness, &status, &columns); err != nil {
-						logger.Warnf("Failed to scan index row: %v", err)
-						continue
-					}
-
-					var category dashboard_sql.IndexCategory
-					if strings.HasPrefix(indexName, "t_pk_obpk_") {
-						category = dashboard_sql.IndexCategoryPrimaryKey
-					} else if uniqueness == "UNIQUE" {
-						category = dashboard_sql.IndexCategoryGlobalUnique
-					} else {
-						category = dashboard_sql.IndexCategoryGlobalNormal
-					}
-
-					var indexStatus dashboard_sql.IndexStatus
-					switch status {
-					case "VALID", "AVAILABLE":
-						indexStatus = dashboard_sql.IndexStatusAvailable
-					case "ERROR", "UNUSABLE":
-						indexStatus = dashboard_sql.IndexStatusError
-					default:
-						indexStatus = dashboard_sql.IndexStatusAvailable // Default to available
-					}
-
-					detailedInfo.Indexies = append(detailedInfo.Indexies, dashboard_sql.IndexInfo{
-						TableName: table.TableName,
-						Category:  category,
-						IndexName: indexName,
-						Columns:   strings.Split(columns, ","),
-						Status:    indexStatus,
-					})
-				}
-				rows.Close()
-			}
-		}
+	for _, idx := range resp.Indexes {
+		detailedInfo.Indexies = append(detailedInfo.Indexies, dashboard_sql.IndexInfo{
+			TableName: idx.TableName,
+			Category:  dashboard_sql.IndexCategory(idx.Category),
+			IndexName: idx.IndexName,
+			Columns:   idx.Columns,
+			Status:    dashboard_sql.IndexStatus(idx.Status),
+		})
 	}
 
 	return detailedInfo, nil
