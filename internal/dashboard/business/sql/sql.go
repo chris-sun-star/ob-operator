@@ -26,8 +26,8 @@ import (
 	"github.com/oceanbase/ob-operator/internal/dashboard/business/k8s"
 	"github.com/oceanbase/ob-operator/internal/dashboard/generated/bindata"
 	"github.com/oceanbase/ob-operator/internal/dashboard/model/response"
-	dashboard_sql "github.com/oceanbase/ob-operator/internal/dashboard/model/sql"
-	sql_analyzer_model "github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
+	"github.com/oceanbase/ob-operator/internal/dashboard/model/sql"
+	apimodel "github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/model"
 )
 
@@ -37,15 +37,15 @@ const (
 	SQLMetricScope          = "SQL_DIAGNOSIS"
 )
 
-var metricCategoryMap map[string]dashboard_sql.MetricCategory
+var metricCategoryMap map[string]sql.MetricCategory
 
 func init() {
-	metricCategoryMap = make(map[string]dashboard_sql.MetricCategory)
+	metricCategoryMap = make(map[string]sql.MetricCategory)
 	metricConfigContent, err := bindata.Asset(SQLMetricConfigFileEnUS)
 	if err != nil {
 		panic(errors.Wrap(err, "load sql metric config failed"))
 	}
-	metricConfigs := make([]dashboard_sql.SqlMetricMetaCategory, 0)
+	metricConfigs := make([]sql.SqlMetricMetaCategory, 0)
 	err = yaml.Unmarshal(metricConfigContent, &metricConfigs)
 	if err != nil {
 		panic(errors.Wrap(err, "parse sql metric config data failed"))
@@ -57,8 +57,8 @@ func init() {
 	}
 }
 
-func ListSqlMetrics(language string) ([]dashboard_sql.SqlMetricMetaCategory, error) {
-	metricClasses := make([]dashboard_sql.SqlMetricMetaCategory, 0)
+func ListSqlMetrics(language string) ([]sql.SqlMetricMetaCategory, error) {
+	metricClasses := make([]sql.SqlMetricMetaCategory, 0)
 	configFile := SQLMetricConfigFileEnUS
 	switch language {
 	case bizconstant.LANGUAGE_EN_US:
@@ -73,7 +73,7 @@ func ListSqlMetrics(language string) ([]dashboard_sql.SqlMetricMetaCategory, err
 	if err != nil {
 		return metricClasses, err
 	}
-	metricCategories := make([]dashboard_sql.SqlMetricMetaCategory, 0)
+	metricCategories := make([]sql.SqlMetricMetaCategory, 0)
 	err = yaml.Unmarshal(metricConfigContent, &metricCategories)
 	if err != nil {
 		return metricClasses, err
@@ -82,13 +82,13 @@ func ListSqlMetrics(language string) ([]dashboard_sql.SqlMetricMetaCategory, err
 	return metricCategories, err
 }
 
-func ListSqlStats(ctx context.Context, filter *dashboard_sql.SqlFilter) ([]dashboard_sql.SqlInfo, error) {
+func ListSqlStats(ctx context.Context, filter *sql.SqlFilter) ([]sql.SqlInfo, error) {
 	podIP, err := k8s.GetSQLAnalyzerPodIP(ctx, filter.Namespace, filter.OBTenant)
 	if err != nil {
 		return nil, err
 	}
 
-	req := sql_analyzer_model.QuerySqlStatsRequest{
+	req := apimodel.QuerySqlStatsRequest{
 		StartTime:       filter.StartTime,
 		EndTime:         filter.EndTime,
 		UserName:        filter.User,
@@ -116,10 +116,10 @@ func ListSqlStats(ctx context.Context, filter *dashboard_sql.SqlFilter) ([]dashb
 	}
 
 	// Convert resp to []model.SqlInfo
-	sqlInfos := make([]dashboard_sql.SqlInfo, 0, len(resp.Items))
+	sqlInfos := make([]sql.SqlInfo, 0, len(resp.Items))
 	for _, item := range resp.Items {
-		sqlInfo := dashboard_sql.SqlInfo{
-			SqlMetaInfo: dashboard_sql.SqlMetaInfo{
+		sqlInfo := sql.SqlInfo{
+			SqlMetaInfo: sql.SqlMetaInfo{
 				SvrIP:      item.SvrIP,
 				SvrPort:    item.SvrPort,
 				TenantId:   item.TenantId,
@@ -144,8 +144,8 @@ func ListSqlStats(ctx context.Context, filter *dashboard_sql.SqlFilter) ([]dashb
 				LastFailInfo:      item.LastFailInfo,
 				CauseType:         item.CauseType,
 			},
-			ExecutionStatistics: []dashboard_sql.SqlStatisticMetric{},
-			LatencyStatistics:   []dashboard_sql.SqlStatisticMetric{},
+			ExecutionStatistics: []sql.SqlStatisticMetric{},
+			LatencyStatistics:   []sql.SqlStatisticMetric{},
 		}
 		for _, stat := range item.Statistics {
 			category, ok := metricCategoryMap[stat.Name]
@@ -153,16 +153,16 @@ func ListSqlStats(ctx context.Context, filter *dashboard_sql.SqlFilter) ([]dashb
 				logger.Warnf("metric %s has no category", stat.Name)
 				continue
 			}
-			metric := dashboard_sql.SqlStatisticMetric{
+			metric := sql.SqlStatisticMetric{
 				Name:  stat.Name,
 				Value: stat.Value,
 			}
 			switch category {
-			case dashboard_sql.Execution:
+			case sql.Execution:
 				sqlInfo.ExecutionStatistics = append(sqlInfo.ExecutionStatistics, metric)
-			case dashboard_sql.Latency:
+			case sql.Latency:
 				sqlInfo.LatencyStatistics = append(sqlInfo.LatencyStatistics, metric)
-			case dashboard_sql.Meta:
+			case sql.Meta:
 				// Do nothing, already populated in SqlMetaInfo
 			}
 		}
@@ -172,7 +172,7 @@ func ListSqlStats(ctx context.Context, filter *dashboard_sql.SqlFilter) ([]dashb
 	return sqlInfos, nil
 }
 
-func QuerySqlDetailInfo(ctx context.Context, param *dashboard_sql.SqlDetailParam) (*dashboard_sql.SqlDetailedInfo, error) {
+func QuerySqlDetailInfo(ctx context.Context, param *sql.SqlDetailParam) (*sql.SqlDetailedInfo, error) {
 	podIP, err := k8s.GetSQLAnalyzerPodIP(ctx, param.Namespace, param.OBTenant)
 	if err != nil {
 		return nil, err
@@ -186,7 +186,7 @@ func QuerySqlDetailInfo(ctx context.Context, param *dashboard_sql.SqlDetailParam
 		return nil, errors.Wrap(err, "Get ob tenant")
 	}
 
-	req := sql_analyzer_model.SqlDetailRequest{
+	req := apimodel.SqlDetailRequest{
 		StartTime:      param.StartTime,
 		EndTime:        param.EndTime,
 		SqlId:          param.SqlId,
@@ -203,12 +203,12 @@ func QuerySqlDetailInfo(ctx context.Context, param *dashboard_sql.SqlDetailParam
 		return nil, nil
 	}
 
-	detailedInfo := &dashboard_sql.SqlDetailedInfo{
+	detailedInfo := &sql.SqlDetailedInfo{
 		ExecutionTrend: []response.MetricData{},
 		LatencyTrend:   []response.MetricData{},
-		DiagnoseInfo:   []dashboard_sql.SqlDiagnoseInfo{},
-		Plans:          []dashboard_sql.PlanStatistic{},
-		Indexies:       []dashboard_sql.IndexInfo{},
+		DiagnoseInfo:   []sql.SqlDiagnoseInfo{},
+		Plans:          []sql.PlanStatistic{},
+		Indexies:       []sql.IndexInfo{},
 	}
 
 	// Convert ExecutionTrend
@@ -257,9 +257,9 @@ func QuerySqlDetailInfo(ctx context.Context, param *dashboard_sql.SqlDetailParam
 
 	// Convert Plans
 	for _, planStat := range resp.Plans {
-		plan := dashboard_sql.PlanStatistic{
-			PlanMeta: dashboard_sql.PlanMeta{
-				PlanIdentity: dashboard_sql.PlanIdentity{
+		plan := sql.PlanStatistic{
+			PlanMeta: sql.PlanMeta{
+				PlanIdentity: sql.PlanIdentity{
 					TenantID: planStat.TenantID,
 					SvrIP:    planStat.SvrIP,
 					SvrPort:  planStat.SvrPort,
@@ -278,7 +278,7 @@ func QuerySqlDetailInfo(ctx context.Context, param *dashboard_sql.SqlDetailParam
 
 	// Convert Indexes
 	for _, idx := range resp.Indexes {
-		detailedInfo.Indexies = append(detailedInfo.Indexies, dashboard_sql.IndexInfo{
+		detailedInfo.Indexies = append(detailedInfo.Indexies, sql.IndexInfo{
 			TableName: idx.TableName,
 			Category:  idx.Category,
 			IndexName: idx.IndexName,
@@ -290,7 +290,7 @@ func QuerySqlDetailInfo(ctx context.Context, param *dashboard_sql.SqlDetailParam
 	return detailedInfo, nil
 }
 
-func ListRequestStatistics(c context.Context, param *dashboard_sql.SqlRequestStatisticParam) ([]dashboard_sql.RequestStatisticInfo, error) {
+func ListRequestStatistics(c context.Context, param *sql.SqlRequestStatisticParam) ([]sql.RequestStatisticInfo, error) {
 	podIP, err := k8s.GetSQLAnalyzerPodIP(c, param.Namespace, param.OBTenant)
 	if err != nil {
 		return nil, err
@@ -304,7 +304,7 @@ func ListRequestStatistics(c context.Context, param *dashboard_sql.SqlRequestSta
 		return nil, errors.Wrap(err, "Get ob tenant")
 	}
 
-	req := sql_analyzer_model.RequestStatisticsRequest{
+	req := apimodel.RequestStatisticsRequest{
 		StartTime:      param.StartTime,
 		EndTime:        param.EndTime,
 		UserName:       param.User,
@@ -318,7 +318,7 @@ func ListRequestStatistics(c context.Context, param *dashboard_sql.SqlRequestSta
 	}
 
 	if resp == nil {
-		return []dashboard_sql.RequestStatisticInfo{}, nil
+		return []sql.RequestStatisticInfo{}, nil
 	}
 
 	var averageLatency float64
@@ -326,11 +326,11 @@ func ListRequestStatistics(c context.Context, param *dashboard_sql.SqlRequestSta
 		averageLatency = resp.TotalLatency / resp.TotalExecutions
 	}
 
-	info := dashboard_sql.RequestStatisticInfo{
+	info := sql.RequestStatisticInfo{
 		Tenant:                 obtenant.Spec.TenantName,
 		User:                   param.User,
 		Database:               param.Database,
-		PlanCategoryStatistics: []dashboard_sql.SqlStatisticMetric{}, // This field is not available from the sql-analyzer
+		PlanCategoryStatistics: []sql.SqlStatisticMetric{}, // This field is not available from the sql-analyzer
 		TotalExecutions:        resp.TotalExecutions,
 		FailedExecutions:       resp.FailedExecutions,
 		TotalLatency:           resp.TotalLatency,
@@ -365,10 +365,10 @@ func ListRequestStatistics(c context.Context, param *dashboard_sql.SqlRequestSta
 		})
 	}
 
-	return []dashboard_sql.RequestStatisticInfo{info}, nil
+	return []sql.RequestStatisticInfo{info}, nil
 }
 
-func QueryPlanDetailInfo(ctx context.Context, param *dashboard_sql.PlanDetailParam) (*dashboard_sql.PlanDetail, error) {
+func QueryPlanDetailInfo(ctx context.Context, param *sql.PlanDetailParam) (*sql.PlanDetail, error) {
 	podIP, err := k8s.GetSQLAnalyzerPodIP(ctx, param.Namespace, param.OBTenant)
 	if err != nil {
 		return nil, err
@@ -399,11 +399,11 @@ func QueryPlanDetailInfo(ctx context.Context, param *dashboard_sql.PlanDetailPar
 	}
 
 	// Build plan tree
-	planMap := make(map[int64]*dashboard_sql.PlanOperator)
-	var root *dashboard_sql.PlanOperator
+	planMap := make(map[int64]*sql.PlanOperator)
+	var root *sql.PlanOperator
 
 	for _, plan := range plans {
-		planMap[plan.ID] = &dashboard_sql.PlanOperator{
+		planMap[plan.ID] = &sql.PlanOperator{
 			Operator:      plan.Operator,
 			Name:          plan.ObjectName,
 			EstimatedRows: int(plan.Cardinality),
@@ -422,15 +422,15 @@ func QueryPlanDetailInfo(ctx context.Context, param *dashboard_sql.PlanDetailPar
 		}
 	}
 
-	planIdentity := dashboard_sql.PlanIdentity{
+	planIdentity := sql.PlanIdentity{
 		SvrIP:    plans[0].SvrIP,
 		SvrPort:  plans[0].SvrPort,
 		TenantID: plans[0].TenantID,
 		PlanID:   plans[0].PlanID,
 	}
 
-	return &dashboard_sql.PlanDetail{
-		PlanMeta: dashboard_sql.PlanMeta{
+	return &sql.PlanDetail{
+		PlanMeta: sql.PlanMeta{
 			PlanIdentity: planIdentity,
 			PlanHash:     plans[0].PlanHash,
 		},
