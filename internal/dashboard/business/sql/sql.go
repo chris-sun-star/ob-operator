@@ -278,12 +278,13 @@ func QuerySqlDetailInfo(ctx context.Context, param *sql.SqlDetailParam) (*sql.Sq
 
 	// Convert Indexes
 	for _, idx := range resp.Indexes {
-		detailedInfo.Indexies = append(detailedInfo.Indexies, sql.IndexInfo{
-			TableName: idx.TableName,
-			Category:  idx.Category,
-			IndexName: idx.IndexName,
-			Columns:   idx.Columns,
-			Status:    idx.Status,
+		detailedInfo.Indexies = append(detailedInfo.Indexies, dashboard_sql.IndexInfo{
+			TableName:  idx.TableName,
+			IndexType:  idx.IndexType,
+			Uniqueness: idx.Uniqueness,
+			IndexName:  idx.IndexName,
+			Columns:    idx.Columns,
+			Status:     idx.Status,
 		})
 	}
 

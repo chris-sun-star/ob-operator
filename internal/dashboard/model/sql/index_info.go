@@ -13,9 +13,10 @@ See the Mulan PSL v2 for more details.
 package sql
 
 type IndexInfo struct {
-	TableName string   `json:"tableName" binding:"required"`
-	Category  string   `json:"category" binding:"required"`
-	IndexName string   `json:"indexName" binding:"required"`
-	Columns   []string `json:"columns" binding:"required"`
-	Status    string   `json:"status" binding:"required"`
+	TableName  string   `json:"tableName" binding:"required"`
+	IndexType  string   `json:"indexType" binding:"required"`
+	Uniqueness string   `json:"uniqueness" binding:"required"`
+	IndexName  string   `json:"indexName" binding:"required"`
+	Columns    []string `json:"columns" binding:"required"`
+	Status     string   `json:"status" binding:"required"`
 }

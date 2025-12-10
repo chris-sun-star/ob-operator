@@ -59,4 +59,23 @@ const (
 		OTHER_XML          VARCHAR,
 		PRIMARY KEY (TENANT_ID, SVR_IP, SVR_PORT, PLAN_ID, ID)
 	)`
+
+	GetTableIndex = `
+    SELECT
+      I.index_name,
+      I.index_type,
+      I.uniqueness,
+      I.status,
+      GROUP_CONCAT(C.column_name ORDER BY column_position SEPARATOR ',') AS column_name
+    FROM cdb_indexes I
+    LEFT JOIN cdb_ind_columns C
+      ON I.table_owner = C.table_owner
+      AND I.table_name = C.table_name
+      AND I.index_name = C.index_name
+      AND I.con_id = C.con_id
+    WHERE I.con_id = ?
+      AND I.table_owner = ?
+      AND I.table_name = ?
+    GROUP BY I.index_name, I.index_type, I.uniqueness, I.status;
+    `
 )
