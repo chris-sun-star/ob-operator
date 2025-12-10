@@ -675,5 +675,19 @@ func (s *SqlAuditStore) QuerySqlDetailInfo(planStore *PlanStore, req apimodel.Sq
 		})
 	}
 
+	// Tables
+	tables, err := planStore.GetTableInfoBySqlId(req.SqlId)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, table := range tables {
+		resp.Tables = append(resp.Tables, apimodel.TableInfo{
+			DatabaseName: table.DatabaseName,
+			TableName:    table.TableName,
+			TableID:      table.TableID,
+		})
+	}
+
 	return resp, nil
 }

@@ -14,11 +14,15 @@ package sql
 
 import (
 	"context"
+	"database/sql"
+	"strings"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/pkg/errors"
 	logger "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/oceanbase/ob-operator/internal/clients"
@@ -26,9 +30,11 @@ import (
 	"github.com/oceanbase/ob-operator/internal/dashboard/business/k8s"
 	"github.com/oceanbase/ob-operator/internal/dashboard/generated/bindata"
 	"github.com/oceanbase/ob-operator/internal/dashboard/model/response"
-	"github.com/oceanbase/ob-operator/internal/dashboard/model/sql"
+	dashboard_sql "github.com/oceanbase/ob-operator/internal/dashboard/model/sql"
 	sql_analyzer_model "github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/model"
+	"github.com/oceanbase/ob-operator/pkg/k8s/client"
+	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/connector"
 )
 
 const (
@@ -37,15 +43,15 @@ const (
 	SQLMetricScope          = "SQL_DIAGNOSIS"
 )
 
-var metricCategoryMap map[string]sql.MetricCategory
+var metricCategoryMap map[string]dashboard_sql.MetricCategory
 
 func init() {
-	metricCategoryMap = make(map[string]sql.MetricCategory)
+	metricCategoryMap = make(map[string]dashboard_sql.MetricCategory)
 	metricConfigContent, err := bindata.Asset(SQLMetricConfigFileEnUS)
 	if err != nil {
 		panic(errors.Wrap(err, "load sql metric config failed"))
 	}
-	metricConfigs := make([]sql.SqlMetricMetaCategory, 0)
+	metricConfigs := make([]dashboard_sql.SqlMetricMetaCategory, 0)
 	err = yaml.Unmarshal(metricConfigContent, &metricConfigs)
 	if err != nil {
 		panic(errors.Wrap(err, "parse sql metric config data failed"))
@@ -57,8 +63,8 @@ func init() {
 	}
 }
 
-func ListSqlMetrics(language string) ([]sql.SqlMetricMetaCategory, error) {
-	metricClasses := make([]sql.SqlMetricMetaCategory, 0)
+func ListSqlMetrics(language string) ([]dashboard_sql.SqlMetricMetaCategory, error) {
+	metricClasses := make([]dashboard_sql.SqlMetricMetaCategory, 0)
 	configFile := SQLMetricConfigFileEnUS
 	switch language {
 	case bizconstant.LANGUAGE_EN_US:
@@ -73,7 +79,7 @@ func ListSqlMetrics(language string) ([]sql.SqlMetricMetaCategory, error) {
 	if err != nil {
 		return metricClasses, err
 	}
-	metricCategories := make([]sql.SqlMetricMetaCategory, 0)
+	metricCategories := make([]dashboard_sql.SqlMetricMetaCategory, 0)
 	err = yaml.Unmarshal(metricConfigContent, &metricCategories)
 	if err != nil {
 		return metricClasses, err
@@ -82,7 +88,7 @@ func ListSqlMetrics(language string) ([]sql.SqlMetricMetaCategory, error) {
 	return metricCategories, err
 }
 
-func ListSqlStats(ctx context.Context, filter *sql.SqlFilter) ([]sql.SqlInfo, error) {
+func ListSqlStats(ctx context.Context, filter *dashboard_sql.SqlFilter) ([]dashboard_sql.SqlInfo, error) {
 	podIP, err := k8s.GetSQLAnalyzerPodIP(ctx, filter.Namespace, filter.OBTenant)
 	if err != nil {
 		return nil, err
@@ -116,10 +122,10 @@ func ListSqlStats(ctx context.Context, filter *sql.SqlFilter) ([]sql.SqlInfo, er
 	}
 
 	// Convert resp to []model.SqlInfo
-	sqlInfos := make([]sql.SqlInfo, 0, len(resp.Items))
+	sqlInfos := make([]dashboard_sql.SqlInfo, 0, len(resp.Items))
 	for _, item := range resp.Items {
-		sqlInfo := sql.SqlInfo{
-			SqlMetaInfo: sql.SqlMetaInfo{
+		sqlInfo := dashboard_sql.SqlInfo{
+			SqlMetaInfo: dashboard_sql.SqlMetaInfo{
 				SvrIP:      item.SvrIP,
 				SvrPort:    item.SvrPort,
 				TenantId:   item.TenantId,
@@ -144,8 +150,8 @@ func ListSqlStats(ctx context.Context, filter *sql.SqlFilter) ([]sql.SqlInfo, er
 				LastFailInfo:      item.LastFailInfo,
 				CauseType:         item.CauseType,
 			},
-			ExecutionStatistics: []sql.SqlStatisticMetric{},
-			LatencyStatistics:   []sql.SqlStatisticMetric{},
+			ExecutionStatistics: []dashboard_sql.SqlStatisticMetric{},
+			LatencyStatistics:   []dashboard_sql.SqlStatisticMetric{},
 		}
 		for _, stat := range item.Statistics {
 			category, ok := metricCategoryMap[stat.Name]
@@ -153,16 +159,16 @@ func ListSqlStats(ctx context.Context, filter *sql.SqlFilter) ([]sql.SqlInfo, er
 				logger.Warnf("metric %s has no category", stat.Name)
 				continue
 			}
-			metric := sql.SqlStatisticMetric{
+			metric := dashboard_sql.SqlStatisticMetric{
 				Name:  stat.Name,
 				Value: stat.Value,
 			}
 			switch category {
-			case sql.Execution:
+			case dashboard_sql.Execution:
 				sqlInfo.ExecutionStatistics = append(sqlInfo.ExecutionStatistics, metric)
-			case sql.Latency:
+			case dashboard_sql.Latency:
 				sqlInfo.LatencyStatistics = append(sqlInfo.LatencyStatistics, metric)
-			case sql.Meta:
+			case dashboard_sql.Meta:
 				// Do nothing, already populated in SqlMetaInfo
 			}
 		}
@@ -172,7 +178,25 @@ func ListSqlStats(ctx context.Context, filter *sql.SqlFilter) ([]sql.SqlInfo, er
 	return sqlInfos, nil
 }
 
-func QuerySqlDetailInfo(ctx context.Context, param *sql.SqlDetailParam) (*sql.SqlDetailedInfo, error) {
+func getSysTenantDB(ctx context.Context, namespace, clusterName string) (*sql.DB, error) {
+	obCluster, err := clients.GetOBCluster(ctx, namespace, clusterName)
+	if err != nil {
+		return nil, err
+	}
+
+	k8sClient := client.GetClient()
+	secretName := obCluster.Spec.UserSecrets.Root
+	secret, err := k8sClient.ClientSet.CoreV1().Secrets(namespace).Get(ctx, secretName, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	password := string(secret.Data[clients.PasswordKey])
+	ds := connector.NewOceanBaseDataSource(obCluster.Name, 2881, "root", "sys", password, "oceanbase")
+	return sql.Open("mysql", ds.DataSourceName())
+}
+
+func QuerySqlDetailInfo(ctx context.Context, param *dashboard_sql.SqlDetailParam) (*dashboard_sql.SqlDetailedInfo, error) {
 	podIP, err := k8s.GetSQLAnalyzerPodIP(ctx, param.Namespace, param.OBTenant)
 	if err != nil {
 		return nil, err
@@ -203,12 +227,12 @@ func QuerySqlDetailInfo(ctx context.Context, param *sql.SqlDetailParam) (*sql.Sq
 		return nil, nil
 	}
 
-	detailedInfo := &sql.SqlDetailedInfo{
+	detailedInfo := &dashboard_sql.SqlDetailedInfo{
 		ExecutionTrend: []response.MetricData{},
 		LatencyTrend:   []response.MetricData{},
-		DiagnoseInfo:   []sql.SqlDiagnoseInfo{},
-		Plans:          []sql.PlanStatistic{},
-		Indexies:       []sql.IndexInfo{},
+		DiagnoseInfo:   []dashboard_sql.SqlDiagnoseInfo{},
+		Plans:          []dashboard_sql.PlanStatistic{},
+		Indexies:       []dashboard_sql.IndexInfo{},
 	}
 
 	// Convert ExecutionTrend
@@ -257,9 +281,9 @@ func QuerySqlDetailInfo(ctx context.Context, param *sql.SqlDetailParam) (*sql.Sq
 
 	// Convert Plans
 	for _, planStat := range resp.Plans {
-		plan := sql.PlanStatistic{
-			PlanMeta: sql.PlanMeta{
-				PlanIdentity: sql.PlanIdentity{
+		plan := dashboard_sql.PlanStatistic{
+			PlanMeta: dashboard_sql.PlanMeta{
+				PlanIdentity: dashboard_sql.PlanIdentity{
 					TenantID: planStat.TenantID,
 					SvrIP:    planStat.SvrIP,
 					SvrPort:  planStat.SvrPort,
@@ -276,10 +300,82 @@ func QuerySqlDetailInfo(ctx context.Context, param *sql.SqlDetailParam) (*sql.Sq
 		detailedInfo.Plans = append(detailedInfo.Plans, plan)
 	}
 
+	// Convert Indexes
+	if len(resp.Tables) > 0 {
+		db, err := getSysTenantDB(ctx, param.Namespace, obtenant.Spec.ClusterName)
+		if err != nil {
+			logger.Warnf("Failed to connect to sys tenant: %v", err)
+		} else {
+			defer db.Close()
+
+			for _, table := range resp.Tables {
+				query := `
+					SELECT
+						I.index_name,
+						I.index_type,
+						I.uniqueness,
+						I.status,
+						GROUP_CONCAT(C.column_name ORDER BY column_position SEPARATOR ',') AS column_name
+					FROM cdb_indexes I
+					LEFT JOIN cdb_ind_columns C
+						ON I.table_owner = C.table_owner
+						AND I.table_name = C.table_name
+						AND I.index_name = C.index_name
+						AND I.con_id = C.con_id
+					WHERE I.con_id = ?
+						AND I.table_owner = ?
+						AND I.table_name = ?
+					GROUP BY I.index_name, I.index_type, I.uniqueness, I.status;
+				`
+				rows, err := db.QueryContext(ctx, query, obtenant.Status.TenantRecordInfo.TenantID, table.DatabaseName, table.TableName)
+				if err != nil {
+					logger.Warnf("Failed to query indexes for table %s.%s: %v", table.DatabaseName, table.TableName, err)
+					continue
+				}
+
+				for rows.Next() {
+					var indexName, indexType, uniqueness, status, columns string
+					if err := rows.Scan(&indexName, &indexType, &uniqueness, &status, &columns); err != nil {
+						logger.Warnf("Failed to scan index row: %v", err)
+						continue
+					}
+
+					var category dashboard_sql.IndexCategory
+					if strings.HasPrefix(indexName, "t_pk_obpk_") {
+						category = dashboard_sql.IndexCategoryPrimaryKey
+					} else if uniqueness == "UNIQUE" {
+						category = dashboard_sql.IndexCategoryGlobalUnique
+					} else {
+						category = dashboard_sql.IndexCategoryGlobalNormal
+					}
+
+					var indexStatus dashboard_sql.IndexStatus
+					switch status {
+					case "VALID", "AVAILABLE":
+						indexStatus = dashboard_sql.IndexStatusAvailable
+					case "ERROR", "UNUSABLE":
+						indexStatus = dashboard_sql.IndexStatusError
+					default:
+						indexStatus = dashboard_sql.IndexStatusAvailable // Default to available
+					}
+
+					detailedInfo.Indexies = append(detailedInfo.Indexies, dashboard_sql.IndexInfo{
+						TableName: table.TableName,
+						Category:  category,
+						IndexName: indexName,
+						Columns:   strings.Split(columns, ","),
+						Status:    indexStatus,
+					})
+				}
+				rows.Close()
+			}
+		}
+	}
+
 	return detailedInfo, nil
 }
 
-func ListRequestStatistics(c context.Context, param *sql.SqlRequestStatisticParam) ([]sql.RequestStatisticInfo, error) {
+func ListRequestStatistics(c context.Context, param *dashboard_sql.SqlRequestStatisticParam) ([]dashboard_sql.RequestStatisticInfo, error) {
 	podIP, err := k8s.GetSQLAnalyzerPodIP(c, param.Namespace, param.OBTenant)
 	if err != nil {
 		return nil, err
@@ -307,7 +403,7 @@ func ListRequestStatistics(c context.Context, param *sql.SqlRequestStatisticPara
 	}
 
 	if resp == nil {
-		return []sql.RequestStatisticInfo{}, nil
+		return []dashboard_sql.RequestStatisticInfo{}, nil
 	}
 
 	var averageLatency float64
@@ -315,11 +411,11 @@ func ListRequestStatistics(c context.Context, param *sql.SqlRequestStatisticPara
 		averageLatency = resp.TotalLatency / resp.TotalExecutions
 	}
 
-	info := sql.RequestStatisticInfo{
+	info := dashboard_sql.RequestStatisticInfo{
 		Tenant:                 obtenant.Spec.TenantName,
 		User:                   param.User,
 		Database:               param.Database,
-		PlanCategoryStatistics: []sql.SqlStatisticMetric{}, // This field is not available from the sql-analyzer
+		PlanCategoryStatistics: []dashboard_sql.SqlStatisticMetric{}, // This field is not available from the sql-analyzer
 		TotalExecutions:        resp.TotalExecutions,
 		FailedExecutions:       resp.FailedExecutions,
 		TotalLatency:           resp.TotalLatency,
@@ -354,10 +450,10 @@ func ListRequestStatistics(c context.Context, param *sql.SqlRequestStatisticPara
 		})
 	}
 
-	return []sql.RequestStatisticInfo{info}, nil
+	return []dashboard_sql.RequestStatisticInfo{info}, nil
 }
 
-func QueryPlanDetailInfo(ctx context.Context, param *sql.PlanDetailParam) (*sql.PlanDetail, error) {
+func QueryPlanDetailInfo(ctx context.Context, param *dashboard_sql.PlanDetailParam) (*dashboard_sql.PlanDetail, error) {
 	podIP, err := k8s.GetSQLAnalyzerPodIP(ctx, param.Namespace, param.OBTenant)
 	if err != nil {
 		return nil, err
@@ -388,11 +484,11 @@ func QueryPlanDetailInfo(ctx context.Context, param *sql.PlanDetailParam) (*sql.
 	}
 
 	// Build plan tree
-	planMap := make(map[int64]*sql.PlanOperator)
-	var root *sql.PlanOperator
+	planMap := make(map[int64]*dashboard_sql.PlanOperator)
+	var root *dashboard_sql.PlanOperator
 
 	for _, plan := range plans {
-		planMap[plan.ID] = &sql.PlanOperator{
+		planMap[plan.ID] = &dashboard_sql.PlanOperator{
 			Operator:      plan.Operator,
 			Name:          plan.ObjectName,
 			EstimatedRows: int(plan.Cardinality),
@@ -411,15 +507,15 @@ func QueryPlanDetailInfo(ctx context.Context, param *sql.PlanDetailParam) (*sql.
 		}
 	}
 
-	planIdentity := sql.PlanIdentity{
+	planIdentity := dashboard_sql.PlanIdentity{
 		SvrIP:    plans[0].SvrIP,
 		SvrPort:  plans[0].SvrPort,
 		TenantID: plans[0].TenantID,
 		PlanID:   plans[0].PlanID,
 	}
 
-	return &sql.PlanDetail{
-		PlanMeta: sql.PlanMeta{
+	return &dashboard_sql.PlanDetail{
+		PlanMeta: dashboard_sql.PlanMeta{
 			PlanIdentity: planIdentity,
 			PlanHash:     plans[0].PlanHash,
 		},

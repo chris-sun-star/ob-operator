@@ -74,3 +74,9 @@ type PlanStatistic struct {
 	Cost          int64  `db:"COST"`
 	RealCost      int64  `db:"REAL_COST"`
 }
+
+type TableInfo struct {
+	DatabaseName string `db:"OBJECT_OWNER"`
+	TableName    string `db:"OBJECT_NAME"`
+	TableID      int64  `db:"OBJECT_ID"`
+}

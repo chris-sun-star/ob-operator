@@ -33,8 +33,15 @@ type PlanStats struct {
 	RealCost      int64  `json:"realCost"`
 }
 
+type TableInfo struct {
+	DatabaseName string `json:"databaseName"`
+	TableName    string `json:"tableName"`
+	TableID      int64  `json:"tableId"`
+}
+
 type SqlDetailResponse struct {
 	ExecutionTrend []PlanTypeTrend    `json:"executionTrend"`
 	LatencyTrend   []LatencyTrendItem `json:"latencyTrend"`
 	Plans          []PlanStats        `json:"plans"`
+	Tables         []TableInfo        `json:"tables"`
 }

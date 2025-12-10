@@ -214,3 +214,33 @@ func (s *PlanStore) GetPlanStatsBySqlId(sqlId string) ([]model.PlanStatistic, er
 	}
 	return stats, nil
 }
+
+func (s *PlanStore) GetTableInfoBySqlId(sqlId string) ([]model.TableInfo, error) {
+	query := `
+		SELECT DISTINCT
+			OBJECT_OWNER,
+			OBJECT_NAME,
+			OBJECT_ID
+		FROM sql_plan
+		WHERE SQL_ID = ? AND OBJECT_TYPE = 'BASIC TABLE'
+	`
+	rows, err := s.db.Query(query, sqlId)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to query table info by sqlId")
+	}
+	defer rows.Close()
+
+	tables := make([]model.TableInfo, 0)
+	for rows.Next() {
+		var table model.TableInfo
+		if err := rows.Scan(
+			&table.DatabaseName,
+			&table.TableName,
+			&table.TableID,
+		); err != nil {
+			return nil, errors.Wrap(err, "failed to scan table info")
+		}
+		tables = append(tables, table)
+	}
+	return tables, nil
+}
