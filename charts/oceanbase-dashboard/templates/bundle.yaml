@@ -8,6 +8,8 @@ metadata:
     {{- include "oceanbase-dashboard.labels" . | nindent 4}}
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: oceanbase-dashboard-{{ .Release.Name }}
