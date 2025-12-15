@@ -32,6 +32,7 @@ func (m *Manager) RegisterRules() {
 	m.rules = append(m.rules, rules.NewUpdateDeleteMultiTableRule())
 	m.rules = append(m.rules, rules.NewFullScanRule())
 	m.rules = append(m.rules, rules.NewIndexColumnFuzzyMatchRule())
+	m.rules = append(m.rules, rules.NewFunctionOnIndexedColumnRule())
 }
 
 func (m *Manager) Analyze(sql string, indexes []model.IndexInfo) []model.SqlDiagnoseInfo {
