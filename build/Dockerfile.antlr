@@ -1,0 +1,15 @@
+FROM eclipse-temurin:11-jre
+
+ARG ANTLR_VERSION=4.13.2
+ENV CLASSPATH=".:/usr/local/lib/antlr-${ANTLR_VERSION}-complete.jar:$CLASSPATH"
+
+# Install ANTLR
+COPY antlr-${ANTLR_VERSION}-complete.jar /usr/local/lib/antlr-${ANTLR_VERSION}-complete.jar
+
+# Create entrypoint script
+RUN echo '#!/bin/bash' > /usr/local/bin/antlr4 && \
+    echo 'java -jar /usr/local/lib/antlr-'${ANTLR_VERSION}'-complete.jar "$@"' >> /usr/local/bin/antlr4 && \
+    chmod +x /usr/local/bin/antlr4
+
+WORKDIR /work
+ENTRYPOINT ["antlr4"]

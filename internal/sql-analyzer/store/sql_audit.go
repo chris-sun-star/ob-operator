@@ -564,6 +564,25 @@ func (s *SqlAuditStore) QuerySqlDetailInfo(planStore *PlanStore, req apimodel.Sq
 		Plans:          []apimodel.PlanStats{},
 	}
 
+	// Fetch QuerySql for the given SqlId
+	querySqlQuery := fmt.Sprintf(`
+		SELECT
+			query_sql
+		FROM
+			read_parquet('%s/*.parquet')
+		WHERE
+			sql_id = ?
+			AND max_request_time >= ?
+			AND max_request_time <= ?
+		LIMIT 1`, s.path)
+
+	var querySql string
+	err := s.db.QueryRowContext(s.ctx, querySqlQuery, req.SqlId, req.StartTime*1000, req.EndTime*1000).Scan(&querySql)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("failed to query QuerySql: %w", err)
+	}
+	resp.QuerySql = querySql
+
 	// Execution Trend
 	execTrendQuery := fmt.Sprintf(`
 		SELECT

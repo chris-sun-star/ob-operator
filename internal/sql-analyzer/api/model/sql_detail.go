@@ -49,9 +49,18 @@ type IndexInfo struct {
 }
 
 type SqlDetailResponse struct {
+	QuerySql       string             `json:"querySql,omitempty"`
 	ExecutionTrend []PlanTypeTrend    `json:"executionTrend"`
 	LatencyTrend   []LatencyTrendItem `json:"latencyTrend"`
 	Plans          []PlanStats        `json:"plans"`
 	Tables         []TableInfo        `json:"tables"`
 	Indexes        []IndexInfo        `json:"indexes"`
+	DiagnoseInfo   []SqlDiagnoseInfo  `json:"diagnoseInfo,omitempty"`
+}
+
+type SqlDiagnoseInfo struct {
+	RuleName   string `json:"ruleName"`
+	Level      string `json:"level"`
+	Suggestion string `json:"suggestion"`
+	Reason     string `json:"reason"`
 }

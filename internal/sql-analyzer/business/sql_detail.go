@@ -6,6 +6,7 @@ import (
 	logger "github.com/sirupsen/logrus"
 
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
+	"github.com/oceanbase/ob-operator/internal/sql-analyzer/analyzer"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/oceanbase"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/store"
 )
@@ -14,6 +15,13 @@ func GetSqlDetailInfo(ctx context.Context, cm *oceanbase.ConnectionManager, audi
 	resp, err := auditStore.QuerySqlDetailInfo(planStore, req)
 	if err != nil {
 		return nil, err
+	}
+
+	// Initialize the SQL Analyzer and run analysis
+	analyzerManager := analyzer.NewManager()
+	if resp != nil && resp.QuerySql != "" {
+		diagnoseResults := analyzerManager.Analyze(resp.QuerySql)
+		resp.DiagnoseInfo = diagnoseResults
 	}
 
 	// If we have tables and connection manager, query indexes

@@ -1,4 +1,3 @@
-
 package handler
 
 import (
@@ -74,5 +73,5 @@ func GetSqlDetailInfo(c *gin.Context) (*model.SqlDetailResponse, error) {
 		logger.Warn("NAMESPACE or OBTENANT env not set, skipping index query")
 	}
 
-	return business.GetSqlDetailInfo(c.Request.Context(), cm, auditStore, planStore, req)
+	return business.GetSqlDetailInfo(c, cm, auditStore, planStore, req)
 }
