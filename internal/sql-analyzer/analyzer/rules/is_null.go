@@ -25,7 +25,7 @@ func (r *IsNullRule) Description() string {
 	return "Use IS NULL to determine whether it is a NULL value. Direct comparison of NULL to any value is NULL."
 }
 
-func (r *IsNullRule) Analyze(tree antlr.ParseTree) []model.SqlDiagnoseInfo {
+func (r *IsNullRule) Analyze(tree antlr.ParseTree, indexes []model.IndexInfo) []model.SqlDiagnoseInfo {
 	r.diagnoseResults = []model.SqlDiagnoseInfo{}
 	tree.Accept(r)
 	return r.diagnoseResults

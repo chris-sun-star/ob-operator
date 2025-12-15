@@ -28,7 +28,7 @@ func (r *LargeInClauseRule) Description() string {
 	return "Avoid using IN clauses with more than 200 elements."
 }
 
-func (r *LargeInClauseRule) Analyze(tree antlr.ParseTree) []model.SqlDiagnoseInfo {
+func (r *LargeInClauseRule) Analyze(tree antlr.ParseTree, indexes []model.IndexInfo) []model.SqlDiagnoseInfo {
 	r.diagnoseResults = []model.SqlDiagnoseInfo{}
 	tree.Accept(r)
 	return r.diagnoseResults

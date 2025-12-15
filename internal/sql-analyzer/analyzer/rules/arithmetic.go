@@ -25,7 +25,7 @@ func (r *ArithmeticRule) Description() string {
 	return "Field operations are not recommended. Example: a + 1 > 2 => a > 2 - 1"
 }
 
-func (r *ArithmeticRule) Analyze(tree antlr.ParseTree) []model.SqlDiagnoseInfo {
+func (r *ArithmeticRule) Analyze(tree antlr.ParseTree, indexes []model.IndexInfo) []model.SqlDiagnoseInfo {
 	r.diagnoseResults = []model.SqlDiagnoseInfo{}
 	tree.Accept(r)
 	return r.diagnoseResults

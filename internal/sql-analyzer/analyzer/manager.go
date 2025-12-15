@@ -30,9 +30,11 @@ func (m *Manager) RegisterRules() {
 	m.rules = append(m.rules, rules.NewMultiTableJoinRule())
 	m.rules = append(m.rules, rules.NewUpdateDeleteWithoutWhereRule())
 	m.rules = append(m.rules, rules.NewUpdateDeleteMultiTableRule())
+	m.rules = append(m.rules, rules.NewFullScanRule())
+	m.rules = append(m.rules, rules.NewIndexColumnFuzzyMatchRule())
 }
 
-func (m *Manager) Analyze(sql string) []model.SqlDiagnoseInfo {
+func (m *Manager) Analyze(sql string, indexes []model.IndexInfo) []model.SqlDiagnoseInfo {
 	var diagnostics []model.SqlDiagnoseInfo
 
 	// Setup ANTLR input stream
@@ -52,7 +54,7 @@ func (m *Manager) Analyze(sql string) []model.SqlDiagnoseInfo {
 
 	// Run all registered rules
 	for _, rule := range m.rules {
-		results := rule.Analyze(tree)
+		results := rule.Analyze(tree, indexes)
 		diagnostics = append(diagnostics, results...)
 	}
 

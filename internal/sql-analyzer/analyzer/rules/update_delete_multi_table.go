@@ -25,7 +25,7 @@ func (r *UpdateDeleteMultiTableRule) Description() string {
 	return "UPDATE / DELETE does not recommend using multiple tables"
 }
 
-func (r *UpdateDeleteMultiTableRule) Analyze(tree antlr.ParseTree) []model.SqlDiagnoseInfo {
+func (r *UpdateDeleteMultiTableRule) Analyze(tree antlr.ParseTree, indexes []model.IndexInfo) []model.SqlDiagnoseInfo {
 	r.diagnoseResults = []model.SqlDiagnoseInfo{}
 	tree.Accept(r)
 	return r.diagnoseResults

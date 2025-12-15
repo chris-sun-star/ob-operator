@@ -32,7 +32,7 @@ func (r *SelectAllRule) Description() string {
 }
 
 // Analyze traverses the parse tree to find SELECT * statements
-func (r *SelectAllRule) Analyze(tree antlr.ParseTree) []model.SqlDiagnoseInfo {
+func (r *SelectAllRule) Analyze(tree antlr.ParseTree, indexes []model.IndexInfo) []model.SqlDiagnoseInfo {
 	r.diagnoseResults = []model.SqlDiagnoseInfo{} // Reset results for each analysis
 
 	// We manually walk the tree since ANTLR4 Go visitors don't have a generic "Walk" method that takes a visitor.

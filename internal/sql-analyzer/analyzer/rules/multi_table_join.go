@@ -27,7 +27,7 @@ func (r *MultiTableJoinRule) Description() string {
 	return "The number of association tables is not recommended to exceed 5"
 }
 
-func (r *MultiTableJoinRule) Analyze(tree antlr.ParseTree) []model.SqlDiagnoseInfo {
+func (r *MultiTableJoinRule) Analyze(tree antlr.ParseTree, indexes []model.IndexInfo) []model.SqlDiagnoseInfo {
 	r.diagnoseResults = []model.SqlDiagnoseInfo{}
 	r.joinCount = 0
 	tree.Accept(r)

@@ -25,7 +25,7 @@ func (r *UpdateDeleteWithoutWhereRule) Description() string {
 	return "UPDATE or DELETE statements should not be executed without a WHERE clause or with an always-true WHERE condition."
 }
 
-func (r *UpdateDeleteWithoutWhereRule) Analyze(tree antlr.ParseTree) []model.SqlDiagnoseInfo {
+func (r *UpdateDeleteWithoutWhereRule) Analyze(tree antlr.ParseTree, indexes []model.IndexInfo) []model.SqlDiagnoseInfo {
 	r.diagnoseResults = []model.SqlDiagnoseInfo{}
 	tree.Accept(r)
 	return r.diagnoseResults
