@@ -14,6 +14,7 @@ package handler
 
 import (
 	"github.com/gin-gonic/gin"
+	logger "github.com/sirupsen/logrus"
 
 	sqlbiz "github.com/oceanbase/ob-operator/internal/dashboard/business/sql"
 	"github.com/oceanbase/ob-operator/internal/dashboard/model/sql"
@@ -56,7 +57,14 @@ func ListSqlStats(c *gin.Context) ([]sql.SqlInfo, error) {
 	if err != nil {
 		return nil, httpErr.NewBadRequest(err.Error())
 	}
-	return sqlbiz.ListSqlStats(c, filter)
+	logger.Infof("ListSqlStats filter: %+v", filter)
+	res, err := sqlbiz.ListSqlStats(c, filter)
+	if err != nil {
+		logger.Errorf("ListSqlStats error: %v", err)
+		return nil, err
+	}
+	logger.Infof("ListSqlStats returned %d records", len(res))
+	return res, nil
 }
 
 // @ID ListRequestStatistics

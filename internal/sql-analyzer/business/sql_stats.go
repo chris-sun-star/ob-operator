@@ -18,6 +18,7 @@ import (
 
 	apimodel "github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/store"
+	"github.com/sirupsen/logrus"
 )
 
 var fixedDimensions = map[string]any{
@@ -199,17 +200,21 @@ var columnAggregations = map[string]string{
 }
 
 type SqlStatsService struct {
-	Store *store.SqlAuditStore
+	Store  *store.SqlAuditStore
+	Logger *logrus.Logger
 }
 
-func NewSqlStatsService(store *store.SqlAuditStore) *SqlStatsService {
+func NewSqlStatsService(store *store.SqlAuditStore, logger *logrus.Logger) *SqlStatsService {
 	return &SqlStatsService{
-		Store: store,
+		Store:  store,
+		Logger: logger,
 	}
 }
 
 func (s *SqlStatsService) QuerySqlStats(req *apimodel.QuerySqlStatsRequest) (*apimodel.SqlStatsResponse, error) {
 	filters := s.buildFilters(req)
+	s.Logger.Infof("QuerySqlStats filters: %+v", filters)
+
 	selectExpressions, groupByColumns := s.buildQueryParts(req.OutputColumns)
 
 	// Ensure all fixed dimensions are in the SELECT and GROUP BY clauses
@@ -237,6 +242,7 @@ func (s *SqlStatsService) QuerySqlStats(req *apimodel.QuerySqlStatsRequest) (*ap
 	if err != nil {
 		return nil, fmt.Errorf("failed to count sql audits: %w", err)
 	}
+	s.Logger.Infof("QuerySqlStats totalCount: %d", totalCount)
 
 	if totalCount == 0 {
 		return &apimodel.SqlStatsResponse{

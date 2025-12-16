@@ -110,10 +110,12 @@ func ListSqlStats(ctx context.Context, filter *sql.SqlFilter) ([]sql.SqlInfo, er
 		return nil, errors.Wrap(err, "Get ob tenant")
 	}
 
+	logger.Infof("Sending QuerySqlStatsRequest: %+v", req)
 	resp, err := QuerySqlStats(podIP, obtenant.Spec.TenantName, req)
 	if err != nil {
 		return nil, err
 	}
+	logger.Infof("QuerySqlStats returned %d items", len(resp.Items))
 
 	// Convert resp to []model.SqlInfo
 	sqlInfos := make([]sql.SqlInfo, 0, len(resp.Items))

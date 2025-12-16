@@ -17,6 +17,7 @@ import (
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/business"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/store"
+	logger "github.com/sirupsen/logrus"
 )
 
 // @Summary Query SQL statistics
@@ -36,6 +37,12 @@ func QuerySqlStats(c *gin.Context) (*model.SqlStatsResponse, error) {
 		return nil, err
 	}
 
+	l := HandlerLogger
+	if l == nil {
+		l = logger.StandardLogger()
+	}
+	l.WithField("req", req).Info("QuerySqlStats request")
+
 	// Set default pagination
 	if req.PageNum <= 0 {
 		req.PageNum = 1
@@ -51,6 +58,6 @@ func QuerySqlStats(c *gin.Context) (*model.SqlStatsResponse, error) {
 	}
 	defer auditStore.Close()
 
-	service := business.NewSqlStatsService(auditStore)
+	service := business.NewSqlStatsService(auditStore, l)
 	return service.QuerySqlStats(&req)
 }
