@@ -117,6 +117,7 @@ func (s *SqlAuditStore) InsertBatch(resultsSlices [][]model.SqlAudit) error {
 	if _, err := conn.ExecContext(context.Background(), fmt.Sprintf(sqlconst.CreateSqlAuditTempTableTemplate, tempTableName)); err != nil {
 		return fmt.Errorf("failed to create temp table: %w", err)
 	}
+	defer conn.ExecContext(context.Background(), fmt.Sprintf("DROP TABLE IF EXISTS %s", tempTableName))
 
 	// Use the appender to load data into the temp table.
 	err = conn.Raw(func(driverConn any) error {
