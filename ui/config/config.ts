@@ -19,4 +19,10 @@ export default defineConfig({
   history: { type: 'hash' },
   npmClient: 'yarn',
   jsMinifier: 'terser',
+  proxy: {
+    '/api': {
+      target: 'http://11.161.204.50:30275',
+      changeOrigin: true,
+    },
+  },
 });
