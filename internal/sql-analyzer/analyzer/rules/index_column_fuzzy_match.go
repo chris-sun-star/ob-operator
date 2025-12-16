@@ -69,13 +69,13 @@ func (r *IndexColumnFuzzyMatchRule) extractColumnInfo(bitExpr obmysql.IBit_exprC
 						colName := cr.Column_name().GetText()
 						// Strip backticks if present
 						colName = strings.Trim(colName, "`")
-						
-					tableName := ""
-					if len(cr.AllRelation_name()) > 0 {
-						tableName = cr.Relation_name(0).GetText()
-						tableName = strings.Trim(tableName, "`")
-					}
-					return colName, tableName
+
+						tableName := ""
+						if len(cr.AllRelation_name()) > 0 {
+							tableName = cr.Relation_name(0).GetText()
+							tableName = strings.Trim(tableName, "`")
+						}
+						return colName, tableName
 					}
 				}
 			}
@@ -89,7 +89,7 @@ func (r *IndexColumnFuzzyMatchRule) isColumnIndexed(tableName, colName string) b
 		if tableName != "" && !strings.EqualFold(idx.TableName, tableName) {
 			continue
 		}
-		
+
 		for _, idxCol := range idx.Columns {
 			if strings.EqualFold(idxCol, colName) {
 				return true
@@ -108,15 +108,15 @@ func (r *IndexColumnFuzzyMatchRule) isFuzzyMatch(ctx obmysql.ISimple_exprContext
 					val = cs.GetText()
 				}
 				// Removed STRING_VALUE check
-			
+
 				if val != "" {
 					val = strings.Trim(val, "'\"")
 					if strings.HasPrefix(val, "%") {
 						return true
 					}
-                    if strings.Contains(val, "%") && !strings.HasSuffix(val, "%") {
-                    	return true
-                    }
+					if strings.Contains(val, "%") && !strings.HasSuffix(val, "%") {
+						return true
+					}
 				}
 			}
 		}

@@ -31,8 +31,8 @@ func (r *FullScanRule) Description() string {
 func (r *FullScanRule) Analyze(tree antlr.ParseTree, indexes []model.IndexInfo) []model.SqlDiagnoseInfo {
 	r.diagnoseResults = []model.SqlDiagnoseInfo{}
 	r.hasSargablePred = false
-	
-tree.Accept(r)
+
+	tree.Accept(r)
 
 	if !r.hasSargablePred {
 		r.addResult()
@@ -79,7 +79,7 @@ func (r *FullScanRule) VisitPredicate(ctx *obmysql.PredicateContext) interface{}
 			}
 		}
 	}
-	
+
 	return r.BaseOBParserVisitor.VisitChildren(ctx)
 }
 
@@ -90,7 +90,7 @@ func (r *FullScanRule) isLeftFuzzy(ctx obmysql.ISimple_exprContext) bool {
 				if cs := l.Complex_string_literal(); cs != nil {
 					val := cs.GetText()
 					val = strings.Trim(val, "'\"")
-					if strings.HasPrefix(val, "%" ) {
+					if strings.HasPrefix(val, "%") {
 						return true
 					}
 				}
@@ -103,11 +103,11 @@ func (r *FullScanRule) isLeftFuzzy(ctx obmysql.ISimple_exprContext) bool {
 
 func (r *FullScanRule) VisitSimple_expr(ctx *obmysql.Simple_exprContext) interface{} {
 	if ctx.EXISTS() != nil {
-		// EXISTS implies subquery check. 
+		// EXISTS implies subquery check.
 		// Following Python logic where NOT EXISTS is considered "Range" (Good).
 		// But detecting NOT here is tricky without context.
-		// For now, if we see EXISTS, we treat it as SARGable to avoid false positives for subqueries 
-		// which might use indexes internally. 
+		// For now, if we see EXISTS, we treat it as SARGable to avoid false positives for subqueries
+		// which might use indexes internally.
 		// Improvement: check parent for NOT.
 		r.hasSargablePred = true
 	}

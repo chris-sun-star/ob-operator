@@ -3,6 +3,7 @@ module github.com/oceanbase/ob-operator
 go 1.24
 
 require (
+	github.com/antlr4-go/antlr/v4 v4.13.1
 	github.com/casbin/casbin/v2 v2.97.0
 	github.com/deckarep/golang-set v1.8.0
 	github.com/gin-contrib/gzip v0.0.6
@@ -61,7 +62,6 @@ require (
 	github.com/KyleBanks/depth v1.2.1 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/alecthomas/units v0.0.0-20231202071711-9a357b53e9c9 // indirect
-	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/apache/arrow-go/v18 v18.1.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/aws/aws-sdk-go v1.51.25 // indirect

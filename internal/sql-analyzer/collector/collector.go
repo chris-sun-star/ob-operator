@@ -20,14 +20,13 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
-	logger "github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/types"
-
 	"github.com/oceanbase/ob-operator/internal/clients"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/config"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/model"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/oceanbase"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/store"
+	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 const (
@@ -45,15 +44,17 @@ type Collector struct {
 	TenantID           uint64
 	PlanIdentifierChan chan *model.SqlPlanIdentifier
 	CompactionChan     chan struct{}
+	Logger             *logrus.Logger
 }
 
 // NewCollector creates a new Collector.
-func NewCollector(ctx context.Context, config *config.Config) *Collector {
+func NewCollector(ctx context.Context, config *config.Config, logger *logrus.Logger) *Collector {
 	c := &Collector{
 		Ctx:                ctx,
 		Config:             config,
 		PlanIdentifierChan: make(chan *model.SqlPlanIdentifier, config.QueueSize),
 		CompactionChan:     make(chan struct{}, 1),
+		Logger:             logger,
 	}
 	var err error
 	c.PlanCache, err = lru.New[model.SqlPlanIdentifier, struct{}](LRU_CACHE_SIZE)
@@ -99,7 +100,7 @@ func (c *Collector) Init() error {
 		return fmt.Errorf("failed to load request id from duckdb: %w", err)
 	} else {
 		for k, v := range lastRequestIDs {
-			logger.Infof("Retrieved progress for %s with request id %d from DuckDB.", k, v)
+			c.Logger.Infof("Retrieved progress for %s with request id %d from DuckDB.", k, v)
 		}
 	}
 	c.RequestIdMap = lastRequestIDs
@@ -143,14 +144,14 @@ func (c *Collector) Start() {
 		for {
 			select {
 			case <-c.CompactionChan:
-				logger.Println("Compaction signal received, running compaction...")
+				c.Logger.Println("Compaction signal received, running compaction...")
 				if err := c.SqlAuditStore.Compact(); err != nil {
-					logger.Errorf("Failed to compact sql audit data: %v", err)
+					c.Logger.Errorf("Failed to compact sql audit data: %v", err)
 				} else {
-					logger.Println("Sql audit data compacted successfully.")
+					c.Logger.Println("Sql audit data compacted successfully.")
 				}
 			case <-c.Ctx.Done():
-				logger.Println("Compaction worker stopped.")
+				c.Logger.Println("Compaction worker stopped.")
 				return
 			}
 		}
@@ -173,11 +174,11 @@ func (c *Collector) Start() {
 				case c.CompactionChan <- struct{}{}: // Send compaction signal
 					compactionCounter = 0 // Reset counter after sending signal
 				default:
-					logger.Warn("Compaction channel is full, skipping compaction signal.")
+					c.Logger.Warn("Compaction channel is full, skipping compaction signal.")
 				}
 			}
 		case <-c.Ctx.Done():
-			logger.Println("Collector stopped. Stopping plan workers...")
+			c.Logger.Println("Collector stopped. Stopping plan workers...")
 			close(c.PlanIdentifierChan)
 			wg.Wait() // Wait for all workers (plan and compaction) to finish
 			return

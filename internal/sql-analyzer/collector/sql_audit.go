@@ -20,8 +20,6 @@ import (
 
 	sqlconst "github.com/oceanbase/ob-operator/internal/sql-analyzer/const/sql"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/model"
-
-	logger "github.com/sirupsen/logrus"
 )
 
 // getMaxRequestIDs finds the latest request_id for each observer.
@@ -51,7 +49,7 @@ func (c *Collector) getMaxRequestIDs() (map[string]uint64, error) {
 func (c *Collector) collectSqlAuditData() {
 	maxRequestIDs, err := c.getMaxRequestIDs()
 	if err != nil {
-		logger.Errorf("Failed to get max request ids %v", err)
+		c.Logger.Errorf("Failed to get max request ids %v", err)
 	}
 
 	var wg sync.WaitGroup
@@ -67,7 +65,7 @@ func (c *Collector) collectSqlAuditData() {
 		wg.Add(1)
 		go func(svrIP string, lastRequestID uint64) {
 			defer wg.Done()
-			logger.Printf("Collecting from observer %s since request_id %d", svrIP, lastRequestID)
+			c.Logger.Printf("Collecting from observer %s since request_id %d", svrIP, lastRequestID)
 			data, err := c.collectSqlAuditByOBServer(svrIP, lastRequestID)
 			if err != nil {
 				errChan <- fmt.Errorf("failed to collect from observer %s: %w", svrIP, err)
@@ -89,7 +87,7 @@ func (c *Collector) collectSqlAuditData() {
 	}
 
 	for err := range errChan {
-		logger.Println("Error during collection:", err) // Log errors but don't fail the whole batch
+		c.Logger.Println("Error during collection:", err) // Log errors but don't fail the whole batch
 	}
 
 	totalRecords := 0
@@ -108,13 +106,13 @@ func (c *Collector) collectSqlAuditData() {
 			}
 		}
 	}
-	logger.Printf("Collected %d new audit records.", totalRecords)
+	c.Logger.Printf("Collected %d new audit records.", totalRecords)
 
 	if totalRecords > 0 {
 		if err := c.SqlAuditStore.InsertBatch(allResults); err != nil {
-			logger.Printf("Error inserting data into DuckDB: %v", err)
+			c.Logger.Printf("Error inserting data into DuckDB: %v", err)
 		} else {
-			logger.Printf("Saved %d sql audit records", totalRecords)
+			c.Logger.Printf("Saved %d sql audit records", totalRecords)
 		}
 	}
 
@@ -123,17 +121,17 @@ func (c *Collector) collectSqlAuditData() {
 func (c *Collector) PushPlan(plan *model.SqlPlanIdentifier) {
 	// Check cache first. This is thread-safe.
 	if c.PlanCache.Contains(*plan) {
-		logger.Debugf("Plan %v already in cache, skipping.", plan)
+		c.Logger.Debugf("Plan %v already in cache, skipping.", plan)
 		return
 	}
 
 	// If not in cache, check DuckDB without holding any lock.
 	existsInDuckDB, err := c.SqlPlanStore.PlanExists(*plan)
 	if err != nil {
-		logger.Errorf("Error checking plan existence in DuckDB for %v: %v", plan, err)
+		c.Logger.Errorf("Error checking plan existence in DuckDB for %v: %v", plan, err)
 		// If we can't check DuckDB, we'll proceed to collect it, but first add to cache.
 	} else if existsInDuckDB {
-		logger.Debugf("Plan %v found in DuckDB, adding to cache and skipping.", plan)
+		c.Logger.Debugf("Plan %v found in DuckDB, adding to cache and skipping.", plan)
 		// Add to cache and skip pushing to channel.
 		c.PlanCache.Add(*plan, struct{}{})
 		return

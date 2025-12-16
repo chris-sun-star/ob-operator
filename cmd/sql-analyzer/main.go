@@ -16,37 +16,47 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
 
-	logger "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
+	"gopkg.in/natefinch/lumberjack.v2"
 
 	webserver "github.com/oceanbase/ob-operator/internal/server"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/collector"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/config"
+	"github.com/oceanbase/ob-operator/internal/sql-analyzer/handler"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/router"
-	"github.com/oceanbase/ob-operator/pkg/log"
 )
 
 const (
 	PlanWorkerCount = 4
 )
 
-func init() {
-	logLevel := os.Getenv("LOG_LEVEL")
-	if logLevel == "" {
-		logLevel = "info"
+func newLogger(filename string, level string) *logrus.Logger {
+	l := logrus.New()
+	l.SetOutput(&lumberjack.Logger{
+		Filename:   filename,
+		MaxSize:    100, // megabytes
+		MaxBackups: 3,
+		MaxAge:     28,   // days
+		Compress:   true, // disabled by default
+	})
+
+	lLevel, err := logrus.ParseLevel(level)
+	if err != nil {
+		lLevel = logrus.InfoLevel
 	}
-	log.InitLogger(
-		log.LoggerConfig{
-			Level:  logLevel,
-			Output: os.Stdout, // Log to standard output
-		},
-	)
+	l.SetLevel(lLevel)
+	l.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp: true,
+	})
+	return l
 }
 
-func startHttpServer(ctx context.Context) *webserver.HTTPServer {
+func startHttpServer(ctx context.Context, logger *logrus.Logger) *webserver.HTTPServer {
 	httpServer := webserver.NewHTTPServer(ctx)
 	router.Register(httpServer.Router)
 	logger.Info("Successfully registered router")
@@ -65,13 +75,28 @@ func main() {
 	namespace := os.Getenv("NAMESPACE")
 	obtenant := os.Getenv("OBTENANT")
 	dataPath := os.Getenv("DATA_PATH")
+	logLevel := os.Getenv("LOG_LEVEL")
+	if logLevel == "" {
+		logLevel = "info"
+	}
 
 	if namespace == "" || obtenant == "" {
-		logger.Fatalf("NAMESPACE, OBTENANT environment variables must be set.")
+		logrus.Fatalf("NAMESPACE, OBTENANT environment variables must be set.")
 	}
 	if dataPath == "" {
 		dataPath = "."
 	}
+
+	// Initialize Loggers
+	collectorLogPath := filepath.Join(dataPath, "collector.log")
+	analyzerLogPath := filepath.Join(dataPath, "analyzer.log")
+
+	collectorLogger := newLogger(collectorLogPath, logLevel)
+	analyzerLogger := newLogger(analyzerLogPath, logLevel)
+
+	// Set analyzer logger for handlers
+	handler.HandlerLogger = analyzerLogger
+
 	// Set up a context that is canceled on interruption signals.
 	ctx, cancel := context.WithCancel(context.Background())
 	sigChan := make(chan os.Signal, 1)
@@ -84,7 +109,7 @@ func main() {
 		if val, err := strconv.Atoi(intervalStr); err == nil && val > 0 {
 			collectionIntervalSeconds = val
 		} else {
-			logger.Printf("Invalid COLLECTION_INTERVAL_SECONDS value '%s', using default of 30 seconds.", intervalStr)
+			analyzerLogger.Printf("Invalid COLLECTION_INTERVAL_SECONDS value '%s', using default of 30 seconds.", intervalStr)
 		}
 	}
 
@@ -95,7 +120,7 @@ func main() {
 		if val, err := strconv.Atoi(compactionIntervalStr); err == nil && val > 0 {
 			compactionIntervalSeconds = val
 		} else {
-			logger.Printf("Invalid COMPACTION_INTERVAL_SECONDS value '%s', using default of 3600 seconds.", compactionIntervalStr)
+			analyzerLogger.Printf("Invalid COMPACTION_INTERVAL_SECONDS value '%s', using default of 3600 seconds.", compactionIntervalStr)
 		}
 	}
 
@@ -111,7 +136,7 @@ func main() {
 		if val, err := strconv.Atoi(sqlAuditLimitStr); err == nil && val > 0 {
 			sqlAuditLimit = val
 		} else {
-			logger.Printf("Invalid SQL_AUDIT_LIMIT value '%s', using default of 10000.", sqlAuditLimitStr)
+			analyzerLogger.Printf("Invalid SQL_AUDIT_LIMIT value '%s', using default of 10000.", sqlAuditLimitStr)
 		}
 	}
 
@@ -122,7 +147,7 @@ func main() {
 		if val, err := strconv.Atoi(slowSqlThresholdMilliSecondsStr); err == nil && val >= 0 {
 			slowSqlThresholdMilliSeconds = val
 		} else {
-			logger.Printf("Invalid SLOW_SQL_THRESHOLD_MILLISECONDS value '%s', using default of 1000ms.", slowSqlThresholdMilliSecondsStr)
+			analyzerLogger.Printf("Invalid SLOW_SQL_THRESHOLD_MILLISECONDS value '%s', using default of 1000ms.", slowSqlThresholdMilliSecondsStr)
 		}
 	}
 
@@ -139,20 +164,20 @@ func main() {
 		WorkerNum: 4,
 	}
 
-	collector := collector.NewCollector(ctx, config)
+	collector := collector.NewCollector(ctx, config, collectorLogger)
 	if err := collector.Init(); err != nil {
-		logger.Fatalf("Failed to initialize collector: %v", err)
+		collectorLogger.Fatalf("Failed to initialize collector: %v", err)
 	}
 	go collector.Start()
 
-	httpServer := startHttpServer(ctx)
+	httpServer := startHttpServer(ctx, analyzerLogger)
 	// Wait for a shutdown signal
 	<-sigChan
-	logger.Println("Shutdown signal received, stopping...")
+	analyzerLogger.Println("Shutdown signal received, stopping...")
 	// Trigger graceful shutdown
 	cancel()
 	// Stop the collector
 	collector.Stop()
 	httpServer.Stop()
-	logger.Println("Shutdown complete.")
+	analyzerLogger.Println("Shutdown complete.")
 }

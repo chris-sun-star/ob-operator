@@ -31,7 +31,7 @@ func (r *MultiTableJoinRule) Analyze(tree antlr.ParseTree, indexes []model.Index
 	r.diagnoseResults = []model.SqlDiagnoseInfo{}
 	r.joinCount = 0
 	tree.Accept(r)
-	
+
 	if r.joinCount > 5 {
 		r.diagnoseResults = append(r.diagnoseResults, model.SqlDiagnoseInfo{
 			RuleName:   r.Name(),
@@ -40,14 +40,14 @@ func (r *MultiTableJoinRule) Analyze(tree antlr.ParseTree, indexes []model.Index
 			Reason:     fmt.Sprintf("The query involves %d tables in JOIN operations, exceeding the recommended limit of 5.", r.joinCount),
 		})
 	}
-	
+
 	return r.diagnoseResults
 }
 
 func (r *MultiTableJoinRule) VisitJoined_table(ctx *obmysql.Joined_tableContext) interface{} {
 	// joined_table : table_factor inner_join_type table_factor ...
 	// Every time we visit a joined_table node, it implies a join operation.
-	// Note: joined_table is recursive. 
+	// Note: joined_table is recursive.
 	// A JOIN B JOIN C
 	// joined_table( joined_table(A, B), C )
 	// So visiting each node counts 1 join.
@@ -61,7 +61,7 @@ func (r *MultiTableJoinRule) VisitJoined_table(ctx *obmysql.Joined_tableContext)
 	// Python: `if self.join_count >= 5: match = True`.
 	// It warns "involves {join_count} tables". Actually if join_count is 5, it means 6 tables (usually).
 	// But let's stick to the logic: count joins.
-	
+
 	r.joinCount++
 	return r.BaseOBParserVisitor.VisitChildren(ctx)
 }

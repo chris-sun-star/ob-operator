@@ -43,7 +43,7 @@ func (r *UpdateDeleteMultiTableRule) VisitUpdate_stmt(ctx *obmysql.Update_stmtCo
 	// update_stmt: UPDATE ... table_references ...
 	// table_references -> table_reference (Comma table_reference)*
 	// table_reference -> joined_table
-	
+
 	refs := ctx.Table_references()
 	if refs != nil {
 		tr, ok := refs.(*obmysql.Table_referencesContext)

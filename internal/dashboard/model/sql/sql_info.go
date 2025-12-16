@@ -62,7 +62,7 @@ type SqlInfo struct {
 type SqlDetailedInfo struct {
 	ExecutionTrend []response.MetricData `json:"executionTrend" binding:"required"`
 	LatencyTrend   []response.MetricData `json:"latencyTrend" binding:"required"`
-	DiagnoseInfo   []SqlDiagnoseInfo      `json:"diagnoseInfo,omitempty"`
-	Plans          []PlanStatistic        `json:"plans" binding:"required"`
-	Indexies       []IndexInfo            `json:"indexies,omitempty"`
+	DiagnoseInfo   []SqlDiagnoseInfo     `json:"diagnoseInfo,omitempty"`
+	Plans          []PlanStatistic       `json:"plans" binding:"required"`
+	Indexies       []IndexInfo           `json:"indexies,omitempty"`
 }

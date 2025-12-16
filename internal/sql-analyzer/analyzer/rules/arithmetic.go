@@ -34,16 +34,16 @@ func (r *ArithmeticRule) Analyze(tree antlr.ParseTree, indexes []model.IndexInfo
 func (r *ArithmeticRule) VisitBit_expr(ctx *obmysql.Bit_exprContext) interface{} {
 	// Check for arithmetic operators
 	if ctx.Plus() != nil || ctx.Minus() != nil || ctx.Star() != nil || ctx.Div() != nil || ctx.Mod() != nil || ctx.MOD() != nil || ctx.DIV() != nil {
-		// Bit_expr has children. 
+		// Bit_expr has children.
 		// Grammar: bit_expr operator bit_expr
 		// If it has an operator, it likely has 3 children (left, op, right) or more if chained?
 		// ANTLR usually creates a list of Bit_expr children.
-		
+
 		exprs := ctx.AllBit_expr()
 		if len(exprs) >= 2 {
 			left := exprs[0]
 			right := exprs[1]
-			
+
 			if r.isColumn(left) || r.isColumn(right) {
 				r.diagnoseResults = append(r.diagnoseResults, model.SqlDiagnoseInfo{
 					RuleName:   r.Name(),
@@ -63,7 +63,7 @@ func (r *ArithmeticRule) isColumn(ctx obmysql.IBit_exprContext) bool {
 	if !ok {
 		return false
 	}
-	
+
 	// bit_expr -> simple_expr
 	if c.Simple_expr() != nil {
 		s, ok := c.Simple_expr().(*obmysql.Simple_exprContext)

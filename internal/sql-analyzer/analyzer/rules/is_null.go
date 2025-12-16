@@ -40,7 +40,7 @@ func (r *IsNullRule) VisitBool_pri(ctx *obmysql.Bool_priContext) interface{} {
 	// If it contains `IS` and `NULLX`, it's a correct usage, so we skip it for this rule.
 	if ctx.IS() != nil && ctx.NULLX() != nil {
 		// This is a correct usage (`IS NULL`), so we skip it for this rule.
-		return r.BaseOBParserVisitor.VisitChildren(ctx) 
+		return r.BaseOBParserVisitor.VisitChildren(ctx)
 	}
 	if ctx.IS() != nil && ctx.Not() != nil && ctx.NULLX() != nil {
 		// This is also a correct usage (`IS NOT NULL`), skip.
@@ -54,14 +54,14 @@ func (r *IsNullRule) VisitBool_pri(ctx *obmysql.Bool_priContext) interface{} {
 		// A Bool_priContext representing a comparison usually has a left-hand side (recursive Bool_pri)
 		// and a right-hand side (Predicate).
 		// We need to check if either operand directly resolves to a NULL literal.
-		
+
 		leftOperandIsLiteralNull := false
-		if ctx.Bool_pri() != nil { 
+		if ctx.Bool_pri() != nil {
 			leftOperandIsLiteralNull = r.containsNullLiteral(ctx.Bool_pri())
 		}
 
 		rightOperandIsLiteralNull := false
-		if ctx.Predicate() != nil { 
+		if ctx.Predicate() != nil {
 			rightOperandIsLiteralNull = r.containsNullLiteral(ctx.Predicate())
 		}
 
@@ -84,26 +84,26 @@ func (r *IsNullRule) addResult() {
 
 // containsNullLiteral recursively checks if any descendant of the given ParseTree is a NULLX literal.
 func (r *IsNullRule) containsNullLiteral(node antlr.ParseTree) bool {
-    if node == nil {
-        return false
-    }
+	if node == nil {
+		return false
+	}
 
-    if literalCtx, ok := node.(obmysql.ILiteralContext); ok && literalCtx.NULLX() != nil {
-        return true
-    }
-    
-    // Check if the node itself is a NULLX terminal node
-    if terminalNode, ok := node.(antlr.TerminalNode); ok && terminalNode.GetSymbol().GetTokenType() == obmysql.OBParserNULLX {
-        return true
-    }
+	if literalCtx, ok := node.(obmysql.ILiteralContext); ok && literalCtx.NULLX() != nil {
+		return true
+	}
 
-    // Recursively check children
-    for _, child := range node.GetChildren() {
-        if parseTreeChild, ok := child.(antlr.ParseTree); ok {
-            if r.containsNullLiteral(parseTreeChild) {
-                return true
-            }
-        }
-    }
-    return false
+	// Check if the node itself is a NULLX terminal node
+	if terminalNode, ok := node.(antlr.TerminalNode); ok && terminalNode.GetSymbol().GetTokenType() == obmysql.OBParserNULLX {
+		return true
+	}
+
+	// Recursively check children
+	for _, child := range node.GetChildren() {
+		if parseTreeChild, ok := child.(antlr.ParseTree); ok {
+			if r.containsNullLiteral(parseTreeChild) {
+				return true
+			}
+		}
+	}
+	return false
 }

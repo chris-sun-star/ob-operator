@@ -50,7 +50,7 @@ func (r *FunctionOnIndexedColumnRule) VisitFunc_expr(ctx *obmysql.Func_exprConte
 	if !r.inPredicate {
 		return r.BaseOBParserVisitor.VisitChildren(ctx)
 	}
-	
+
 	oldFunction := r.inFunction
 	r.inFunction = true
 	defer func() { r.inFunction = oldFunction }()

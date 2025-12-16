@@ -22,11 +22,16 @@ import (
 	logger "github.com/sirupsen/logrus"
 )
 
+var HandlerLogger *logger.Logger
+
 type Handler[T any] func(c *gin.Context) (T, error)
 
 func logHandlerError(c *gin.Context, err error) {
-	logger.
-		WithField("Method", c.Request.Method).
+	l := HandlerLogger
+	if l == nil {
+		l = logger.StandardLogger()
+	}
+	l.WithField("Method", c.Request.Method).
 		WithField("Request URI", c.Request.RequestURI).
 		WithField("Request ID", requestid.Get(c)).
 		WithError(err).
@@ -48,6 +53,16 @@ func Wrap[T any](h Handler[T]) gin.HandlerFunc {
 			logHandlerError(c, err)
 			// ensure that the response is nil
 			res = *new(T)
+		} else {
+			// Log success if needed, or essential info
+			l := HandlerLogger
+			if l == nil {
+				l = logger.StandardLogger()
+			}
+			l.WithField("Method", c.Request.Method).
+				WithField("Request URI", c.Request.RequestURI).
+				WithField("Request ID", requestid.Get(c)).
+				Info("handler success")
 		}
 		c.JSON(statusCode, &model.APIResponse{
 			Data:       res,

@@ -54,23 +54,28 @@ func GetSqlDetailInfo(c *gin.Context) (*model.SqlDetailResponse, error) {
 	obTenantName := os.Getenv("OBTENANT")
 
 	var cm *oceanbase.ConnectionManager
+	l := HandlerLogger
+	if l == nil {
+		l = logger.StandardLogger()
+	}
+
 	if namespace != "" && obTenantName != "" {
 		obtenant, err := clients.GetOBTenant(c.Request.Context(), types.NamespacedName{
 			Namespace: namespace,
 			Name:      obTenantName,
 		})
 		if err != nil {
-			logger.Warnf("Failed to get OBTenant %s/%s: %v", namespace, obTenantName, err)
+			l.Warnf("Failed to get OBTenant %s/%s: %v", namespace, obTenantName, err)
 		} else {
 			obcluster, err := clients.GetOBCluster(c.Request.Context(), namespace, obtenant.Spec.ClusterName)
 			if err != nil {
-				logger.Warnf("Failed to get OBCluster %s/%s: %v", namespace, obtenant.Spec.ClusterName, err)
+				l.Warnf("Failed to get OBCluster %s/%s: %v", namespace, obtenant.Spec.ClusterName, err)
 			} else {
 				cm = oceanbase.NewConnectionManager(c.Request.Context(), obcluster)
 			}
 		}
 	} else {
-		logger.Warn("NAMESPACE or OBTENANT env not set, skipping index query")
+		l.Warn("NAMESPACE or OBTENANT env not set, skipping index query")
 	}
 
 	return business.GetSqlDetailInfo(c, cm, auditStore, planStore, req)

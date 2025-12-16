@@ -34,7 +34,7 @@ func (r *UpdateDeleteWithoutWhereRule) Analyze(tree antlr.ParseTree, indexes []m
 func (r *UpdateDeleteWithoutWhereRule) VisitDelete_stmt(ctx *obmysql.Delete_stmtContext) interface{} {
 	// delete_stmt: DELETE ... (WHERE expr)? ...
 	// If WHERE is missing, expr will be nil.
-	
+
 	if ctx.WHERE() == nil {
 		r.addResult()
 	} else if ctx.Expr() != nil {
@@ -47,7 +47,7 @@ func (r *UpdateDeleteWithoutWhereRule) VisitDelete_stmt(ctx *obmysql.Delete_stmt
 
 func (r *UpdateDeleteWithoutWhereRule) VisitUpdate_stmt(ctx *obmysql.Update_stmtContext) interface{} {
 	// update_stmt: UPDATE ... (WHERE expr)? ...
-	
+
 	if ctx.WHERE() == nil {
 		r.addResult()
 	} else if ctx.Expr() != nil {
@@ -71,13 +71,15 @@ func (r *UpdateDeleteWithoutWhereRule) addResult() {
 func (r *UpdateDeleteWithoutWhereRule) isAlwaysTrue(ctx obmysql.IExprContext) bool {
 	// expr -> bool_pri -> bit_expr -> simple_expr -> expr_const -> literal -> INTNUM
 	// or bool_pri COMP_EQ bool_pri
-	
+
 	// This is complex to implement fully without an evaluator.
 	// We implement a basic check for literal equality (e.g., 1=1).
-	
+
 	e, ok := ctx.(*obmysql.ExprContext)
-	if !ok { return false }
-	
+	if !ok {
+		return false
+	}
+
 	if e.Bool_pri() != nil {
 		b, ok := e.Bool_pri().(*obmysql.Bool_priContext)
 		if ok {
@@ -88,7 +90,7 @@ func (r *UpdateDeleteWithoutWhereRule) isAlwaysTrue(ctx obmysql.IExprContext) bo
 				// If we have "1 = 1", it might be:
 				// bool_pri (1) COMP_EQ predicate(bit_expr(1))
 				// or bool_pri(1) COMP_EQ bool_pri(1) ?
-				
+
 				// Simplified check: Get text of left and right
 				// This is "cheating" but effective for "1=1"
 				if b.Bool_pri() != nil && b.Predicate() != nil {
@@ -101,6 +103,6 @@ func (r *UpdateDeleteWithoutWhereRule) isAlwaysTrue(ctx obmysql.IExprContext) bo
 			}
 		}
 	}
-	
+
 	return false
 }

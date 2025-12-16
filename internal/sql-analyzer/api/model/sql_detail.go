@@ -16,7 +16,7 @@ type PlanTypeTrend struct {
 }
 
 type LatencyTrendItem struct {
-	Time  int64            `json:"time"`
+	Time  int64              `json:"time"`
 	Value map[string]float64 `json:"value"`
 }
 
