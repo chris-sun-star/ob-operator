@@ -53,12 +53,20 @@ func QuerySqlStats(host string, tenantName string, req model.QuerySqlStatsReques
 		return nil, fmt.Errorf("sql-analyzer returned non-200 status: %d, body: %s", resp.StatusCode, string(respBody))
 	}
 
-	var sqlStatsResp model.SqlStatsResponse
-	if err := json.Unmarshal(respBody, &sqlStatsResp); err != nil {
+	var apiResp struct {
+		Successful bool                    `json:"successful"`
+		Message    string                  `json:"message"`
+		Data       *model.SqlStatsResponse `json:"data"`
+	}
+	if err := json.Unmarshal(respBody, &apiResp); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal response body")
 	}
 
-	return &sqlStatsResp, nil
+	if !apiResp.Successful {
+		return nil, fmt.Errorf("sql-analyzer returned error: %s", apiResp.Message)
+	}
+
+	return apiResp.Data, nil
 }
 
 func QueryRequestStatistics(host string, tenantName string, req model.RequestStatisticsRequest) (*model.RequestStatisticsResponse, error) {
@@ -90,12 +98,20 @@ func QueryRequestStatistics(host string, tenantName string, req model.RequestSta
 		return nil, fmt.Errorf("sql-analyzer returned non-200 status: %d, body: %s", resp.StatusCode, string(respBody))
 	}
 
-	var requestStatsResp model.RequestStatisticsResponse
-	if err := json.Unmarshal(respBody, &requestStatsResp); err != nil {
+	var apiResp struct {
+		Successful bool                             `json:"successful"`
+		Message    string                           `json:"message"`
+		Data       *model.RequestStatisticsResponse `json:"data"`
+	}
+	if err := json.Unmarshal(respBody, &apiResp); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal response body")
 	}
 
-	return &requestStatsResp, nil
+	if !apiResp.Successful {
+		return nil, fmt.Errorf("sql-analyzer returned error: %s", apiResp.Message)
+	}
+
+	return apiResp.Data, nil
 }
 
 func QuerySqlDetail(host string, tenantName string, req model.SqlDetailRequest) (*model.SqlDetailResponse, error) {
@@ -127,12 +143,20 @@ func QuerySqlDetail(host string, tenantName string, req model.SqlDetailRequest) 
 		return nil, fmt.Errorf("sql-analyzer returned non-200 status: %d, body: %s", resp.StatusCode, string(respBody))
 	}
 
-	var sqlDetailResp model.SqlDetailResponse
-	if err := json.Unmarshal(respBody, &sqlDetailResp); err != nil {
+	var apiResp struct {
+		Successful bool                     `json:"successful"`
+		Message    string                   `json:"message"`
+		Data       *model.SqlDetailResponse `json:"data"`
+	}
+	if err := json.Unmarshal(respBody, &apiResp); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal response body")
 	}
 
-	return &sqlDetailResp, nil
+	if !apiResp.Successful {
+		return nil, fmt.Errorf("sql-analyzer returned error: %s", apiResp.Message)
+	}
+
+	return apiResp.Data, nil
 }
 
 func QueryPlanDetail(host string, tenantName string, req analyticmodel.SqlPlanIdentifier) ([]analyticmodel.SqlPlan, error) {
@@ -164,10 +188,18 @@ func QueryPlanDetail(host string, tenantName string, req analyticmodel.SqlPlanId
 		return nil, fmt.Errorf("sql-analyzer returned non-200 status: %d, body: %s", resp.StatusCode, string(respBody))
 	}
 
-	var planDetailResp []analyticmodel.SqlPlan
-	if err := json.Unmarshal(respBody, &planDetailResp); err != nil {
+	var apiResp struct {
+		Successful bool                      `json:"successful"`
+		Message    string                    `json:"message"`
+		Data       []analyticmodel.SqlPlan `json:"data"`
+	}
+	if err := json.Unmarshal(respBody, &apiResp); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal response body")
 	}
 
-	return planDetailResp, nil
+	if !apiResp.Successful {
+		return nil, fmt.Errorf("sql-analyzer returned error: %s", apiResp.Message)
+	}
+
+	return apiResp.Data, nil
 }
