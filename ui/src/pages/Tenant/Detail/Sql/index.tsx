@@ -1,11 +1,15 @@
 import { DATE_TIME_FORMAT, DateSelectOption } from '@/constants/datetime';
-import { listSqlStats } from '@/services/sql';
+import { listSqlMetrics, listSqlStats } from '@/services/sql';
+import { SettingOutlined } from '@ant-design/icons';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
-import { useParams } from '@umijs/max';
+import { useParams, useRequest } from '@umijs/max';
+import { Button } from 'antd';
 import type { RangePickerProps } from 'antd/es/date-picker';
 import dayjs from 'dayjs';
-import { useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { getLocale } from 'umi';
+import ColumnSelectionDrawer from './ColumnSelectionDrawer';
 
 export default function SqlList() {
   const { ns, name, tenantName } = useParams<{
@@ -14,6 +18,36 @@ export default function SqlList() {
     tenantName: string;
   }>();
   const actionRef = useRef<ActionType>();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedMetricKeys, setSelectedMetricKeys] = useState<string[]>([]);
+
+  // Helper to robustly extract metrics array regardless of response format
+  const getMetricsList = (data: any): API.SqlMetricMetaCategory[] => {
+    if (!data) return [];
+    if (Array.isArray(data)) return data;
+    if (data.data && Array.isArray(data.data)) return data.data;
+    return [];
+  };
+
+  // Fetch metric metadata to know available columns and defaults
+  const { data: metricsData } = useRequest(
+    () =>
+      listSqlMetrics({ language: getLocale() === 'zh-CN' ? 'zh_CN' : 'en_US' }),
+    {
+      onSuccess: (data) => {
+        const list = getMetricsList(data);
+        const defaults: string[] = [];
+        list.forEach((category) => {
+          category.metrics.forEach((metric) => {
+            if (metric.displayByDefault) {
+              defaults.push(metric.key);
+            }
+          });
+        });
+        setSelectedMetricKeys(defaults);
+      },
+    },
+  );
 
   const initialTimeRange: [dayjs.Dayjs, dayjs.Dayjs] = [
     dayjs().subtract(30, 'minute'),
@@ -57,6 +91,38 @@ export default function SqlList() {
     return current && current > dayjs().endOf('day');
   };
 
+  // Generate dynamic columns based on selected keys and metadata
+  const dynamicColumns: ProColumns<API.SqlInfo>[] = useMemo(() => {
+    const list = getMetricsList(metricsData);
+    if (list.length === 0 || selectedMetricKeys.length === 0) return [];
+
+    const cols: ProColumns<API.SqlInfo>[] = [];
+    // Flatten metrics map for easy lookup
+    const metricMap = new Map<string, API.SqlMetricMeta>();
+    list.forEach((cat) => {
+      cat.metrics.forEach((m) => metricMap.set(m.key, m));
+    });
+
+    selectedMetricKeys.forEach((key) => {
+      const meta = metricMap.get(key);
+      if (meta) {
+        cols.push({
+          title: meta.name,
+          dataIndex: key, // Not strictly used for lookup but good for keying
+          search: false,
+          width: 120,
+          render: (_, record) => {
+            const stat =
+              record.executionStatistics?.find((s) => s.name === key) ||
+              record.latencyStatistics?.find((s) => s.name === key);
+            return stat ? stat.value : '-';
+          },
+        });
+      }
+    });
+    return cols;
+  }, [metricsData, selectedMetricKeys]);
+
   const columns: ProColumns<API.SqlInfo>[] = [
     {
       title: 'SQL ID',
@@ -64,6 +130,7 @@ export default function SqlList() {
       copyable: true,
       ellipsis: true,
       width: 150,
+      fixed: 'left',
       order: 10,
       render: (dom, record) => (
         <a
@@ -78,6 +145,7 @@ export default function SqlList() {
       dataIndex: 'querySql',
       ellipsis: true,
       search: false,
+      width: 200,
     },
     {
       title: 'Database',
@@ -97,6 +165,7 @@ export default function SqlList() {
       width: 120,
       search: false,
     },
+    ...dynamicColumns,
     {
       title: 'Time Range',
       dataIndex: 'timeRange',
@@ -126,53 +195,76 @@ export default function SqlList() {
   ];
 
   return (
-    <ProTable<API.SqlInfo>
-      headerTitle="SQL Analysis"
-      actionRef={actionRef}
-      rowKey="sqlId"
-      form={{
-        initialValues: {
-          timeRange: initialTimeRange,
-        },
-      }}
-      search={{
-        collapsed: false,
-        collapseRender: false,
-        labelWidth: 'auto',
-      }}
-      request={async (params, sort) => {
-        if (!ns || !name || !tenantName) {
-          return { data: [], success: false };
-        }
+    <>
+      <ProTable<API.SqlInfo>
+        headerTitle="SQL Analysis"
+        actionRef={actionRef}
+        rowKey="sqlId"
+        form={{
+          initialValues: {
+            timeRange: initialTimeRange,
+          },
+        }}
+        search={{
+          collapsed: false,
+          collapseRender: false,
+          labelWidth: 'auto',
+        }}
+        toolBarRender={() => [
+          <Button
+            key="column-selection"
+            icon={<SettingOutlined />}
+            onClick={() => setDrawerOpen(true)}
+          >
+            Column Selection
+          </Button>,
+        ]}
+        scroll={{ x: 'max-content' }}
+        request={async (params, sort) => {
+          if (!ns || !name || !tenantName) {
+            return { data: [], success: false };
+          }
 
-        const { startTime, endTime, ...restParams } = params;
+          const { startTime, endTime, ...restParams } = params;
 
-        // Ensure startTime and endTime are present, defaulting to initialTimeRange if not
-        const effectiveStartTime = startTime ?? initialTimeRange[0].unix();
-        const effectiveEndTime = endTime ?? initialTimeRange[1].unix();
+          // Ensure startTime and endTime are present, defaulting to initialTimeRange if not
+          const effectiveStartTime = startTime ?? initialTimeRange[0].unix();
+          const effectiveEndTime = endTime ?? initialTimeRange[1].unix();
 
-        const msg = await listSqlStats({
-          namespace: ns,
-          obtenant: name,
-          sortColumn: Object.keys(sort)[0],
-          sortOrder: Object.values(sort)[0] === 'ascend' ? 'asc' : 'desc',
-          pageNum: restParams.current,
-          pageSize: restParams.pageSize,
-          keyword: restParams.querySql as string,
-          startTime: effectiveStartTime,
-          endTime: effectiveEndTime,
-        });
+          const msg = await listSqlStats({
+            namespace: ns,
+            obtenant: name,
+            sortColumn: Object.keys(sort)[0],
+            sortOrder: Object.values(sort)[0] === 'ascend' ? 'asc' : 'desc',
+            pageNum: restParams.current,
+            pageSize: restParams.pageSize,
+            keyword: restParams.querySql as string,
+            startTime: effectiveStartTime,
+            endTime: effectiveEndTime,
+            outputColumns: selectedMetricKeys,
+          });
 
-        return {
-          data: msg.data,
-          success: msg.successful,
-          total: msg.data?.length || 0,
-        };
-      }}
-      columns={columns}
-      pagination={{
-        pageSize: 10,
-      }}
-    />
+          return {
+            data: msg.data,
+            success: msg.successful,
+            total: msg.data?.length || 0,
+          };
+        }}
+        columns={columns}
+        pagination={{
+          pageSize: 10,
+        }}
+      />
+      <ColumnSelectionDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        selectedKeys={selectedMetricKeys}
+        onSelectionChange={(keys) => {
+          setSelectedMetricKeys(keys);
+          actionRef.current?.reload();
+        }}
+        metrics={getMetricsList(metricsData)}
+      />
+    </>
   );
 }
