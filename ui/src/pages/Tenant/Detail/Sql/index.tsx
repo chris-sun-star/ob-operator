@@ -91,6 +91,16 @@ export default function SqlList() {
     return current && current > dayjs().endOf('day');
   };
 
+  const metaFieldMap: Record<string, keyof API.SqlMetaInfo> = {
+    query_sql: 'querySql',
+    db_name: 'dbName',
+    user_name: 'userName',
+    sql_id: 'sqlId',
+    svr_ip: 'svrIp',
+    svr_port: 'svrPort',
+    client_ip: 'clientIp',
+  };
+
   // Generate dynamic columns based on selected keys and metadata
   const dynamicColumns: ProColumns<API.SqlInfo>[] = useMemo(() => {
     const list = getMetricsList(metricsData);
@@ -104,65 +114,48 @@ export default function SqlList() {
 
     allMetrics.forEach((metric) => {
       if (selectedMetricKeys.includes(metric.key)) {
-        cols.push({
+        const colConfig: ProColumns<API.SqlInfo> = {
           title: metric.name,
           dataIndex: metric.key,
           search: false,
           width: 120,
-          render: (_, record) => {
+        };
+
+        if (metaFieldMap[metric.key]) {
+          colConfig.dataIndex = metaFieldMap[metric.key];
+          if (metric.key === 'sql_id') {
+            colConfig.fixed = 'left';
+            colConfig.width = 150;
+            colConfig.copyable = true;
+            colConfig.ellipsis = true;
+            colConfig.render = (dom, record) => (
+              <a
+                href={`/tenant/${ns}/${name}/${tenantName}/sql/${record.sqlId}?dbName=${record.dbName}`}
+              >
+                {dom}
+              </a>
+            );
+          } else if (metric.key === 'query_sql') {
+            colConfig.width = 200;
+            colConfig.ellipsis = true;
+          } else if (metric.key === 'user_name') {
+            colConfig.width = 100;
+          }
+        } else {
+          colConfig.render = (_, record) => {
             const stat =
               record.executionStatistics?.find((s) => s.name === metric.key) ||
               record.latencyStatistics?.find((s) => s.name === metric.key);
             return stat ? stat.value : '-';
-          },
-        });
+          };
+        }
+        cols.push(colConfig);
       }
     });
     return cols;
-  }, [metricsData, selectedMetricKeys]);
+  }, [metricsData, selectedMetricKeys, ns, name, tenantName]);
 
   const columns: ProColumns<API.SqlInfo>[] = [
-    {
-      title: 'SQL ID',
-      dataIndex: 'sqlId',
-      copyable: true,
-      ellipsis: true,
-      width: 150,
-      fixed: 'left',
-      order: 10,
-      render: (dom, record) => (
-        <a
-          href={`/tenant/${ns}/${name}/${tenantName}/sql/${record.sqlId}?dbName=${record.dbName}`}
-        >
-          {dom}
-        </a>
-      ),
-    },
-    {
-      title: 'Query SQL',
-      dataIndex: 'querySql',
-      ellipsis: true,
-      search: false,
-      width: 200,
-    },
-    {
-      title: 'Database',
-      dataIndex: 'dbName',
-      width: 120,
-      order: 9,
-    },
-    {
-      title: 'User',
-      dataIndex: 'userName',
-      width: 100,
-      order: 8,
-    },
-    {
-      title: 'Client IP',
-      dataIndex: 'clientIp',
-      width: 120,
-      search: false,
-    },
     ...dynamicColumns,
     {
       title: 'Time Range',
