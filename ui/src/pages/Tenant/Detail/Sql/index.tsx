@@ -4,7 +4,7 @@ import { SettingOutlined } from '@ant-design/icons';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
 import { useParams, useRequest } from '@umijs/max';
-import { Button } from 'antd';
+import { Button, Checkbox } from 'antd';
 import type { RangePickerProps } from 'antd/es/date-picker';
 import dayjs from 'dayjs';
 import { useMemo, useRef, useState } from 'react';
@@ -147,8 +147,9 @@ export default function SqlList() {
             const stat =
               record.executionStatistics?.find((s) => s.name === metric.key) ||
               record.latencyStatistics?.find((s) => s.name === metric.key);
-            return stat ? stat.value : '-';
+            return stat ? stat.value.toFixed(2) : '-';
           };
+          colConfig.sorter = true;
         }
         cols.push(colConfig);
       }
@@ -159,11 +160,32 @@ export default function SqlList() {
   const columns: ProColumns<API.SqlInfo>[] = [
     ...dynamicColumns,
     {
+      title: 'User',
+      dataIndex: 'user',
+      hideInTable: true,
+      order: 100,
+    },
+    {
+      title: 'Database',
+      dataIndex: 'database',
+      hideInTable: true,
+      order: 99,
+    },
+    {
+      title: '',
+      dataIndex: 'includeInnerSql',
+      hideInTable: true,
+      order: 98,
+      renderFormItem: () => {
+        return <Checkbox>Include Inner SQLs</Checkbox>;
+      },
+    },
+    {
       title: 'Time Range',
       dataIndex: 'timeRange',
       valueType: 'dateTimeRange',
       hideInTable: true,
-      order: 1, // Lowest priority -> last in search form
+      order: 97,
       fieldProps: {
         format: DATE_TIME_FORMAT,
         disabledDate: disabledDate,
@@ -184,6 +206,12 @@ export default function SqlList() {
         },
       },
     },
+    {
+      title: 'Keyword',
+      dataIndex: 'keyword',
+      hideInTable: true,
+      order: 96,
+    },
   ];
 
   return (
@@ -191,7 +219,9 @@ export default function SqlList() {
       <ProTable<API.SqlInfo>
         headerTitle="SQL Analysis"
         actionRef={actionRef}
-        rowKey="sqlId"
+        rowKey={(record) =>
+          `${record.sqlId}_${record.svrIp}_${record.svrPort}_${record.planId}`
+        }
         params={{ outputColumns: selectedMetricKeys }}
         form={{
           initialValues: {
@@ -203,6 +233,7 @@ export default function SqlList() {
           collapseRender: false,
           labelWidth: 'auto',
         }}
+        options={false}
         toolBarRender={() => [
           <Button
             key="column-selection"
@@ -231,7 +262,10 @@ export default function SqlList() {
             sortOrder: Object.values(sort)[0] === 'ascend' ? 'asc' : 'desc',
             pageNum: restParams.current,
             pageSize: restParams.pageSize,
-            keyword: restParams.querySql as string,
+            keyword: restParams.keyword as string,
+            user: restParams.user as string,
+            database: restParams.database as string,
+            includeInnerSql: restParams.includeInnerSql as boolean,
             startTime: effectiveStartTime,
             endTime: effectiveEndTime,
             outputColumns: selectedMetricKeys,
@@ -241,11 +275,13 @@ export default function SqlList() {
             data: msg.data?.items || [],
             success: msg.successful,
             total: msg.data?.totalCount || 0,
+            page: params.current,
           };
         }}
         columns={columns}
         pagination={{
-          pageSize: 10,
+          defaultPageSize: 20,
+          showSizeChanger: true,
         }}
       />
       <ColumnSelectionDrawer
