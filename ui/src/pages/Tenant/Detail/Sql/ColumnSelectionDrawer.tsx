@@ -75,6 +75,7 @@ export default function ColumnSelectionDrawer({
                 <Col span={12} key={metric.key}>
                   <Checkbox
                     checked={currentSelectedKeys.includes(metric.key)}
+                    disabled={metric.immutable}
                     onChange={(e) =>
                       handleCheckboxChange(metric.key, e.target.checked)
                     }

@@ -26,6 +26,7 @@ type SqlMetricMeta struct {
 	Description      string `json:"description" binding:"required"`
 	Unit             string `json:"unit" binding:"required"`
 	DisplayByDefault bool   `json:"displayByDefault" binding:"required"`
+	Immutable        bool   `json:"immutable" binding:"required"`
 }
 
 type SqlMetricMetaCategory struct {

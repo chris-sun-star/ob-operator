@@ -62,6 +62,7 @@ declare namespace API {
     description: string;
     unit: string;
     displayByDefault: boolean;
+    immutable?: boolean;
   }
 
   export interface SqlMetricMetaCategory {

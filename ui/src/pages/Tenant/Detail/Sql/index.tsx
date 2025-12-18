@@ -39,7 +39,7 @@ export default function SqlList() {
         const defaults: string[] = [];
         list.forEach((category) => {
           category.metrics.forEach((metric) => {
-            if (metric.displayByDefault) {
+            if (metric.displayByDefault || metric.immutable) {
               defaults.push(metric.key);
             }
           });
