@@ -97,24 +97,22 @@ export default function SqlList() {
     if (list.length === 0 || selectedMetricKeys.length === 0) return [];
 
     const cols: ProColumns<API.SqlInfo>[] = [];
-    // Flatten metrics map for easy lookup
-    const metricMap = new Map<string, API.SqlMetricMeta>();
+    const allMetrics: API.SqlMetricMeta[] = [];
     list.forEach((cat) => {
-      cat.metrics.forEach((m) => metricMap.set(m.key, m));
+      allMetrics.push(...cat.metrics);
     });
 
-    selectedMetricKeys.forEach((key) => {
-      const meta = metricMap.get(key);
-      if (meta) {
+    allMetrics.forEach((metric) => {
+      if (selectedMetricKeys.includes(metric.key)) {
         cols.push({
-          title: meta.name,
-          dataIndex: key, // Not strictly used for lookup but good for keying
+          title: metric.name,
+          dataIndex: metric.key,
           search: false,
           width: 120,
           render: (_, record) => {
             const stat =
-              record.executionStatistics?.find((s) => s.name === key) ||
-              record.latencyStatistics?.find((s) => s.name === key);
+              record.executionStatistics?.find((s) => s.name === metric.key) ||
+              record.latencyStatistics?.find((s) => s.name === metric.key);
             return stat ? stat.value : '-';
           },
         });

@@ -271,7 +271,7 @@ func (s *SqlStatsService) buildQueryParts(outputColumns []string) (selectExpress
 		if agg, isMetric := columnAggregations[col]; isMetric {
 			columnExpr := fmt.Sprintf("%s(%s) as %s", agg, col, col)
 			if agg == "AVG" {
-				columnExpr = fmt.Sprintf("SUM(%s) / SUM(executions) as %s", col, col)
+				columnExpr = fmt.Sprintf("SUM(%s_sum) / SUM(executions) as %s", col, col)
 			}
 			selectExpressions = append(selectExpressions, columnExpr)
 		} else if _, isFixedDimension := fixedDimensions[col]; isFixedDimension {
