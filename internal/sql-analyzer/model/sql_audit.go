@@ -35,9 +35,6 @@ type SqlAudit struct {
 	Sid               uint64 `db:"sid"`
 	UserClientIp      string `db:"user_client_ip"`
 	TxId              string `db:"tx_id"`
-	SubPlanCount      int64  `db:"sub_plan_count"`
-	LastFailInfo      int64  `db:"last_fail_info"`
-	CauseType         int64  `db:"cause_type"`
 
 	// Aggregated Numeric Values
 	Executions     int64  `db:"executions"` // COUNT(*)
@@ -164,10 +161,6 @@ type SqlAudit struct {
 
 	ConsistencyLevelStrongCount int64 `db:"consistency_level_strong_count"`
 	ConsistencyLevelWeakCount   int64 `db:"consistency_level_weak_count"`
-
-	CpuTimeSum int64 `db:"cpu_time_sum"`
-	CpuTimeMax int64 `db:"cpu_time_max"`
-	CpuTimeMin int64 `db:"cpu_time_min"`
 
 	FailCountSum int64 `db:"fail_count_sum"`
 

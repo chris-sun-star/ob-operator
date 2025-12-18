@@ -116,12 +116,6 @@
       unit: "μs"
       displayByDefault: false
       immutable: false
-    - key: cpu_time
-      name: CPU时间
-      description: "SQL消耗的总CPU时间"
-      unit: "μs"
-      displayByDefault: true
-      immutable: false
     - key: event_0_wait_time_sum
       name: "事件0等待时间"
       description: "事件0的等待时间"

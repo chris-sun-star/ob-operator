@@ -116,12 +116,6 @@
       unit: "μs"
       displayByDefault: false
       immutable: false
-    - key: cpu_time
-      name: CPU Time
-      description: "Total CPU time consumed by the SQL statement."
-      unit: "μs"
-      displayByDefault: true
-      immutable: false
     - key: event_0_wait_time_sum
       name: "Event 0 Wait Time"
       description: "Wait time for event 0."

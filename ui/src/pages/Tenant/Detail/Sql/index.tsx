@@ -136,7 +136,8 @@ export default function SqlList() {
               </a>
             );
           } else if (metric.key === 'query_sql') {
-            colConfig.width = 200;
+            colConfig.fixed = 'left';
+            colConfig.width = 100;
             colConfig.ellipsis = true;
           } else if (metric.key === 'user_name') {
             colConfig.width = 100;
