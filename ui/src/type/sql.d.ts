@@ -164,7 +164,10 @@ declare namespace API {
 
   export interface SqlStatsResponse {
     successful: boolean;
-    data: SqlInfo[];
+    data: {
+      items: SqlInfo[];
+      totalCount: number;
+    };
   }
 
   export interface RequestStatisticsResponse {

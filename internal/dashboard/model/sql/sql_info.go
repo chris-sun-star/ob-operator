@@ -66,3 +66,8 @@ type SqlDetailedInfo struct {
 	Plans          []PlanStatistic       `json:"plans" binding:"required"`
 	Indexies       []IndexInfo           `json:"indexies,omitempty"`
 }
+
+type SqlStatsList struct {
+	Items      []SqlInfo `json:"items"`
+	TotalCount int64     `json:"totalCount"`
+}

@@ -45,13 +45,13 @@ func ListSqlMetrics(c *gin.Context) ([]sql.SqlMetricMetaCategory, error) {
 // @Accept application/json
 // @Produce application/json
 // @Param body body sql.SqlFilter true "sql filter"
-// @Success 200 object response.APIResponse{data=[]sql.SqlInfo}
+// @Success 200 object response.APIResponse{data=sql.SqlStatsList}
 // @Failure 400 object response.APIResponse
 // @Failure 401 object response.APIResponse
 // @Failure 500 object response.APIResponse
 // @Router /api/v1/sql/stats [POST]
 // @Security ApiKeyAuth
-func ListSqlStats(c *gin.Context) ([]sql.SqlInfo, error) {
+func ListSqlStats(c *gin.Context) (*sql.SqlStatsList, error) {
 	filter := &sql.SqlFilter{}
 	err := c.ShouldBindJSON(filter)
 	if err != nil {
@@ -63,7 +63,7 @@ func ListSqlStats(c *gin.Context) ([]sql.SqlInfo, error) {
 		logger.Errorf("ListSqlStats error: %v", err)
 		return nil, err
 	}
-	logger.Infof("ListSqlStats returned %d records", len(res))
+	logger.Infof("ListSqlStats returned %d records", len(res.Items))
 	return res, nil
 }
 

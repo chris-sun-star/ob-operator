@@ -192,6 +192,7 @@ export default function SqlList() {
         headerTitle="SQL Analysis"
         actionRef={actionRef}
         rowKey="sqlId"
+        params={{ outputColumns: selectedMetricKeys }}
         form={{
           initialValues: {
             timeRange: initialTimeRange,
@@ -237,9 +238,9 @@ export default function SqlList() {
           });
 
           return {
-            data: msg.data,
+            data: msg.data?.items || [],
             success: msg.successful,
-            total: msg.data?.length || 0,
+            total: msg.data?.totalCount || 0,
           };
         }}
         columns={columns}

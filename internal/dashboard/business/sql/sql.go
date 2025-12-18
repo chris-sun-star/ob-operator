@@ -82,7 +82,7 @@ func ListSqlMetrics(language string) ([]sql.SqlMetricMetaCategory, error) {
 	return metricCategories, err
 }
 
-func ListSqlStats(ctx context.Context, filter *sql.SqlFilter) ([]sql.SqlInfo, error) {
+func ListSqlStats(ctx context.Context, filter *sql.SqlFilter) (*sql.SqlStatsList, error) {
 	podIP, err := k8s.GetSQLAnalyzerPodIP(ctx, filter.Namespace, filter.OBTenant)
 	if err != nil {
 		return nil, err
@@ -171,7 +171,10 @@ func ListSqlStats(ctx context.Context, filter *sql.SqlFilter) ([]sql.SqlInfo, er
 		sqlInfos = append(sqlInfos, sqlInfo)
 	}
 
-	return sqlInfos, nil
+	return &sql.SqlStatsList{
+		Items:      sqlInfos,
+		TotalCount: resp.TotalCount,
+	}, nil
 }
 
 func QuerySqlDetailInfo(ctx context.Context, param *sql.SqlDetailParam) (*sql.SqlDetailedInfo, error) {
