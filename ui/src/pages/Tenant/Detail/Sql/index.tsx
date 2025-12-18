@@ -137,7 +137,7 @@ export default function SqlList() {
             );
           } else if (metric.key === 'query_sql') {
             colConfig.fixed = 'left';
-            colConfig.width = 100;
+            colConfig.width = 150;
             colConfig.ellipsis = true;
           } else if (metric.key === 'user_name') {
             colConfig.width = 100;
@@ -211,7 +211,7 @@ export default function SqlList() {
             Column Selection
           </Button>,
         ]}
-        scroll={{ x: 'max-content' }}
+        scroll={{ x: 1500 }}
         request={async (params, sort) => {
           if (!ns || !name || !tenantName) {
             return { data: [], success: false };
