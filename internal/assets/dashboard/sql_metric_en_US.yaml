@@ -41,103 +41,103 @@
     - key: elapsed_time
       name: Elapsed Time
       description: "Average time taken for the SQL to execute."
-      unit: "μs"
+      unit: "ms"
       displayByDefault: true
       immutable: false
     - key: execute_time
       name: Execute Time
       description: "Time spent executing the SQL statement."
-      unit: "μs"
+      unit: "ms"
       displayByDefault: true
       immutable: false
     - key: queue_time
       name: Queue Time
       description: "Total time spent in the queue waiting for execution."
-      unit: "μs"
+      unit: "ms"
       displayByDefault: true
       immutable: false
     - key: get_plan_time
       name: Get Plan Time
       description: "Time spent getting the execution plan."
-      unit: "μs"
+      unit: "ms"
       displayByDefault: true
       immutable: false
     - key: wait_time_micro
       name: Wait Time
       description: "Total wait time."
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: total_wait_time_micro
       name: Total Wait Time
       description: "Total wait time including all events."
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: net_time
       name: Net Time
       description: "Time spent on network."
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: net_wait_time
       name: Net Wait Time
       description: "Time spent waiting for network I/O."
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: decode_time
       name: Decode Time
       description: "Time spent decoding."
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: application_wait_time
       name: Application Wait Time
       description: "Time spent waiting for application."
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: concurrency_wait_time
       name: Concurrency Wait Time
       description: "Time spent waiting for concurrency control."
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: user_io_wait_time
       name: User I/O Wait Time
       description: "Time spent waiting for user I/O."
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: schedule_time
       name: Schedule Time
       description: "Time spent on scheduling."
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: event_0_wait_time_sum
       name: "Event 0 Wait Time"
       description: "Wait time for event 0."
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: event_1_wait_time_sum
       name: "Event 1 Wait Time"
       description: "Wait time for event 1."
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: event_2_wait_time_sum
       name: "Event 2 Wait Time"
       description: "Wait time for event 2."
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: event_3_wait_time_sum
       name: "Event 3 Wait Time"
       description: "Wait time for event 3."
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
 - category: execution

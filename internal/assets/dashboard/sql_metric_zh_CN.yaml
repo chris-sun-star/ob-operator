@@ -41,103 +41,103 @@
     - key: elapsed_time
       name: 响应时间
       description: "SQL执行的总耗时"
-      unit: "μs"
+      unit: "ms"
       displayByDefault: true
       immutable: false
     - key: execute_time
       name: 执行时间
       description: "SQL执行阶段的耗时"
-      unit: "μs"
+      unit: "ms"
       displayByDefault: true
       immutable: false
     - key: queue_time
       name: 排队时间
       description: "SQL在队列中等待执行的总时间"
-      unit: "μs"
+      unit: "ms"
       displayByDefault: true
       immutable: false
     - key: get_plan_time
       name: 获取计划时间
       description: "获取执行计划的耗时"
-      unit: "μs"
+      unit: "ms"
       displayByDefault: true
       immutable: false
     - key: wait_time_micro
       name: 等待时间
       description: "总等待时间"
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: total_wait_time_micro
       name: 总等待时间
       description: "包括所有事件的总等待时间"
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: net_time
       name: 网络时间
       description: "网络传输耗时"
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: net_wait_time
       name: 网络等待时间
       description: "网络I/O等待时间"
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: decode_time
       name: 解码时间
       description: "解码耗时"
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: application_wait_time
       name: 应用等待时间
       description: "应用等待时间"
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: concurrency_wait_time
       name: 并发等待时间
       description: "并发控制等待时间"
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: user_io_wait_time
       name: 用户I/O等待时间
       description: "用户I/O等待时间"
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: schedule_time
       name: 调度时间
       description: "调度耗时"
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: event_0_wait_time_sum
       name: "事件0等待时间"
       description: "事件0的等待时间"
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: event_1_wait_time_sum
       name: "事件1等待时间"
       description: "事件1的等待时间"
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: event_2_wait_time_sum
       name: "事件2等待时间"
       description: "事件2的等待时间"
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
     - key: event_3_wait_time_sum
       name: "事件3等待时间"
       description: "事件3的等待时间"
-      unit: "μs"
+      unit: "ms"
       displayByDefault: false
       immutable: false
 - category: execution

@@ -266,14 +266,39 @@ func (s *SqlStatsService) QuerySqlStats(req *apimodel.QuerySqlStatsRequest) (*ap
 	return resp, nil
 }
 
+var timeMetrics = map[string]struct{}{
+	"elapsed_time":            {},
+	"execute_time":            {},
+	"queue_time":              {},
+	"get_plan_time":           {},
+	"wait_time_micro":         {},
+	"total_wait_time_micro":   {},
+	"net_time":                {},
+	"net_wait_time":           {},
+	"decode_time":             {},
+	"application_wait_time":   {},
+	"concurrency_wait_time":   {},
+	"user_io_wait_time":       {},
+	"schedule_time":           {},
+	"event_0_wait_time_sum":   {},
+	"event_1_wait_time_sum":   {},
+	"event_2_wait_time_sum":   {},
+	"event_3_wait_time_sum":   {},
+}
+
 func (s *SqlStatsService) buildQueryParts(outputColumns []string) (selectExpressions []string, groupByColumns []string) {
 	for _, col := range outputColumns {
 		if agg, isMetric := columnAggregations[col]; isMetric {
-			columnExpr := fmt.Sprintf("%s(%s) as %s", agg, col, col)
+			columnExpr := fmt.Sprintf("%s(%s)", agg, col)
 			if agg == "AVG" {
-				columnExpr = fmt.Sprintf("SUM(%s_sum) / SUM(executions) as %s", col, col)
+				columnExpr = fmt.Sprintf("SUM(%s_sum) / SUM(executions)", col)
 			}
-			selectExpressions = append(selectExpressions, columnExpr)
+
+			if _, isTime := timeMetrics[col]; isTime {
+				columnExpr = fmt.Sprintf("(%s) / 1000", columnExpr)
+			}
+
+			selectExpressions = append(selectExpressions, fmt.Sprintf("%s as %s", columnExpr, col))
 		} else if _, isFixedDimension := fixedDimensions[col]; isFixedDimension {
 			// It's a dimension
 			selectExpressions = append(selectExpressions, col)
