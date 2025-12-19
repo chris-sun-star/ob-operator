@@ -4,7 +4,7 @@ import { SettingOutlined } from '@ant-design/icons';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
 import { useParams, useRequest } from '@umijs/max';
-import { Button, Checkbox } from 'antd';
+import { Button, Checkbox, Tooltip } from 'antd';
 import type { RangePickerProps } from 'antd/es/date-picker';
 import dayjs from 'dayjs';
 import { useMemo, useRef, useState } from 'react';
@@ -20,6 +20,8 @@ export default function SqlList() {
   const actionRef = useRef<ActionType>();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedMetricKeys, setSelectedMetricKeys] = useState<string[]>([]);
+  const [maxElapsedTime, setMaxElapsedTime] = useState<number>(0);
+  const [activeTab, setActiveTab] = useState<string>('sql_analysis');
 
   // Helper to robustly extract metrics array regardless of response format
   const getMetricsList = (data: any): API.SqlMetricMetaCategory[] => {
@@ -101,6 +103,15 @@ export default function SqlList() {
     client_ip: 'clientIp',
   };
 
+  const METRIC_COLORS: Record<string, string> = {
+    execute_time: '#4096FF', // blue
+    queue_time: '#95DE54', // green
+    get_plan_time: '#FFD666', // orange
+  };
+
+  // ... existing imports ...
+
+  // ... inside the component ...
   // Generate dynamic columns based on selected keys and metadata
   const dynamicColumns: ProColumns<API.SqlInfo>[] = useMemo(() => {
     const list = getMetricsList(metricsData);
@@ -128,6 +139,7 @@ export default function SqlList() {
           colConfig.dataIndex = metaFieldMap[metric.key];
           if (metric.key === 'sql_id') {
             colConfig.width = 120;
+            colConfig.copyable = true;
             colConfig.ellipsis = true;
           } else if (metric.key === 'query_sql') {
             colConfig.fixed = 'left';
@@ -144,6 +156,107 @@ export default function SqlList() {
           } else if (metric.key === 'user_name') {
             colConfig.width = 100;
           }
+        } else if (metric.key === 'elapsed_time') {
+          colConfig.width = 250;
+          colConfig.render = (_, record) => {
+            const elapsedStat = record.latencyStatistics?.find(
+              (s) => s.name === 'elapsed_time',
+            );
+            if (!elapsedStat) return '-';
+            const total = elapsedStat.value;
+            if (total <= 0) return '0.00';
+
+            // Find component metrics that are currently selected and have a color defined
+            const components =
+              record.latencyStatistics?.filter(
+                (s) =>
+                  s.name !== 'elapsed_time' &&
+                  selectedMetricKeys.includes(s.name) &&
+                  METRIC_COLORS[s.name],
+              ) || [];
+
+            // Sort components based on the order of keys in METRIC_COLORS to ensure consistent display order
+            const orderedKeys = Object.keys(METRIC_COLORS);
+            components.sort((a, b) => {
+              return orderedKeys.indexOf(a.name) - orderedKeys.indexOf(b.name);
+            });
+
+            // Calculate width for each component relative to the total of this row
+            const segments = components.map((comp) => {
+              const width = (comp.value / total) * 100;
+              return {
+                name: comp.name,
+                value: comp.value,
+                width,
+                color: METRIC_COLORS[comp.name],
+              };
+            });
+
+            // Calculate the width of the bar relative to the max elapsed time on the page
+            const MAX_BAR_WIDTH = 150;
+            const barWidth =
+              maxElapsedTime > 0 ? (total / maxElapsedTime) * MAX_BAR_WIDTH : 0;
+
+            return (
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <Tooltip
+                  title={
+                    <div>
+                      <div>Total: {total.toFixed(2)} ms</div>
+                      {segments.map((seg) => (
+                        <div
+                          key={seg.name}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 8,
+                              height: 8,
+                              backgroundColor: seg.color,
+                              borderRadius: '50%',
+                            }}
+                          ></span>
+                          <span>
+                            {seg.name}: {seg.value.toFixed(2)} ms
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  }
+                >
+                  <div
+                    style={{
+                      width: barWidth,
+                      height: 12,
+                      backgroundColor: '#f0f0f0', // Background represents total
+                      borderRadius: 2,
+                      overflow: 'hidden',
+                      display: 'flex',
+                      marginRight: 8,
+                      position: 'relative',
+                    }}
+                  >
+                    {segments.map((seg, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          width: `${seg.width}%`,
+                          height: '100%',
+                          backgroundColor: seg.color,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </Tooltip>
+                <span>{total.toFixed(2)}</span>
+              </div>
+            );
+          };
+          colConfig.sorter = true;
         } else {
           colConfig.render = (_, record) => {
             const stat =
@@ -160,7 +273,7 @@ export default function SqlList() {
       }
     });
     return cols;
-  }, [metricsData, selectedMetricKeys, ns, name, tenantName]);
+  }, [metricsData, selectedMetricKeys, ns, name, tenantName, maxElapsedTime]);
 
   const columns: ProColumns<API.SqlInfo>[] = [
     ...dynamicColumns,
@@ -239,7 +352,24 @@ export default function SqlList() {
         rowKey={(record) =>
           `${record.sqlId}_${record.svrIp}_${record.svrPort}_${record.planId}_${record.userName}_${record.dbName}`
         }
-        params={{ outputColumns: selectedMetricKeys }}
+        params={{ outputColumns: selectedMetricKeys, activeTab }}
+        toolbar={{
+          menu: {
+            type: 'tab',
+            activeKey: activeTab,
+            items: [
+              {
+                label: 'SQL Analysis',
+                key: 'sql_analysis',
+              },
+              {
+                label: 'Slow SQL',
+                key: 'slow_sql',
+              },
+            ],
+            onChange: (key) => setActiveTab(key as string),
+          },
+        }}
         form={{
           initialValues: {
             timeRange: initialTimeRange,
@@ -284,13 +414,24 @@ export default function SqlList() {
             user: restParams.user as string,
             database: restParams.database as string,
             includeInnerSql: restParams.includeInnerSql as boolean,
+            suspiciousOnly: activeTab === 'slow_sql',
             startTime: effectiveStartTime,
             endTime: effectiveEndTime,
             outputColumns: selectedMetricKeys,
           });
 
+          const items = msg.data?.items || [];
+          let maxTime = 0;
+          items.forEach((item) => {
+            const elapsed =
+              item.latencyStatistics?.find((s) => s.name === 'elapsed_time')
+                ?.value || 0;
+            if (elapsed > maxTime) maxTime = elapsed;
+          });
+          setMaxElapsedTime(maxTime);
+
           return {
-            data: msg.data?.items || [],
+            data: items,
             success: msg.successful,
             total: msg.data?.totalCount || 0,
             page: params.current,

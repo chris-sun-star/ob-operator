@@ -94,6 +94,7 @@ func ListSqlStats(ctx context.Context, filter *sql.SqlFilter) (*sql.SqlStatsList
 		UserName:        filter.User,
 		DatabaseName:    filter.Database,
 		FilterInnerSql:  !filter.IncludeInnerSql,
+		SuspiciousOnly:  filter.SuspiciousOnly,
 		QuerySqlKeyword: filter.Keyword,
 		OutputColumns:   filter.OutputColumns,
 		SortByColumn:    filter.SortByColumn,

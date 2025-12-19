@@ -13,9 +13,13 @@ See the Mulan PSL v2 for more details.
 package handler
 
 import (
+	"os"
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/business"
+	"github.com/oceanbase/ob-operator/internal/sql-analyzer/config"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/store"
 	logger "github.com/sirupsen/logrus"
 )
@@ -58,6 +62,18 @@ func QuerySqlStats(c *gin.Context) (*model.SqlStatsResponse, error) {
 	}
 	defer auditStore.Close()
 
-	service := business.NewSqlStatsService(auditStore, l)
+	slowSqlThresholdMilliSeconds := 1000 // milliseconds
+	slowSqlThresholdMilliSecondsStr := os.Getenv("SLOW_SQL_THRESHOLD_MILLISECONDS")
+	if slowSqlThresholdMilliSecondsStr != "" {
+		if val, err := strconv.Atoi(slowSqlThresholdMilliSecondsStr); err == nil && val >= 0 {
+			slowSqlThresholdMilliSeconds = val
+		}
+	}
+
+	conf := &config.Config{
+		SlowSqlThresholdMilliSeconds: slowSqlThresholdMilliSeconds,
+	}
+
+	service := business.NewSqlStatsService(auditStore, conf, l)
 	return service.QuerySqlStats(&req)
 }

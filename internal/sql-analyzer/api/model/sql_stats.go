@@ -19,6 +19,7 @@ type QuerySqlStatsRequest struct {
 	UserName        string   `json:"userName,omitempty" example:"user1"`
 	DatabaseName    string   `json:"databaseName,omitempty" example:"db1"`
 	FilterInnerSql  bool     `json:"filterInnerSql,omitempty"`
+	SuspiciousOnly  bool     `json:"suspiciousOnly,omitempty"`
 	QuerySqlKeyword string   `json:"querySqlKeyword,omitempty" example:"SELECT"`
 	SortByColumn    string   `json:"sortByColumn,omitempty" example:"request_time"`
 	SortOrder       string   `json:"sortOrder,omitempty" example:"DESC"`

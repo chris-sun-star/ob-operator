@@ -17,6 +17,7 @@ import (
 	"math/big"
 
 	apimodel "github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
+	"github.com/oceanbase/ob-operator/internal/sql-analyzer/config"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/store"
 	"github.com/sirupsen/logrus"
 )
@@ -201,12 +202,14 @@ var columnAggregations = map[string]string{
 
 type SqlStatsService struct {
 	Store  *store.SqlAuditStore
+	Config *config.Config
 	Logger *logrus.Logger
 }
 
-func NewSqlStatsService(store *store.SqlAuditStore, logger *logrus.Logger) *SqlStatsService {
+func NewSqlStatsService(store *store.SqlAuditStore, conf *config.Config, logger *logrus.Logger) *SqlStatsService {
 	return &SqlStatsService{
 		Store:  store,
+		Config: conf,
 		Logger: logger,
 	}
 }
@@ -423,6 +426,9 @@ func (s *SqlStatsService) buildFilters(req *apimodel.QuerySqlStatsRequest) map[s
 	}
 	if req.FilterInnerSql {
 		filters["inner_sql_count ="] = 0
+	}
+	if req.SuspiciousOnly && s.Config != nil && s.Config.SlowSqlThresholdMilliSeconds > 0 {
+		filters["elapsed_time_max >="] = s.Config.SlowSqlThresholdMilliSeconds * 1000
 	}
 	return filters
 }

@@ -43,7 +43,7 @@
       description: "Average time taken for the SQL to execute."
       unit: "ms"
       displayByDefault: true
-      immutable: false
+      immutable: true
     - key: execute_time
       name: Execute Time
       description: "Time spent executing the SQL statement."

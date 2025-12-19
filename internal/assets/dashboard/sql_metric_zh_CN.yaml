@@ -43,7 +43,7 @@
       description: "SQL执行的总耗时"
       unit: "ms"
       displayByDefault: true
-      immutable: false
+      immutable: true
     - key: execute_time
       name: 执行时间
       description: "SQL执行阶段的耗时"
