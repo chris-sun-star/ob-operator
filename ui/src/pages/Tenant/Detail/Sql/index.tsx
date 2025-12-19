@@ -150,7 +150,10 @@ export default function SqlList() {
             const stat =
               record.executionStatistics?.find((s) => s.name === metric.key) ||
               record.latencyStatistics?.find((s) => s.name === metric.key);
-            return stat ? stat.value.toFixed(2) : '-';
+            if (!stat) return '-';
+            return Number.isInteger(stat.value)
+              ? stat.value
+              : stat.value.toFixed(2);
           };
           colConfig.sorter = true;
         }
@@ -179,8 +182,20 @@ export default function SqlList() {
       dataIndex: 'includeInnerSql',
       hideInTable: true,
       order: 98,
-      renderFormItem: () => {
-        return <Checkbox>Include Inner SQLs</Checkbox>;
+      formItemProps: {
+        valuePropName: 'checked',
+      },
+      renderFormItem: (_item, _config, form) => {
+        return (
+          <Checkbox
+            onChange={(e) => {
+              form.setFieldValue('includeInnerSql', e.target.checked);
+              form.submit();
+            }}
+          >
+            Include Inner SQLs
+          </Checkbox>
+        );
       },
     },
     {
