@@ -128,7 +128,6 @@ export default function SqlList() {
           colConfig.dataIndex = metaFieldMap[metric.key];
           if (metric.key === 'sql_id') {
             colConfig.width = 120;
-            colConfig.copyable = true;
             colConfig.ellipsis = true;
           } else if (metric.key === 'query_sql') {
             colConfig.fixed = 'left';
@@ -238,7 +237,7 @@ export default function SqlList() {
         headerTitle="SQL Analysis"
         actionRef={actionRef}
         rowKey={(record) =>
-          `${record.sqlId}_${record.svrIp}_${record.svrPort}_${record.planId}`
+          `${record.sqlId}_${record.svrIp}_${record.svrPort}_${record.planId}_${record.userName}_${record.dbName}`
         }
         params={{ outputColumns: selectedMetricKeys }}
         form={{
