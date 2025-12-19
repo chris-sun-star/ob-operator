@@ -114,8 +114,11 @@ export default function SqlList() {
 
     allMetrics.forEach((metric) => {
       if (selectedMetricKeys.includes(metric.key)) {
+        const title = metric.unit
+          ? `${metric.name} (${metric.unit})`
+          : metric.name;
         const colConfig: ProColumns<API.SqlInfo> = {
-          title: metric.name,
+          title: title,
           dataIndex: metric.key,
           search: false,
           width: 120,
