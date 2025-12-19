@@ -394,7 +394,7 @@ func (s *SqlStatsService) buildFilters(req *apimodel.QuerySqlStatsRequest) map[s
 		filters["db_name ="] = req.DatabaseName
 	}
 	if req.QuerySqlKeyword != "" {
-		filters["query_sql LIKE"] = "%" + req.QuerySqlKeyword + "%"
+		filters["query_sql ILIKE"] = "%" + req.QuerySqlKeyword + "%"
 	}
 	if req.FilterInnerSql {
 		filters["inner_sql_count ="] = 0

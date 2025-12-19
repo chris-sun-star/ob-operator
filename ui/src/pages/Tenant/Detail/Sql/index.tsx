@@ -124,10 +124,14 @@ export default function SqlList() {
         if (metaFieldMap[metric.key]) {
           colConfig.dataIndex = metaFieldMap[metric.key];
           if (metric.key === 'sql_id') {
-            colConfig.fixed = 'left';
-            colConfig.width = 150;
+            colConfig.width = 120;
             colConfig.copyable = true;
             colConfig.ellipsis = true;
+          } else if (metric.key === 'query_sql') {
+            colConfig.fixed = 'left';
+            colConfig.width = 150;
+            colConfig.ellipsis = true;
+            colConfig.copyable = true;
             colConfig.render = (dom, record) => (
               <a
                 href={`/tenant/${ns}/${name}/${tenantName}/sql/${record.sqlId}?dbName=${record.dbName}`}
@@ -135,10 +139,6 @@ export default function SqlList() {
                 {dom}
               </a>
             );
-          } else if (metric.key === 'query_sql') {
-            colConfig.fixed = 'left';
-            colConfig.width = 150;
-            colConfig.ellipsis = true;
           } else if (metric.key === 'user_name') {
             colConfig.width = 100;
           }
