@@ -232,6 +232,7 @@ export default function SqlList() {
           collapsed: false,
           collapseRender: false,
           labelWidth: 'auto',
+          span: 8,
         }}
         options={false}
         toolBarRender={() => [
