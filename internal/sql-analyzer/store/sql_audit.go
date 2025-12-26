@@ -587,7 +587,7 @@ func (s *SqlAuditStore) QuerySqlDetailInfo(planStore *PlanStore, req apimodel.Sq
 	// Execution Trend
 	execTrendQuery := fmt.Sprintf(`
 		SELECT
-			epoch(time_bucket(INTERVAL %d SECOND, to_timestamp(CAST(max_request_time / 1000000 AS BIGINT)))) AS time_bucket,
+			epoch(time_bucket(INTERVAL %d SECOND, CAST(to_timestamp(CAST(max_request_time / 1000000 AS BIGINT)) AS TIMESTAMP))) AS time_bucket,
 			sum(plan_type_local_count),
 			sum(plan_type_remote_count),
 			sum(plan_type_distributed_count)
@@ -624,7 +624,7 @@ func (s *SqlAuditStore) QuerySqlDetailInfo(planStore *PlanStore, req apimodel.Sq
 
 		latencyTrendQuery := fmt.Sprintf(`
 			SELECT
-				epoch(time_bucket(INTERVAL %d SECOND, to_timestamp(CAST(max_request_time / 1000000 AS BIGINT)))) AS time_bucket,
+				epoch(time_bucket(INTERVAL %d SECOND, CAST(to_timestamp(CAST(max_request_time / 1000000 AS BIGINT)) AS TIMESTAMP))) AS time_bucket,
 				%s
 			FROM read_parquet('%s/*.parquet')
 			WHERE
