@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -31,6 +32,7 @@ import (
 type PlanStore struct {
 	ctx context.Context
 	db  *sql.DB
+	mu  sync.Mutex
 }
 
 func (s *PlanStore) initSqlPlanTable() error {
@@ -111,6 +113,9 @@ func (s *PlanStore) LoadExistingPlans() ([]model.SqlPlanIdentifier, error) {
 }
 
 func (s *PlanStore) Store(plan model.SqlPlan) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	valueArgs := []interface{}{plan.TenantID, plan.SvrIP, plan.SvrPort, plan.PlanID, plan.SqlID, plan.DbID, fmt.Sprintf("%d", plan.PlanHash), plan.GmtCreate,
 		plan.Operator, plan.ObjectNode, plan.ObjectID, plan.ObjectOwner, plan.ObjectName, plan.ObjectAlias,
 		plan.ObjectType, plan.Optimizer, plan.ID, plan.ParentID, plan.Depth, plan.Position, plan.Cost, plan.RealCost,
