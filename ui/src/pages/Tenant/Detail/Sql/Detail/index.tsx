@@ -118,8 +118,9 @@ const SqlDetail: React.FC = () => {
   const [latencyMetricsMeta, setLatencyMetricsMeta] = useState<
     API.SqlMetricMeta[]
   >([]);
-  const [selectedLatencyMetric, setSelectedLatencyMetric] =
-    useState<string>('elapsed_time');
+  const [selectedLatencyMetrics, setSelectedLatencyMetrics] = useState<
+    string[]
+  >([]);
 
   // Fetch metrics meta to populate latency selector
   useRequest(
@@ -131,6 +132,18 @@ const SqlDetail: React.FC = () => {
         const latencyCat = list.find((c: any) => c.category === 'latency');
         if (latencyCat && latencyCat.metrics) {
           setLatencyMetricsMeta(latencyCat.metrics);
+          // Set default selected metrics based on displayByDefault
+          const defaults = latencyCat.metrics
+            .filter((m: any) => m.displayByDefault)
+            .map((m: any) => m.key);
+          if (defaults.length > 0) {
+            setSelectedLatencyMetrics(defaults);
+          } else {
+            // Fallback to first if no defaults
+            if (latencyCat.metrics.length > 0) {
+              setSelectedLatencyMetrics([latencyCat.metrics[0].key]);
+            }
+          }
         }
       },
     },
@@ -154,11 +167,11 @@ const SqlDetail: React.FC = () => {
         startTime: start,
         endTime: end,
         interval,
-        outputColumns: [selectedLatencyMetric], // Only fetch selected latency metric
+        outputColumns: selectedLatencyMetrics,
       });
     },
     {
-      refreshDeps: [timeRange, selectedLatencyMetric, ns, name, sqlId, dbName],
+      refreshDeps: [timeRange, selectedLatencyMetrics, ns, name, sqlId, dbName],
     },
   );
 
@@ -306,9 +319,11 @@ const SqlDetail: React.FC = () => {
                 <Space>
                   <span>Latency</span>
                   <Select
-                    value={selectedLatencyMetric}
-                    onChange={setSelectedLatencyMetric}
-                    style={{ width: 200 }}
+                    mode="multiple"
+                    maxTagCount="responsive"
+                    value={selectedLatencyMetrics}
+                    onChange={setSelectedLatencyMetrics}
+                    style={{ width: 400 }}
                     options={latencyMetricsMeta.map((m) => ({
                       label: m.name,
                       value: m.key,

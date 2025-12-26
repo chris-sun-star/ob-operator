@@ -29,6 +29,7 @@ import (
 	"github.com/pkg/errors"
 
 	apimodel "github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
+	"github.com/oceanbase/ob-operator/internal/sql-analyzer/common"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/const/parquet"
 	sqlconst "github.com/oceanbase/ob-operator/internal/sql-analyzer/const/sql"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/model"
@@ -619,7 +620,13 @@ func (s *SqlAuditStore) QuerySqlDetailInfo(planStore *PlanStore, req apimodel.Sq
 		for _, col := range req.LatencyColumns {
 			// Basic validation to prevent SQL injection
 			safeCol := strings.ReplaceAll(col, ";", "")
-			selectExpressions = append(selectExpressions, fmt.Sprintf("sum(%s) AS %s", safeCol, safeCol))
+			expr := common.BuildMetricExpression(safeCol)
+			if expr != "" {
+				selectExpressions = append(selectExpressions, fmt.Sprintf("%s AS %s", expr, safeCol))
+			} else {
+				// Fallback for unknown metrics, assume they are raw columns we want to sum
+				selectExpressions = append(selectExpressions, fmt.Sprintf("sum(%s) AS %s", safeCol, safeCol))
+			}
 		}
 
 		latencyTrendQuery := fmt.Sprintf(`
