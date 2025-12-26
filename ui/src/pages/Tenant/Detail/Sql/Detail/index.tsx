@@ -120,7 +120,7 @@ const SqlDetail: React.FC = () => {
   >([]);
   const [selectedLatencyMetrics, setSelectedLatencyMetrics] = useState<
     string[]
-  >([]);
+  >(['elapsed_time']);
 
   // Fetch metrics meta to populate latency selector
   useRequest(
@@ -363,6 +363,7 @@ const SqlDetail: React.FC = () => {
         {/* Plan Statistics */}
         <ProCard title="Plan Statistics" headerBordered loading={loading}>
           <ProTable<API.PlanStatistic>
+            rowKey="planID"
             dataSource={detailData?.data?.plans || []}
             columns={[
               {

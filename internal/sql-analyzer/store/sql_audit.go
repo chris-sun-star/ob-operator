@@ -579,7 +579,7 @@ func (s *SqlAuditStore) QuerySqlDetailInfo(planStore *PlanStore, req apimodel.Sq
 		LIMIT 1`, s.path)
 
 	var querySql string
-	err := s.db.QueryRowContext(s.ctx, querySqlQuery, req.SqlId, req.StartTime*1000, req.EndTime*1000).Scan(&querySql)
+	err := s.db.QueryRowContext(s.ctx, querySqlQuery, req.SqlId, req.StartTime*1000000, req.EndTime*1000000).Scan(&querySql)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("failed to query QuerySql: %w", err)
 	}
@@ -600,7 +600,7 @@ func (s *SqlAuditStore) QuerySqlDetailInfo(planStore *PlanStore, req apimodel.Sq
 		GROUP BY time_bucket
 		ORDER BY time_bucket`, req.Interval, s.path)
 
-	rows, err := s.db.QueryContext(s.ctx, execTrendQuery, req.SqlId, req.StartTime*1000, req.EndTime*1000)
+	rows, err := s.db.QueryContext(s.ctx, execTrendQuery, req.SqlId, req.StartTime*1000000, req.EndTime*1000000)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query execution trend: %w", err)
 	}
@@ -641,7 +641,7 @@ func (s *SqlAuditStore) QuerySqlDetailInfo(planStore *PlanStore, req apimodel.Sq
 			GROUP BY time_bucket
 			ORDER BY time_bucket`, req.Interval, strings.Join(selectExpressions, ", "), s.path)
 
-		rows, err := s.db.QueryContext(s.ctx, latencyTrendQuery, req.SqlId, req.StartTime*1000, req.EndTime*1000)
+		rows, err := s.db.QueryContext(s.ctx, latencyTrendQuery, req.SqlId, req.StartTime*1000000, req.EndTime*1000000)
 		if err != nil {
 			return nil, fmt.Errorf("failed to query latency trend: %w", err)
 		}
