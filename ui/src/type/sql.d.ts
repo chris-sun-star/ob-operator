@@ -40,10 +40,28 @@ declare namespace API {
     diagnoseInfo?: SqlDiagnoseInfo[];
   }
 
-  export interface MetricData {
-    // Assuming structure based on usage in other files or generic metric data
+  export interface MetricValue {
     timestamp: number;
     value: number;
+  }
+
+  export interface Metric {
+    name: string;
+    labels: { key: string; value: string }[];
+  }
+
+  export interface MetricData {
+    metric: Metric;
+    values: MetricValue[];
+  }
+
+  export interface IndexInfo {
+    tableName: string;
+    indexType: string;
+    uniqueness: string;
+    indexName: string;
+    columns: string[];
+    status: string;
   }
 
   export interface SqlDetailedInfo {
@@ -51,7 +69,7 @@ declare namespace API {
     latencyTrend: MetricData[];
     diagnoseInfo?: SqlDiagnoseInfo[];
     plans: PlanStatistic[];
-    indexies?: any[]; // IndexInfo not fully defined in snippet, using any for now or I can assume generic
+    indexies?: IndexInfo[];
   }
 
   export type MetricCategory = 'meta' | 'latency' | 'execution';
@@ -79,8 +97,8 @@ declare namespace API {
     failedExecutions: number;
     totalLatency: number;
     averageLatency: number;
-    executionTrend: MetricData[];
-    latencyTrend: MetricData[];
+    executionTrend: MetricValue[];
+    latencyTrend: MetricValue[];
   }
 
   export type PlanCategory = 'local' | 'remote' | 'distributed';

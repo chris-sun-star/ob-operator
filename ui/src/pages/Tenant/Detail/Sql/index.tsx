@@ -3,7 +3,7 @@ import { listSqlMetrics, listSqlStats } from '@/services/sql';
 import { SettingOutlined } from '@ant-design/icons';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
-import { useParams, useRequest } from '@umijs/max';
+import { Link, useParams, useRequest } from '@umijs/max';
 import { Button, Checkbox, Tooltip } from 'antd';
 import type { RangePickerProps } from 'antd/es/date-picker';
 import dayjs from 'dayjs';
@@ -22,6 +22,10 @@ export default function SqlList() {
   const [selectedMetricKeys, setSelectedMetricKeys] = useState<string[]>([]);
   const [maxElapsedTime, setMaxElapsedTime] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<string>('sql_analysis');
+  const [currentParams, setCurrentParams] = useState<{
+    startTime?: number;
+    endTime?: number;
+  }>({});
 
   // Helper to robustly extract metrics array regardless of response format
   const getMetricsList = (data: any): API.SqlMetricMetaCategory[] => {
@@ -146,13 +150,25 @@ export default function SqlList() {
             colConfig.width = 150;
             colConfig.ellipsis = true;
             colConfig.copyable = true;
-            colConfig.render = (dom, record) => (
-              <a
-                href={`/tenant/${ns}/${name}/${tenantName}/sql/${record.sqlId}?dbName=${record.dbName}`}
-              >
-                {dom}
-              </a>
-            );
+            colConfig.render = (dom, record) => {
+              const params = new URLSearchParams();
+              params.append('dbName', record.dbName);
+              if (currentParams.startTime) {
+                params.append('startTime', currentParams.startTime.toString());
+              }
+              if (currentParams.endTime) {
+                params.append('endTime', currentParams.endTime.toString());
+              }
+              return (
+                <Link
+                  to={`/tenant/${ns}/${name}/${tenantName}/sql/${
+                    record.sqlId
+                  }?${params.toString()}`}
+                >
+                  {dom}
+                </Link>
+              );
+            };
           } else if (metric.key === 'user_name') {
             colConfig.width = 100;
           }
@@ -273,7 +289,15 @@ export default function SqlList() {
       }
     });
     return cols;
-  }, [metricsData, selectedMetricKeys, ns, name, tenantName, maxElapsedTime]);
+  }, [
+    metricsData,
+    selectedMetricKeys,
+    ns,
+    name,
+    tenantName,
+    maxElapsedTime,
+    currentParams,
+  ]);
 
   const columns: ProColumns<API.SqlInfo>[] = [
     ...dynamicColumns,
@@ -402,6 +426,11 @@ export default function SqlList() {
           // Ensure startTime and endTime are present, defaulting to initialTimeRange if not
           const effectiveStartTime = startTime ?? initialTimeRange[0].unix();
           const effectiveEndTime = endTime ?? initialTimeRange[1].unix();
+
+          setCurrentParams({
+            startTime: effectiveStartTime,
+            endTime: effectiveEndTime,
+          });
 
           const msg = await listSqlStats({
             namespace: ns,
