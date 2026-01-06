@@ -48,9 +48,6 @@ func NewPlanStore(c context.Context, path string, readOnly bool) (*PlanStore, er
 	}
 
 	dsn := filepath.Join(path, "sql_plan.duckdb")
-	if readOnly {
-		dsn = dsn + "?access_mode=READ_ONLY"
-	}
 	var db *sql.DB
 	var err error
 	var conn *sql.Conn
