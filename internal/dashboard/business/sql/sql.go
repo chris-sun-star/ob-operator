@@ -14,6 +14,8 @@ package sql
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -410,11 +412,28 @@ func QueryPlanDetailInfo(ctx context.Context, param *sql.PlanDetailParam) (*sql.
 	var root *sql.PlanOperator
 
 	for _, plan := range plans {
+		outputOrFilter := make([]string, 0)
+		if plan.AccessPredicates != "" {
+			outputOrFilter = append(outputOrFilter, fmt.Sprintf("access: %s", plan.AccessPredicates))
+		}
+		if plan.FilterPredicates != "" {
+			outputOrFilter = append(outputOrFilter, fmt.Sprintf("filter: %s", plan.FilterPredicates))
+		}
+		if plan.StartupPredicates != "" {
+			outputOrFilter = append(outputOrFilter, fmt.Sprintf("startup: %s", plan.StartupPredicates))
+		}
+		if plan.Projection != "" {
+			outputOrFilter = append(outputOrFilter, fmt.Sprintf("projection: %s", plan.Projection))
+		}
+		if plan.SpecialPredicates != "" {
+			outputOrFilter = append(outputOrFilter, fmt.Sprintf("special: %s", plan.SpecialPredicates))
+		}
 		planMap[plan.ID] = &sql.PlanOperator{
-			Operator:      plan.Operator,
-			Name:          plan.ObjectName,
-			EstimatedRows: int(plan.Cardinality),
-			Cost:          plan.Cost,
+			Operator:       plan.Operator,
+			Name:           plan.ObjectName,
+			EstimatedRows:  int(plan.Cardinality),
+			Cost:           plan.Cost,
+			OutputOrFilter: strings.Join(outputOrFilter, "\n"),
 		}
 	}
 
