@@ -151,6 +151,17 @@ func main() {
 		}
 	}
 
+	// Configure worker num
+	workerNum := 1
+	workerNumStr := os.Getenv("PLAN_WORKER_NUM")
+	if workerNumStr != "" {
+		if val, err := strconv.Atoi(workerNumStr); err == nil && val > 0 {
+			workerNum = val
+		} else {
+			analyzerLogger.Printf("Invalid PLAN_WORKER_NUM value '%s', using default of 1.", workerNumStr)
+		}
+	}
+
 	config := &config.Config{
 		Namespace:                    namespace,
 		OBTenant:                     obtenant,
@@ -161,7 +172,7 @@ func main() {
 		SlowSqlThresholdMilliSeconds: slowSqlThresholdMilliSeconds,
 		// config via environment variable
 		QueueSize: 100,
-		WorkerNum: 4,
+		WorkerNum: workerNum,
 	}
 
 	collector := collector.NewCollector(ctx, config, collectorLogger)

@@ -32,7 +32,7 @@ import (
 type PlanStore struct {
 	ctx context.Context
 	db  *sql.DB
-	mu  sync.Mutex
+	mu  sync.RWMutex
 }
 
 func (s *PlanStore) initSqlPlanTable() error {
@@ -87,6 +87,9 @@ func NewPlanStore(c context.Context, path string, readOnly bool) (*PlanStore, er
 }
 
 func (s *PlanStore) LoadExistingPlans() ([]model.SqlPlanIdentifier, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	rows, err := s.db.Query(sqlconst.ListSqlPlanIdentifier)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to query existing plans")
@@ -131,6 +134,9 @@ func (s *PlanStore) Store(plan model.SqlPlan) error {
 }
 
 func (s *PlanStore) PlanExists(ident model.SqlPlanIdentifier) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	var count int
 	query := `SELECT COUNT(*) FROM sql_plan WHERE TENANT_ID = ? AND SVR_IP = ? AND SVR_PORT = ? AND PLAN_ID = ?`
 	err := s.db.QueryRow(query, ident.TenantID, ident.SvrIP, ident.SvrPort, ident.PlanID).Scan(&count)
@@ -141,6 +147,9 @@ func (s *PlanStore) PlanExists(ident model.SqlPlanIdentifier) (bool, error) {
 }
 
 func (s *PlanStore) GetPlanDetail(ident model.SqlPlanIdentifier) ([]model.SqlPlan, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	rows, err := s.db.Query(sqlconst.SelectSqlPlanFromDuckdb, ident.TenantID, ident.SvrIP, ident.SvrPort, ident.PlanID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to query plans by sqlId and planHash")
@@ -176,6 +185,9 @@ func (s *PlanStore) Close() {
 }
 
 func (s *PlanStore) GetPlanStatsBySqlId(sqlId string) ([]model.PlanStatistic, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	query := `
 		SELECT
 			TENANT_ID,
@@ -221,6 +233,9 @@ func (s *PlanStore) GetPlanStatsBySqlId(sqlId string) ([]model.PlanStatistic, er
 }
 
 func (s *PlanStore) GetTableInfoBySqlId(sqlId string) ([]model.TableInfo, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	query := `
 		SELECT DISTINCT
 			OBJECT_OWNER,
