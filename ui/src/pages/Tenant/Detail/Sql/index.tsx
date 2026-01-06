@@ -161,9 +161,11 @@ export default function SqlList() {
               }
               return (
                 <Link
-                  to={`/tenant/${ns}/${name}/${tenantName}/sql/${
-                    record.sqlId
-                  }?${params.toString()}`}
+                  to={{
+                    pathname: `/tenant/${ns}/${name}/${tenantName}/sql/${record.sqlId}`,
+                    search: params.toString(),
+                  }}
+                  state={record}
                 >
                   {dom}
                 </Link>

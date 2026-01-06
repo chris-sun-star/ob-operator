@@ -47,7 +47,7 @@ declare namespace API {
 
   export interface Metric {
     name: string;
-    labels: { key: string; value: string }[];
+    labels: { key: string; value: string }[] | null;
   }
 
   export interface MetricData {

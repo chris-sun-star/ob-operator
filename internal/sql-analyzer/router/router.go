@@ -20,6 +20,9 @@ import (
 func Register(r *gin.Engine) {
 	apiV1 := r.Group("/api/v1")
 	{
+		// Debug route
+		apiV1.POST("/debug/query", handler.Wrap(handler.DebugQuery))
+
 		tenants := apiV1.Group("/tenants/:tenant_name")
 		{
 			// The openapi definition is in the handler

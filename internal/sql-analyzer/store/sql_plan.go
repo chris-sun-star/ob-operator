@@ -264,3 +264,49 @@ func (s *PlanStore) GetTableInfoBySqlId(sqlId string) ([]model.TableInfo, error)
 	}
 	return tables, nil
 }
+
+func (s *PlanStore) DebugQuery(query string, args ...interface{}) ([]map[string]interface{}, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	results := []map[string]interface{}{}
+
+	for rows.Next() {
+		columns := make([]interface{}, len(cols))
+		columnPointers := make([]interface{}, len(cols))
+		for i := range columns {
+			columnPointers[i] = &columns[i]
+		}
+
+		if err := rows.Scan(columnPointers...); err != nil {
+			return nil, err
+		}
+
+		m := make(map[string]interface{})
+		for i, colName := range cols {
+			val := columnPointers[i].(*interface{})
+			if val != nil {
+				if b, ok := (*val).([]byte); ok {
+					m[colName] = string(b)
+				} else {
+					m[colName] = *val
+				}
+			} else {
+				m[colName] = nil
+			}
+		}
+		results = append(results, m)
+	}
+	return results, nil
+}

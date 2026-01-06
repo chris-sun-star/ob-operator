@@ -3,7 +3,13 @@ import { listSqlMetrics, querySqlDetailInfo } from '@/services/sql';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { ProCard, ProDescriptions, ProTable } from '@ant-design/pro-components';
 import { Line } from '@antv/g2plot';
-import { history, useParams, useRequest, useSearchParams } from '@umijs/max';
+import {
+  history,
+  useLocation,
+  useParams,
+  useRequest,
+  useSearchParams,
+} from '@umijs/max';
 import { Button, DatePicker, Select, Space, Tag, Typography } from 'antd';
 import type { RangePickerProps } from 'antd/es/date-picker';
 import dayjs from 'dayjs';
@@ -37,8 +43,8 @@ const SqlTrendChart: React.FC<SqlTrendChartProps> = ({
     // G2Plot expects array of objects
     const plotData: any[] = [];
     data.forEach((metricData) => {
-      const name = metricData.metric?.name || type;
-      metricData.values?.forEach((v) => {
+      const name = metricData?.metric?.name || type;
+      metricData?.values?.forEach((v) => {
         plotData.push({
           time: v.timestamp * 1000, // Convert to ms
           value: v.value,
@@ -52,6 +58,7 @@ const SqlTrendChart: React.FC<SqlTrendChartProps> = ({
 
     if (chartRef.current) {
       chartRef.current.destroy();
+      chartRef.current = undefined;
     }
 
     const chart = new Line(containerRef.current, {
@@ -87,11 +94,12 @@ const SqlTrendChart: React.FC<SqlTrendChartProps> = ({
     return () => {
       if (chartRef.current) {
         chartRef.current.destroy();
+        chartRef.current = undefined;
       }
     };
   }, [data, type, height]);
 
-  return <div ref={containerRef} />;
+  return <div ref={containerRef} style={{ height }} />;
 };
 
 // --- Main Page Component ---
@@ -104,6 +112,9 @@ const SqlDetail: React.FC = () => {
     sqlId: string;
   }>();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const stateSqlMeta = location.state as API.SqlInfo | undefined;
+
   const dbName = searchParams.get('dbName') || '';
   const urlStartTime = searchParams.get('startTime');
   const urlEndTime = searchParams.get('endTime');
@@ -239,7 +250,10 @@ const SqlDetail: React.FC = () => {
     },
   );
 
-  const sqlMeta = sqlMetaData?.data?.items?.[0];
+  const sqlMeta = stateSqlMeta || sqlMetaData?.data?.items?.[0];
+
+  // Handle both wrapped (response.data) and unwrapped (response IS data) cases
+  const sqlInfo = detailData?.data || (detailData as any);
 
   return (
     <div
@@ -310,7 +324,7 @@ const SqlDetail: React.FC = () => {
           <ProCard split="vertical">
             <ProCard title="Executions" colSpan={12}>
               <SqlTrendChart
-                data={detailData?.data?.executionTrend || []}
+                data={sqlInfo?.executionTrend || []}
                 type="execution"
               />
             </ProCard>
@@ -334,7 +348,7 @@ const SqlDetail: React.FC = () => {
               colSpan={12}
             >
               <SqlTrendChart
-                data={detailData?.data?.latencyTrend || []}
+                data={sqlInfo?.latencyTrend || []}
                 type="latency"
               />
             </ProCard>
@@ -343,9 +357,8 @@ const SqlDetail: React.FC = () => {
 
         {/* Diagnosis */}
         <ProCard title="Diagnosis & Advice" headerBordered loading={loading}>
-          {detailData?.data?.diagnoseInfo &&
-          detailData.data.diagnoseInfo.length > 0 ? (
-            detailData.data.diagnoseInfo.map((diag, idx) => (
+          {sqlInfo?.diagnoseInfo && sqlInfo.diagnoseInfo.length > 0 ? (
+            sqlInfo.diagnoseInfo.map((diag, idx) => (
               <Alert
                 key={idx}
                 message={diag.reason}
@@ -363,8 +376,10 @@ const SqlDetail: React.FC = () => {
         {/* Plan Statistics */}
         <ProCard title="Plan Statistics" headerBordered loading={loading}>
           <ProTable<API.PlanStatistic>
-            rowKey="planID"
-            dataSource={detailData?.data?.plans || []}
+            rowKey={(record) =>
+              `${record.svrIP}-${record.svrPort}-${record.planID}`
+            }
+            dataSource={sqlInfo?.plans || []}
             columns={[
               {
                 title: 'Plan ID',
@@ -380,13 +395,26 @@ const SqlDetail: React.FC = () => {
               { title: 'Svr IP', dataIndex: 'svrIP' },
               { title: 'Svr Port', dataIndex: 'svrPort' },
               { title: 'Plan Hash', dataIndex: 'planHash' },
-              { title: 'Cost', dataIndex: 'cost' },
-              { title: 'CPU Cost', dataIndex: 'cpuCost' },
-              { title: 'IO Cost', dataIndex: 'ioCost' },
+              {
+                title: 'Cost',
+                dataIndex: 'cost',
+                sorter: (a, b) => a.cost - b.cost,
+              },
+              {
+                title: 'CPU Cost',
+                dataIndex: 'cpuCost',
+                sorter: (a, b) => a.cpuCost - b.cpuCost,
+              },
+              {
+                title: 'IO Cost',
+                dataIndex: 'ioCost',
+                sorter: (a, b) => a.ioCost - b.ioCost,
+              },
               {
                 title: 'Generated Time',
                 dataIndex: 'generatedTime',
                 valueType: 'dateTime',
+                sorter: (a, b) => a.generatedTime - b.generatedTime,
               },
             ]}
             search={false}
@@ -398,7 +426,7 @@ const SqlDetail: React.FC = () => {
         {/* Index Info */}
         <ProCard title="Index Info" headerBordered loading={loading}>
           <ProTable<API.IndexInfo>
-            dataSource={detailData?.data?.indexies || []}
+            dataSource={sqlInfo?.indexies || []}
             columns={[
               { title: 'Table Name', dataIndex: 'tableName' },
               { title: 'Index Name', dataIndex: 'indexName' },
