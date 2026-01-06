@@ -122,7 +122,7 @@ func (s *PlanStore) Store(plan model.SqlPlan) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	valueArgs := []interface{}{plan.TenantID, plan.SvrIP, plan.SvrPort, plan.PlanID, plan.SqlID, plan.DbID, plan.PlanHash, plan.GmtCreate,
+	valueArgs := []interface{}{plan.TenantID, plan.SvrIP, plan.SvrPort, plan.PlanID, plan.SqlID, plan.DbID, fmt.Sprintf("%d", plan.PlanHash), plan.GmtCreate,
 		plan.Operator, plan.ObjectNode, plan.ObjectID, plan.ObjectOwner, plan.ObjectName, plan.ObjectAlias,
 		plan.ObjectType, plan.Optimizer, plan.ID, plan.ParentID, plan.Depth, plan.Position, plan.Cost, plan.RealCost,
 		plan.Cardinality, plan.RealCardinality, plan.IoCost, plan.CpuCost, plan.Bytes, plan.Rowset, plan.OtherTag,
@@ -162,13 +162,18 @@ func (s *PlanStore) GetPlanDetail(ident model.SqlPlanIdentifier) ([]model.SqlPla
 	plans := make([]model.SqlPlan, 0)
 	for rows.Next() {
 		var plan model.SqlPlan
-		if err := rows.Scan(&plan.TenantID, &plan.SvrIP, &plan.SvrPort, &plan.PlanID, &plan.SqlID, &plan.DbID, &plan.PlanHash, &plan.GmtCreate,
+		var planHashStr string
+		if err := rows.Scan(&plan.TenantID, &plan.SvrIP, &plan.SvrPort, &plan.PlanID, &plan.SqlID, &plan.DbID, &planHashStr, &plan.GmtCreate,
 			&plan.Operator, &plan.ObjectNode, &plan.ObjectID, &plan.ObjectOwner, &plan.ObjectName, &plan.ObjectAlias,
 			&plan.ObjectType, &plan.Optimizer, &plan.ID, &plan.ParentID, &plan.Depth, &plan.Position, &plan.Cost, &plan.RealCost,
 			&plan.Cardinality, &plan.RealCardinality, &plan.IoCost, &plan.CpuCost, &plan.Bytes, &plan.Rowset, &plan.OtherTag,
 			&plan.PartitionStart, &plan.Other, &plan.AccessPredicates, &plan.FilterPredicates, &plan.StartupPredicates,
 			&plan.Projection, &plan.SpecialPredicates, &plan.QblockName, &plan.Remarks, &plan.OtherXML); err != nil {
 			return nil, errors.Wrap(err, "failed to scan plan")
+		}
+		plan.PlanHash, err = strconv.ParseUint(planHashStr, 10, 64)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to parse plan hash")
 		}
 		plans = append(plans, plan)
 	}
@@ -211,12 +216,13 @@ func (s *PlanStore) GetPlanStatsBySqlId(sqlId string) ([]model.PlanStatistic, er
 	stats := make([]model.PlanStatistic, 0)
 	for rows.Next() {
 		var stat model.PlanStatistic
+		var planHashStr string
 		if err := rows.Scan(
 			&stat.TenantID,
 			&stat.SvrIP,
 			&stat.SvrPort,
 			&stat.PlanID,
-			&stat.PlanHash,
+			&planHashStr,
 			&stat.GeneratedTime,
 			&stat.IoCost,
 			&stat.CpuCost,
@@ -224,6 +230,10 @@ func (s *PlanStore) GetPlanStatsBySqlId(sqlId string) ([]model.PlanStatistic, er
 			&stat.RealCost,
 		); err != nil {
 			return nil, errors.Wrap(err, "failed to scan plan statistic")
+		}
+		stat.PlanHash, err = strconv.ParseUint(planHashStr, 10, 64)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to parse plan hash in stats")
 		}
 		stats = append(stats, stat)
 	}
