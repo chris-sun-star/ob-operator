@@ -413,7 +413,8 @@ const SqlDetail: React.FC = () => {
               {
                 title: 'Generated Time',
                 dataIndex: 'generatedTime',
-                valueType: 'dateTime',
+                render: (_, record) =>
+                  dayjs.unix(record.generatedTime).format(DATE_TIME_FORMAT),
                 sorter: (a, b) => a.generatedTime - b.generatedTime,
               },
             ]}
