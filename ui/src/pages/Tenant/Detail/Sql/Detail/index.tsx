@@ -1,5 +1,9 @@
 import { DATE_TIME_FORMAT, DateSelectOption } from '@/constants/datetime';
-import { listSqlMetrics, querySqlDetailInfo } from '@/services/sql';
+import {
+  listSqlMetrics,
+  queryPlanDetailInfo,
+  querySqlDetailInfo,
+} from '@/services/sql';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { ProCard, ProDescriptions, ProTable } from '@ant-design/pro-components';
 import { Line } from '@antv/g2plot';
@@ -10,7 +14,15 @@ import {
   useRequest,
   useSearchParams,
 } from '@umijs/max';
-import { Button, DatePicker, Select, Space, Tag, Typography } from 'antd';
+import {
+  Button,
+  DatePicker,
+  Drawer,
+  Select,
+  Space,
+  Tag,
+  Typography,
+} from 'antd';
 import type { RangePickerProps } from 'antd/es/date-picker';
 import dayjs from 'dayjs';
 import { useEffect, useRef, useState } from 'react';
@@ -105,10 +117,9 @@ const SqlTrendChart: React.FC<SqlTrendChartProps> = ({
 // --- Main Page Component ---
 
 const SqlDetail: React.FC = () => {
-  const { ns, name, tenantName, sqlId } = useParams<{
+  const { ns, name, sqlId } = useParams<{
     ns: string;
     name: string;
-    tenantName: string;
     sqlId: string;
   }>();
   const [searchParams] = useSearchParams();
@@ -252,6 +263,51 @@ const SqlDetail: React.FC = () => {
 
   const sqlMeta = stateSqlMeta || sqlMetaData?.data?.items?.[0];
 
+  const [planDrawerOpen, setPlanDrawerOpen] = useState(false);
+  const [currentPlanId, setCurrentPlanId] = useState<number>();
+
+  const {
+    data: planDetailTree,
+    loading: planDetailLoading,
+    run: fetchPlanDetail,
+  } = useRequest(
+    async (record: API.PlanStatistic) => {
+      if (!ns || !name) return;
+      const res = await queryPlanDetailInfo({
+        namespace: ns,
+        obtenant: name,
+        tenantID: record.tenantID,
+        svrIP: record.svrIP,
+        svrPort: record.svrPort,
+        planID: record.planID,
+      });
+
+      const data = res?.data || (res as any);
+
+      // Add keys for Table
+      const addKeys = (node: any, idx: string) => {
+        node.key = idx;
+        if (node.childOperators) {
+          node.childOperators.forEach((child: any, i: number) =>
+            addKeys(child, `${idx}-${i}`),
+          );
+        }
+      };
+
+      if (data?.planDetail) {
+        addKeys(data.planDetail, '0');
+      }
+      return data;
+    },
+    { manual: true },
+  );
+
+  const handlePlanClick = (record: API.PlanStatistic) => {
+    setCurrentPlanId(record.planID);
+    setPlanDrawerOpen(true);
+    fetchPlanDetail(record);
+  };
+
   // Handle both wrapped (response.data) and unwrapped (response IS data) cases
   const sqlInfo = detailData?.data || (detailData as any);
 
@@ -385,11 +441,7 @@ const SqlDetail: React.FC = () => {
                 title: 'Plan ID',
                 dataIndex: 'planID',
                 render: (text, record) => (
-                  <a
-                    href={`/tenant/${ns}/${name}/${tenantName}/sql/${sqlId}/plan/${record.planID}`}
-                  >
-                    {text}
-                  </a>
+                  <a onClick={() => handlePlanClick(record)}>{text}</a>
                 ),
               },
               { title: 'Svr IP', dataIndex: 'svrIP' },
@@ -447,6 +499,44 @@ const SqlDetail: React.FC = () => {
           />
         </ProCard>
       </ProCard>
+      <Drawer
+        title={`Plan Detail (Plan ID: ${currentPlanId})`}
+        width={1000}
+        open={planDrawerOpen}
+        onClose={() => setPlanDrawerOpen(false)}
+        bodyStyle={{ padding: 0 }}
+      >
+        <ProTable
+          columns={[
+            { title: 'Operator', dataIndex: 'operator', key: 'operator' },
+            { title: 'Name', dataIndex: 'name', key: 'name' },
+            {
+              title: 'Est. Rows',
+              dataIndex: 'estimatedRows',
+              key: 'estimatedRows',
+            },
+            { title: 'Cost', dataIndex: 'cost', key: 'cost' },
+            {
+              title: 'Output/Filter',
+              dataIndex: 'outputOrFilter',
+              key: 'outputOrFilter',
+              ellipsis: true,
+            },
+          ]}
+          dataSource={
+            planDetailTree?.planDetail ? [planDetailTree.planDetail] : []
+          }
+          rowKey="key"
+          loading={planDetailLoading}
+          pagination={false}
+          search={false}
+          options={false}
+          expandable={{
+            childrenColumnName: 'childOperators',
+            defaultExpandAllRows: true,
+          }}
+        />
+      </Drawer>
     </div>
   );
 };
