@@ -80,3 +80,32 @@ func GetSqlDetailInfo(c *gin.Context) (*model.SqlDetailResponse, error) {
 
 	return business.GetSqlDetailInfo(c, cm, auditStore, planStore, req)
 }
+
+type DebugQueryRequest struct {
+	Query string `json:"query" binding:"required"`
+}
+
+func DebugQuery(c *gin.Context) (any, error) {
+	var req DebugQueryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		return nil, err
+	}
+
+	dataPath := os.Getenv("DATA_PATH")
+	if dataPath == "" {
+		dataPath = "/data"
+	}
+
+	planStore, err := store.NewPlanStore(c.Request.Context(), filepath.Join(dataPath, "sql_plan"), true)
+	if err != nil {
+		return nil, err
+	}
+	defer planStore.Close()
+
+	results, err := planStore.DebugQuery(req.Query)
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
