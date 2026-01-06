@@ -264,68 +264,113 @@ const SqlDetail: React.FC = () => {
   const sqlMeta = stateSqlMeta || sqlMetaData?.data?.items?.[0];
 
   const [planDrawerOpen, setPlanDrawerOpen] = useState(false);
+
   const [currentPlanId, setCurrentPlanId] = useState<number>();
 
+  const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
+
+  const [planDataSource, setPlanDataSource] = useState<any[]>([]);
+
   const {
-    data: planDetailTree,
     loading: planDetailLoading,
+
     run: fetchPlanDetail,
   } = useRequest(
     async (record: API.PlanStatistic) => {
       if (!ns || !name) return;
+
       const res = await queryPlanDetailInfo({
         namespace: ns,
+
         obtenant: name,
+
         tenantID: record.tenantID,
+
         svrIP: record.svrIP,
+
         svrPort: record.svrPort,
+
         planID: record.planID,
       });
 
-      const data = res?.data || (res as any);
-
-      // Add keys for Table
-      const addKeys = (node: any, idx: string) => {
-        node.key = idx;
-        if (node.childOperators) {
-          node.childOperators.forEach((child: any, i: number) =>
-            addKeys(child, `${idx}-${i}`),
-          );
-        }
-      };
-
-      if (data?.planDetail) {
-        addKeys(data.planDetail, '0');
-      }
-      return data;
+      return res;
     },
-    { manual: true },
+
+    {
+      manual: true,
+
+      onSuccess: (res) => {
+        const data = res?.data || (res as any);
+
+        if (data?.planDetail) {
+          const keys: React.Key[] = [];
+
+          // Deep clone to avoid mutating the cached data
+
+          const root = JSON.parse(JSON.stringify(data.planDetail));
+
+          const traverse = (node: any, key: string) => {
+            node.key = key;
+
+            keys.push(key);
+
+            if (node.childOperators && node.childOperators.length > 0) {
+              node.childOperators.forEach((child: any, index: number) => {
+                traverse(child, `${key}-${index}`);
+              });
+            }
+          };
+
+          traverse(root, '0');
+
+          setPlanDataSource([root]);
+
+          setExpandedKeys(keys);
+        } else {
+          setPlanDataSource([]);
+
+          setExpandedKeys([]);
+        }
+      },
+    },
   );
 
   const handlePlanClick = (record: API.PlanStatistic) => {
     setCurrentPlanId(record.planID);
+
+    setPlanDataSource([]);
+
+    setExpandedKeys([]);
+
     setPlanDrawerOpen(true);
+
     fetchPlanDetail(record);
   };
 
   // Handle both wrapped (response.data) and unwrapped (response IS data) cases
+
   const sqlInfo = detailData?.data || (detailData as any);
 
   return (
     <div
       style={{
         backgroundColor: '#F5F7FA',
+
         minHeight: '100vh',
+
         padding: 24,
       }}
     >
       {/* Header & Basic Info */}
+
       <ProCard ghost gutter={[16, 16]} direction="column">
         <ProCard loading={loading}>
           <Space
             style={{
               marginBottom: 16,
+
               justifyContent: 'space-between',
+
               width: '100%',
             }}
           >
@@ -336,10 +381,12 @@ const SqlDetail: React.FC = () => {
               >
                 Back
               </Button>
+
               <Title level={4} style={{ margin: 0 }}>
                 SQL Detail: {sqlId}
               </Title>
             </Space>
+
             <RangePicker
               showTime
               value={timeRange}
@@ -350,6 +397,7 @@ const SqlDetail: React.FC = () => {
               presets={DateSelectOption.filter((o) => o.value !== 'custom').map(
                 (o) => ({
                   label: o.label,
+
                   value: [dayjs().subtract(o.value as number, 'ms'), dayjs()],
                 }),
               )}
@@ -365,10 +413,13 @@ const SqlDetail: React.FC = () => {
                 {sqlMeta?.querySql || '-'}
               </Typography.Paragraph>
             </ProDescriptions.Item>
+
             <ProDescriptions.Item label="SQL ID">{sqlId}</ProDescriptions.Item>
+
             <ProDescriptions.Item label="Database">
               {dbName || sqlMeta?.dbName || '-'}
             </ProDescriptions.Item>
+
             <ProDescriptions.Item label="User">
               {sqlMeta?.userName || '-'}
             </ProDescriptions.Item>
@@ -376,6 +427,7 @@ const SqlDetail: React.FC = () => {
         </ProCard>
 
         {/* Charts */}
+
         <ProCard title="History Request Info" headerBordered loading={loading}>
           <ProCard split="vertical">
             <ProCard title="Executions" colSpan={12}>
@@ -384,10 +436,12 @@ const SqlDetail: React.FC = () => {
                 type="execution"
               />
             </ProCard>
+
             <ProCard
               title={
                 <Space>
                   <span>Latency</span>
+
                   <Select
                     mode="multiple"
                     maxTagCount="responsive"
@@ -396,6 +450,7 @@ const SqlDetail: React.FC = () => {
                     style={{ width: 400 }}
                     options={latencyMetricsMeta.map((m) => ({
                       label: m.name,
+
                       value: m.key,
                     }))}
                   />
@@ -412,6 +467,7 @@ const SqlDetail: React.FC = () => {
         </ProCard>
 
         {/* Diagnosis */}
+
         <ProCard title="Diagnosis & Advice" headerBordered loading={loading}>
           {sqlInfo?.diagnoseInfo && sqlInfo.diagnoseInfo.length > 0 ? (
             sqlInfo.diagnoseInfo.map((diag, idx) => (
@@ -430,6 +486,7 @@ const SqlDetail: React.FC = () => {
         </ProCard>
 
         {/* Plan Statistics */}
+
         <ProCard title="Plan Statistics" headerBordered loading={loading}>
           <ProTable<API.PlanStatistic>
             rowKey={(record) =>
@@ -439,34 +496,52 @@ const SqlDetail: React.FC = () => {
             columns={[
               {
                 title: 'Plan ID',
+
                 dataIndex: 'planID',
+
                 render: (text, record) => (
                   <a onClick={() => handlePlanClick(record)}>{text}</a>
                 ),
               },
+
               { title: 'Svr IP', dataIndex: 'svrIP' },
+
               { title: 'Svr Port', dataIndex: 'svrPort' },
+
               { title: 'Plan Hash', dataIndex: 'planHash' },
+
               {
                 title: 'Cost',
+
                 dataIndex: 'cost',
+
                 sorter: (a, b) => a.cost - b.cost,
               },
+
               {
                 title: 'CPU Cost',
+
                 dataIndex: 'cpuCost',
+
                 sorter: (a, b) => a.cpuCost - b.cpuCost,
               },
+
               {
                 title: 'IO Cost',
+
                 dataIndex: 'ioCost',
+
                 sorter: (a, b) => a.ioCost - b.ioCost,
               },
+
               {
                 title: 'Generated Time',
+
                 dataIndex: 'generatedTime',
+
                 render: (_, record) =>
                   dayjs.unix(record.generatedTime).format(DATE_TIME_FORMAT),
+
                 sorter: (a, b) => a.generatedTime - b.generatedTime,
               },
             ]}
@@ -477,20 +552,28 @@ const SqlDetail: React.FC = () => {
         </ProCard>
 
         {/* Index Info */}
+
         <ProCard title="Index Info" headerBordered loading={loading}>
           <ProTable<API.IndexInfo>
             dataSource={sqlInfo?.indexies || []}
             columns={[
               { title: 'Table Name', dataIndex: 'tableName' },
+
               { title: 'Index Name', dataIndex: 'indexName' },
+
               { title: 'Index Type', dataIndex: 'indexType' },
+
               { title: 'Uniqueness', dataIndex: 'uniqueness' },
+
               {
                 title: 'Columns',
+
                 dataIndex: 'columns',
+
                 render: (cols) =>
                   Array.isArray(cols) ? cols.join(', ') : cols,
               },
+
               { title: 'Status', dataIndex: 'status' },
             ]}
             search={false}
@@ -499,6 +582,7 @@ const SqlDetail: React.FC = () => {
           />
         </ProCard>
       </ProCard>
+
       <Drawer
         title={`Plan Detail (Plan ID: ${currentPlanId})`}
         width={1000}
@@ -509,31 +593,42 @@ const SqlDetail: React.FC = () => {
         <ProTable
           columns={[
             { title: 'Operator', dataIndex: 'operator', key: 'operator' },
+
             { title: 'Name', dataIndex: 'name', key: 'name' },
+
             {
               title: 'Est. Rows',
+
               dataIndex: 'estimatedRows',
+
               key: 'estimatedRows',
             },
+
             { title: 'Cost', dataIndex: 'cost', key: 'cost' },
+
             {
               title: 'Output/Filter',
+
               dataIndex: 'outputOrFilter',
+
               key: 'outputOrFilter',
+
               ellipsis: true,
             },
           ]}
-          dataSource={
-            planDetailTree?.planDetail ? [planDetailTree.planDetail] : []
-          }
+          dataSource={planDataSource}
           rowKey="key"
           loading={planDetailLoading}
           pagination={false}
           search={false}
           options={false}
           expandable={{
+            expandedRowKeys: expandedKeys,
+
+            onExpandedRowsChange: (keys) =>
+              setExpandedKeys(keys as React.Key[]),
+
             childrenColumnName: 'childOperators',
-            defaultExpandAllRows: true,
           }}
         />
       </Drawer>
