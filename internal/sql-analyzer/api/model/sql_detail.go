@@ -1,11 +1,9 @@
 package model
 
 type SqlDetailRequest struct {
-	StartTime      int64    `json:"startTime,omitempty"`
-	EndTime        int64    `json:"endTime,omitempty"`
-	SqlId          string   `json:"sqlId" binding:"required"`
-	Interval       int      `json:"interval" binding:"required"`
-	LatencyColumns []string `json:"latencyColumns"`
+	StartTime int64  `json:"startTime,omitempty"`
+	EndTime   int64  `json:"endTime,omitempty"`
+	SqlId     string `json:"sqlId" binding:"required"`
 }
 
 type PlanTypeTrend struct {
@@ -49,13 +47,11 @@ type IndexInfo struct {
 }
 
 type SqlDetailResponse struct {
-	QuerySql       string             `json:"querySql,omitempty"`
-	ExecutionTrend []PlanTypeTrend    `json:"executionTrend"`
-	LatencyTrend   []LatencyTrendItem `json:"latencyTrend"`
-	Plans          []PlanStats        `json:"plans"`
-	Tables         []TableInfo        `json:"tables"`
-	Indexes        []IndexInfo        `json:"indexes"`
-	DiagnoseInfo   []SqlDiagnoseInfo  `json:"diagnoseInfo,omitempty"`
+	QuerySql     string            `json:"querySql,omitempty"`
+	Plans        []PlanStats       `json:"plans"`
+	Tables       []TableInfo       `json:"tables"`
+	Indexes      []IndexInfo       `json:"indexes"`
+	DiagnoseInfo []SqlDiagnoseInfo `json:"diagnoseInfo,omitempty"`
 }
 
 type SqlDiagnoseInfo struct {

@@ -38,6 +38,15 @@ export async function querySqlDetailInfo(
   });
 }
 
+export async function querySqlHistoryInfo(
+  data: API.SqlHistoryParam,
+): Promise<API.SqlHistoryInfo> {
+  return request(`${sqlPrefix}/querySqlHistoryInfo`, {
+    method: 'POST',
+    data,
+  });
+}
+
 export async function queryPlanDetailInfo(
   data: API.PlanDetailParam,
 ): Promise<API.PlanDetailResponse> {

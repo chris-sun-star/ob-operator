@@ -180,7 +180,7 @@ func ListSqlStats(ctx context.Context, filter *sql.SqlFilter) (*sql.SqlStatsList
 	}, nil
 }
 
-func QuerySqlDetailInfo(ctx context.Context, param *sql.SqlDetailParam) (*sql.SqlDetailedInfo, error) {
+func QuerySqlHistoryInfo(ctx context.Context, param *sql.SqlHistoryParam) (*sql.SqlHistoryInfo, error) {
 	podIP, err := k8s.GetSQLAnalyzerPodIP(ctx, param.Namespace, param.OBTenant)
 	if err != nil {
 		return nil, err
@@ -194,7 +194,7 @@ func QuerySqlDetailInfo(ctx context.Context, param *sql.SqlDetailParam) (*sql.Sq
 		return nil, errors.Wrap(err, "Get ob tenant")
 	}
 
-	req := apimodel.SqlDetailRequest{
+	req := apimodel.SqlHistoryRequest{
 		StartTime:      param.StartTime,
 		EndTime:        param.EndTime,
 		SqlId:          param.SqlId,
@@ -202,7 +202,7 @@ func QuerySqlDetailInfo(ctx context.Context, param *sql.SqlDetailParam) (*sql.Sq
 		LatencyColumns: param.LatencyColumns,
 	}
 
-	resp, err := QuerySqlDetail(podIP, obtenant.Spec.TenantName, req)
+	resp, err := QuerySqlHistory(podIP, obtenant.Spec.TenantName, req)
 	if err != nil {
 		return nil, err
 	}
@@ -211,12 +211,9 @@ func QuerySqlDetailInfo(ctx context.Context, param *sql.SqlDetailParam) (*sql.Sq
 		return nil, nil
 	}
 
-	detailedInfo := &sql.SqlDetailedInfo{
+	historyInfo := &sql.SqlHistoryInfo{
 		ExecutionTrend: []response.MetricData{},
 		LatencyTrend:   []response.MetricData{},
-		DiagnoseInfo:   []sql.SqlDiagnoseInfo{},
-		Plans:          []sql.PlanStatistic{},
-		Indexies:       []sql.IndexInfo{},
 	}
 
 	// Convert ExecutionTrend
@@ -239,7 +236,7 @@ func QuerySqlDetailInfo(ctx context.Context, param *sql.SqlDetailParam) (*sql.Sq
 		remoteTrend.Values = append(remoteTrend.Values, response.MetricValue{Timestamp: ts, Value: trend.Remote})
 		distributedTrend.Values = append(distributedTrend.Values, response.MetricValue{Timestamp: ts, Value: trend.Distributed})
 	}
-	detailedInfo.ExecutionTrend = append(detailedInfo.ExecutionTrend, localTrend, remoteTrend, distributedTrend)
+	historyInfo.ExecutionTrend = append(historyInfo.ExecutionTrend, localTrend, remoteTrend, distributedTrend)
 
 	// Convert LatencyTrend
 	latencyTrends := make(map[string]*response.MetricData)
@@ -260,7 +257,45 @@ func QuerySqlDetailInfo(ctx context.Context, param *sql.SqlDetailParam) (*sql.Sq
 	}
 
 	for _, trend := range latencyTrends {
-		detailedInfo.LatencyTrend = append(detailedInfo.LatencyTrend, *trend)
+		historyInfo.LatencyTrend = append(historyInfo.LatencyTrend, *trend)
+	}
+
+	return historyInfo, nil
+}
+
+func QuerySqlDetailInfo(ctx context.Context, param *sql.SqlDetailParam) (*sql.SqlDetailedInfo, error) {
+	podIP, err := k8s.GetSQLAnalyzerPodIP(ctx, param.Namespace, param.OBTenant)
+	if err != nil {
+		return nil, err
+	}
+
+	obtenant, err := clients.GetOBTenant(ctx, types.NamespacedName{
+		Namespace: param.Namespace,
+		Name:      param.OBTenant,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "Get ob tenant")
+	}
+
+	req := apimodel.SqlDetailRequest{
+		StartTime: param.StartTime,
+		EndTime:   param.EndTime,
+		SqlId:     param.SqlId,
+	}
+
+	resp, err := QuerySqlDetail(podIP, obtenant.Spec.TenantName, req)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp == nil {
+		return nil, nil
+	}
+
+	detailedInfo := &sql.SqlDetailedInfo{
+		DiagnoseInfo: []sql.SqlDiagnoseInfo{},
+		Plans:        []sql.PlanStatistic{},
+		Indexies:     []sql.IndexInfo{},
 	}
 
 	// Convert Plans

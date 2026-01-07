@@ -89,6 +89,27 @@ func ListRequestStatistics(c *gin.Context) ([]sql.RequestStatisticInfo, error) {
 	return sqlbiz.ListRequestStatistics(c, param)
 }
 
+// @ID QuerySqlHistoryInfo
+// @Summary query SQL history info
+// @Description query history statistic info of a SQL
+// @Tags Sql
+// @Accept application/json
+// @Produce application/json
+// @Param body body sql.SqlHistoryParam true "param for query history sql info"
+// @Success 200 object response.APIResponse{data=sql.SqlHistoryInfo}
+// @Failure 400 object response.APIResponse
+// @Failure 401 object response.APIResponse
+// @Failure 500 object response.APIResponse
+// @Router /api/v1/sql/querySqlHistoryInfo [POST]
+// @Security ApiKeyAuth
+func QuerySqlHistoryInfo(c *gin.Context) (*sql.SqlHistoryInfo, error) {
+	param := &sql.SqlHistoryParam{}
+	if err := c.ShouldBindJSON(param); err != nil {
+		return nil, httpErr.NewBadRequest(err.Error())
+	}
+	return sqlbiz.QuerySqlHistoryInfo(c, param)
+}
+
 // @ID QuerySqlDetailInfo
 // @Summary query SQL detail info
 // @Description query detailed statistic info of a SQL

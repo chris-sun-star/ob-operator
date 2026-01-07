@@ -45,6 +45,11 @@ type SqlRequestStatisticParam struct {
 
 type SqlDetailParam struct {
 	BaseSqlRequestParam `json:",inline"`
+	SqlId               string `json:"sqlId" binding:"required"`
+}
+
+type SqlHistoryParam struct {
+	BaseSqlRequestParam `json:",inline"`
 	Interval            int      `json:"interval" binding:"required"`
 	SqlId               string   `json:"sqlId" binding:"required"`
 	LatencyColumns      []string `json:"outputColumns"`

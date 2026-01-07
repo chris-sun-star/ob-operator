@@ -3,6 +3,7 @@ import {
   listSqlMetrics,
   queryPlanDetailInfo,
   querySqlDetailInfo,
+  querySqlHistoryInfo,
 } from '@/services/sql';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { ProCard, ProDescriptions, ProTable } from '@ant-design/pro-components';
@@ -15,6 +16,7 @@ import {
   useSearchParams,
 } from '@umijs/max';
 import {
+  Alert,
   Button,
   DatePicker,
   Drawer,
@@ -130,6 +132,7 @@ const SqlDetail: React.FC = () => {
   const urlStartTime = searchParams.get('startTime');
   const urlEndTime = searchParams.get('endTime');
 
+  // Time range for history trend
   const [timeRange, setTimeRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
     urlStartTime
       ? dayjs.unix(Number(urlStartTime))
@@ -171,17 +174,44 @@ const SqlDetail: React.FC = () => {
     },
   );
 
-  const { data: detailData, loading } = useRequest(
+  // 1. Fetch Static Detail Info (Plans, Indexes, etc.)
+  // Use a wider range or the initial range to find the SQL text
+  const { data: detailData, loading: detailLoading } = useRequest(
+    async () => {
+      if (!ns || !name || !sqlId) return;
+      // We use the initial time range from URL or a default wide window to ensure we find the SQL text/plans
+      // For simplicity, we can use the current timeRange, but ideally this shouldn't reload when user zooms in trend.
+      // However, if we want to isolate it, we can use url params.
+      const start = urlStartTime
+        ? Number(urlStartTime)
+        : dayjs().subtract(24, 'hour').unix();
+      const end = urlEndTime ? Number(urlEndTime) : dayjs().unix();
+
+      return querySqlDetailInfo({
+        namespace: ns,
+        obtenant: name,
+        sqlId,
+        database: dbName,
+        startTime: start,
+        endTime: end,
+      });
+    },
+    {
+      refreshDeps: [ns, name, sqlId, dbName], // Only reload if identity changes
+    },
+  );
+
+  // 2. Fetch History Trend Info
+  const { data: historyData, loading: historyLoading } = useRequest(
     async () => {
       if (!ns || !name || !sqlId) return;
       const start = timeRange[0].unix();
       const end = timeRange[1].unix();
-      // Calculate interval: aim for ~60 points? or just 60s default?
-      // Use (end - start) / 60, min 1s
+      // Calculate interval
       let interval = Math.floor((end - start) / 60);
       if (interval < 1) interval = 1;
 
-      return querySqlDetailInfo({
+      return querySqlHistoryInfo({
         namespace: ns,
         obtenant: name,
         sqlId,
@@ -350,6 +380,7 @@ const SqlDetail: React.FC = () => {
   // Handle both wrapped (response.data) and unwrapped (response IS data) cases
 
   const sqlInfo = detailData?.data || (detailData as any);
+  const historyInfo = historyData?.data || (historyData as any);
 
   return (
     <div
@@ -364,7 +395,7 @@ const SqlDetail: React.FC = () => {
       {/* Header & Basic Info */}
 
       <ProCard ghost gutter={[16, 16]} direction="column">
-        <ProCard loading={loading}>
+        <ProCard loading={detailLoading}>
           <Space
             style={{
               marginBottom: 16,
@@ -387,21 +418,7 @@ const SqlDetail: React.FC = () => {
               </Title>
             </Space>
 
-            <RangePicker
-              showTime
-              value={timeRange}
-              onChange={handleTimeChange}
-              format={DATE_TIME_FORMAT}
-              disabledDate={disabledDate}
-              disabledTime={disabledDateTime}
-              presets={DateSelectOption.filter((o) => o.value !== 'custom').map(
-                (o) => ({
-                  label: o.label,
-
-                  value: [dayjs().subtract(o.value as number, 'ms'), dayjs()],
-                }),
-              )}
-            />
+            {/* Time Picker Removed from here */}
           </Space>
 
           <ProDescriptions column={3} bordered>
@@ -410,7 +427,7 @@ const SqlDetail: React.FC = () => {
                 ellipsis={{ rows: 2, expandable: true, symbol: 'more' }}
                 copyable
               >
-                {sqlMeta?.querySql || '-'}
+                {sqlMeta?.querySql || sqlInfo?.querySql || '-'}
               </Typography.Paragraph>
             </ProDescriptions.Item>
 
@@ -428,11 +445,32 @@ const SqlDetail: React.FC = () => {
 
         {/* Charts */}
 
-        <ProCard title="History Request Info" headerBordered loading={loading}>
+        <ProCard
+          title="History Request Info"
+          headerBordered
+          loading={historyLoading}
+          extra={
+            <RangePicker
+              showTime
+              value={timeRange}
+              onChange={handleTimeChange}
+              format={DATE_TIME_FORMAT}
+              disabledDate={disabledDate}
+              disabledTime={disabledDateTime}
+              presets={DateSelectOption.filter((o) => o.value !== 'custom').map(
+                (o) => ({
+                  label: o.label,
+
+                  value: [dayjs().subtract(o.value as number, 'ms'), dayjs()],
+                }),
+              )}
+            />
+          }
+        >
           <ProCard split="vertical">
             <ProCard title="Executions" colSpan={12}>
               <SqlTrendChart
-                data={sqlInfo?.executionTrend || []}
+                data={historyInfo?.executionTrend || []}
                 type="execution"
               />
             </ProCard>
@@ -459,7 +497,7 @@ const SqlDetail: React.FC = () => {
               colSpan={12}
             >
               <SqlTrendChart
-                data={sqlInfo?.latencyTrend || []}
+                data={historyInfo?.latencyTrend || []}
                 type="latency"
               />
             </ProCard>
@@ -468,7 +506,11 @@ const SqlDetail: React.FC = () => {
 
         {/* Diagnosis */}
 
-        <ProCard title="Diagnosis & Advice" headerBordered loading={loading}>
+        <ProCard
+          title="Diagnosis & Advice"
+          headerBordered
+          loading={detailLoading}
+        >
           {sqlInfo?.diagnoseInfo && sqlInfo.diagnoseInfo.length > 0 ? (
             sqlInfo.diagnoseInfo.map((diag, idx) => (
               <Alert
@@ -487,7 +529,7 @@ const SqlDetail: React.FC = () => {
 
         {/* Plan Statistics */}
 
-        <ProCard title="Plan Statistics" headerBordered loading={loading}>
+        <ProCard title="Plan Statistics" headerBordered loading={detailLoading}>
           <ProTable<API.PlanStatistic>
             rowKey={(record) =>
               `${record.svrIP}-${record.svrPort}-${record.planID}`
@@ -553,7 +595,7 @@ const SqlDetail: React.FC = () => {
 
         {/* Index Info */}
 
-        <ProCard title="Index Info" headerBordered loading={loading}>
+        <ProCard title="Index Info" headerBordered loading={detailLoading}>
           <ProTable<API.IndexInfo>
             dataSource={sqlInfo?.indexies || []}
             columns={[

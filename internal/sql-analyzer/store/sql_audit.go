@@ -574,31 +574,11 @@ func (s *SqlAuditStore) QueryRequestStatistics(req apimodel.RequestStatisticsReq
 	return resp, nil
 }
 
-func (s *SqlAuditStore) QuerySqlDetailInfo(planStore *PlanStore, req apimodel.SqlDetailRequest) (*apimodel.SqlDetailResponse, error) {
-	resp := &apimodel.SqlDetailResponse{
+func (s *SqlAuditStore) QuerySqlHistoryInfo(req apimodel.SqlHistoryRequest) (*apimodel.SqlHistoryResponse, error) {
+	resp := &apimodel.SqlHistoryResponse{
 		ExecutionTrend: []apimodel.PlanTypeTrend{},
 		LatencyTrend:   []apimodel.LatencyTrendItem{},
-		Plans:          []apimodel.PlanStats{},
 	}
-
-	// Fetch QuerySql for the given SqlId
-	querySqlQuery := fmt.Sprintf(`
-		SELECT
-			query_sql
-		FROM
-			read_parquet('%s/*.parquet')
-		WHERE
-			sql_id = ?
-			AND max_request_time >= ?
-			AND max_request_time <= ?
-		LIMIT 1`, s.path)
-
-	var querySql string
-	err := s.db.QueryRowContext(s.ctx, querySqlQuery, req.SqlId, req.StartTime*1000000, req.EndTime*1000000).Scan(&querySql)
-	if err != nil && err != sql.ErrNoRows {
-		return nil, fmt.Errorf("failed to query QuerySql: %w", err)
-	}
-	resp.QuerySql = querySql
 
 	// Execution Trend
 	execTrendQuery := fmt.Sprintf(`
@@ -694,6 +674,35 @@ func (s *SqlAuditStore) QuerySqlDetailInfo(planStore *PlanStore, req apimodel.Sq
 			resp.LatencyTrend = append(resp.LatencyTrend, item)
 		}
 	}
+
+	return resp, nil
+}
+
+func (s *SqlAuditStore) QuerySqlDetailInfo(planStore *PlanStore, req apimodel.SqlDetailRequest) (*apimodel.SqlDetailResponse, error) {
+	resp := &apimodel.SqlDetailResponse{
+		Plans:   []apimodel.PlanStats{},
+		Tables:  []apimodel.TableInfo{},
+		Indexes: []apimodel.IndexInfo{},
+	}
+
+	// Fetch QuerySql for the given SqlId
+	querySqlQuery := fmt.Sprintf(`
+		SELECT
+			query_sql
+		FROM
+			read_parquet('%s/*.parquet')
+		WHERE
+			sql_id = ?
+			AND max_request_time >= ?
+			AND max_request_time <= ?
+		LIMIT 1`, s.path)
+
+	var querySql string
+	err := s.db.QueryRowContext(s.ctx, querySqlQuery, req.SqlId, req.StartTime*1000000, req.EndTime*1000000).Scan(&querySql)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("failed to query QuerySql: %w", err)
+	}
+	resp.QuerySql = querySql
 
 	// Plans
 	planStats, err := planStore.GetPlanStatsBySqlId(req.SqlId)
