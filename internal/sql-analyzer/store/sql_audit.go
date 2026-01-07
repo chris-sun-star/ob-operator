@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	duckdb "github.com/marcboeker/go-duckdb"
+	duckdb "github.com/duckdb/duckdb-go/v2"
 	"github.com/pkg/errors"
 
 	apimodel "github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
