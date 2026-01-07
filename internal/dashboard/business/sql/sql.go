@@ -438,7 +438,7 @@ func QueryPlanDetailInfo(ctx context.Context, param *sql.PlanDetailParam) (*sql.
 	}
 
 	for _, plan := range plans {
-		if plan.ParentID == 0 {
+		if plan.ParentID == -1 {
 			root = planMap[plan.ID]
 		} else {
 			parent, ok := planMap[plan.ParentID]
