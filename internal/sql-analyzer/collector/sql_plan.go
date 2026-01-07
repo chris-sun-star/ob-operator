@@ -50,37 +50,43 @@ func (w *PlanWorker) Start(ctx context.Context, idx int) {
 		case <-ctx.Done():
 			return
 		case ident := <-w.inputChan:
-			w.collector.Logger.Printf("Fetching plan for tenant %d, server %s, port %d, plan %d in worker %d", ident.TenantID, ident.SvrIP, ident.SvrPort, ident.PlanID, idx)
-			cnx, err := w.connManager.GetSysReadonlyConnectionByIP(ident.SvrIP)
-			if err != nil {
-				w.collector.Logger.Printf("failed to get connection for plan worker: %v", err)
-				// Remove from cache if failed
-				w.collector.PlanCache.Remove(*ident) // Remove from cache
-				continue
-			}
-			var plans []model.SqlPlan
-			if err := cnx.QueryList(ctx, &plans, sqlconst.SelectSqlPlan, ident.TenantID, ident.SvrIP, ident.SvrPort, ident.PlanID); err != nil {
-				w.collector.Logger.Printf("failed to query sql plan: %v", err)
-				// Remove from cache if failed
-				w.collector.PlanCache.Remove(*ident) // Remove from cache
-				continue
-			}
-			w.collector.Logger.Printf("Found %d plan details for tenant %d, server %s, port %d, plan %d", len(plans), ident.TenantID, ident.SvrIP, ident.SvrPort, ident.PlanID)
-			allStored := true
-			for _, plan := range plans {
-				if err := w.planStore.Store(plan); err != nil {
-					w.collector.Logger.WithField("plan", plan).Errorf("Error inserting plan into DuckDB: %v", err)
-					allStored = false
-					break // Stop processing further plans for this identifier if one fails
-				}
-			}
-			// Update cache status based on storage result
-			if allStored {
-				w.collector.PlanCache.Add(*ident, struct{}{}) // Add to cache with empty struct
-			} else {
-				// If not all stored, remove from cache
-				w.collector.PlanCache.Remove(*ident) // Remove from cache
-			}
+			w.processPlan(ctx, idx, ident)
 		}
+	}
+}
+
+func (w *PlanWorker) processPlan(ctx context.Context, idx int, ident *model.SqlPlanIdentifier) {
+	w.collector.Logger.Printf("Fetching plan for tenant %d, server %s, port %d, plan %d in worker %d", ident.TenantID, ident.SvrIP, ident.SvrPort, ident.PlanID, idx)
+	cnx, err := w.connManager.GetSysReadonlyConnectionByIP(ident.SvrIP)
+	if err != nil {
+		w.collector.Logger.Printf("failed to get connection for plan worker: %v", err)
+		// Remove from cache if failed
+		w.collector.PlanCache.Remove(*ident) // Remove from cache
+		return
+	}
+	defer cnx.Close()
+
+	var plans []model.SqlPlan
+	if err := cnx.QueryList(ctx, &plans, sqlconst.SelectSqlPlan, ident.TenantID, ident.SvrIP, ident.SvrPort, ident.PlanID); err != nil {
+		w.collector.Logger.Printf("failed to query sql plan: %v", err)
+		// Remove from cache if failed
+		w.collector.PlanCache.Remove(*ident) // Remove from cache
+		return
+	}
+	w.collector.Logger.Printf("Found %d plan details for tenant %d, server %s, port %d, plan %d", len(plans), ident.TenantID, ident.SvrIP, ident.SvrPort, ident.PlanID)
+	allStored := true
+	for _, plan := range plans {
+		if err := w.planStore.Store(plan); err != nil {
+			w.collector.Logger.WithField("plan", plan).Errorf("Error inserting plan into DuckDB: %v", err)
+			allStored = false
+			break // Stop processing further plans for this identifier if one fails
+		}
+	}
+	// Update cache status based on storage result
+	if allStored {
+		w.collector.PlanCache.Add(*ident, struct{}{}) // Add to cache with empty struct
+	} else {
+		// If not all stored, remove from cache
+		w.collector.PlanCache.Remove(*ident) // Remove from cache
 	}
 }

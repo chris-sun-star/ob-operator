@@ -27,6 +27,7 @@ func getTenantIDByName(ctx context.Context, connMgr *oceanbase.ConnectionManager
 	if err != nil {
 		return 0, fmt.Errorf("failed to get connection for tenant ID retrieval: %w", err)
 	}
+	defer manager.Close()
 	var tenant model.Tenant
 	err = manager.QueryRow(ctx, &tenant, "SELECT tenant_id FROM __all_tenant WHERE tenant_name = ?", tenantName)
 	if err != nil {
