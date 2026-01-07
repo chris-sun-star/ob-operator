@@ -75,6 +75,16 @@ func NewPlanStore(c context.Context, path string, readOnly bool) (*PlanStore, er
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to open duckdb after retries at path %s", path)
 	}
+
+	// Set memory limit
+	memLimit := os.Getenv("DUCKDB_MEMORY_LIMIT")
+	if memLimit == "" {
+		memLimit = "512MB"
+	}
+	if _, err := conn.ExecContext(c, fmt.Sprintf("PRAGMA memory_limit='%s'", memLimit)); err != nil {
+		logger.Warnf("Failed to set duckdb memory limit: %v", err)
+	}
+
 	conn.Close() // Close the temporary connection, the pool will manage connections from here.
 
 	s := &PlanStore{db: db, ctx: c}

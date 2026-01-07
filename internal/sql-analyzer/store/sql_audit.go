@@ -50,6 +50,21 @@ func NewSqlAuditStore(c context.Context, path string) (*SqlAuditStore, error) {
 		return nil, fmt.Errorf("failed to open in-memory duckdb: %w", err)
 	}
 
+	// Set memory limit for in-memory DB
+	conn, err := db.Conn(c)
+	if err == nil {
+		memLimit := os.Getenv("DUCKDB_MEMORY_LIMIT")
+		if memLimit == "" {
+			memLimit = "512MB"
+		}
+		if _, err := conn.ExecContext(c, fmt.Sprintf("PRAGMA memory_limit='%s'", memLimit)); err != nil {
+			logger.Warnf("Failed to set duckdb memory limit for sql audit store: %v", err)
+		}
+		conn.Close()
+	} else {
+		logger.Warnf("Failed to get connection to set memory limit for sql audit store: %v", err)
+	}
+
 	// Ensure the data directory exists
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create data directory %s: %w", path, err)
