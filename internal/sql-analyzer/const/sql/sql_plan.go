@@ -78,4 +78,6 @@ const (
       AND I.table_name = ?
     GROUP BY I.index_name, I.index_type, I.uniqueness, I.status;
     `
+
+	GetTablePrimaryKey = `SELECT column_name FROM oceanbase.__all_virtual_column WHERE tenant_id = ? AND table_id = ? and rowkey_position <> 0 ORDER BY rowkey_position`
 )

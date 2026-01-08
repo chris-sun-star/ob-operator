@@ -49,7 +49,7 @@ func GetSqlDetailInfo(ctx context.Context, cm *oceanbase.ConnectionManager, audi
 					go func(t model.TableInfo) {
 						defer wg.Done()
 						tableStart := time.Now()
-						indexes, err := oceanbase.QueryTableIndexes(ctx, opMgr, tenantID, t.DatabaseName, t.TableName)
+						indexes, err := oceanbase.QueryTableIndexes(ctx, opMgr, tenantID, t.DatabaseName, t.TableName, t.TableID)
 						if err != nil {
 							logger.Warnf("Failed to query indexes for table %s.%s: %v", t.DatabaseName, t.TableName, err)
 							return
