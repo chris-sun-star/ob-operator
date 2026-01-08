@@ -9,14 +9,14 @@ import (
 )
 
 type FullScanRule struct {
-	*obmysql.BaseOBParserVisitor
+	*obmysql.BaseOBParserListener
 	diagnoseResults []model.SqlDiagnoseInfo
 	hasSargablePred bool
 }
 
 func NewFullScanRule() *FullScanRule {
 	return &FullScanRule{
-		BaseOBParserVisitor: &obmysql.BaseOBParserVisitor{},
+		BaseOBParserListener: &obmysql.BaseOBParserListener{},
 	}
 }
 
@@ -32,7 +32,8 @@ func (r *FullScanRule) Analyze(tree antlr.ParseTree, indexes []model.IndexInfo) 
 	r.diagnoseResults = []model.SqlDiagnoseInfo{}
 	r.hasSargablePred = false
 
-	tree.Accept(r)
+	walker := antlr.NewParseTreeWalker()
+	walker.Walk(r, tree)
 
 	if !r.hasSargablePred {
 		r.addResult()
@@ -50,14 +51,13 @@ func (r *FullScanRule) addResult() {
 	})
 }
 
-func (r *FullScanRule) VisitBool_pri(ctx *obmysql.Bool_priContext) interface{} {
+func (r *FullScanRule) EnterBool_pri(ctx *obmysql.Bool_priContext) {
 	if ctx.COMP_EQ() != nil || ctx.COMP_GE() != nil || ctx.COMP_GT() != nil || ctx.COMP_LE() != nil || ctx.COMP_LT() != nil {
 		r.hasSargablePred = true
 	}
-	return r.BaseOBParserVisitor.VisitChildren(ctx)
 }
 
-func (r *FullScanRule) VisitPredicate(ctx *obmysql.PredicateContext) interface{} {
+func (r *FullScanRule) EnterPredicate(ctx *obmysql.PredicateContext) {
 	if ctx.IN() != nil {
 		if ctx.Not() == nil {
 			r.hasSargablePred = true
@@ -79,8 +79,6 @@ func (r *FullScanRule) VisitPredicate(ctx *obmysql.PredicateContext) interface{}
 			}
 		}
 	}
-
-	return r.BaseOBParserVisitor.VisitChildren(ctx)
 }
 
 func (r *FullScanRule) isLeftFuzzy(ctx obmysql.ISimple_exprContext) bool {
@@ -94,22 +92,14 @@ func (r *FullScanRule) isLeftFuzzy(ctx obmysql.ISimple_exprContext) bool {
 						return true
 					}
 				}
-				// Removed STRING_VALUE check as it's covered by Complex_string_literal in parser
 			}
 		}
 	}
 	return false
 }
 
-func (r *FullScanRule) VisitSimple_expr(ctx *obmysql.Simple_exprContext) interface{} {
+func (r *FullScanRule) EnterSimple_expr(ctx *obmysql.Simple_exprContext) {
 	if ctx.EXISTS() != nil {
-		// EXISTS implies subquery check.
-		// Following Python logic where NOT EXISTS is considered "Range" (Good).
-		// But detecting NOT here is tricky without context.
-		// For now, if we see EXISTS, we treat it as SARGable to avoid false positives for subqueries
-		// which might use indexes internally.
-		// Improvement: check parent for NOT.
 		r.hasSargablePred = true
 	}
-	return r.BaseOBParserVisitor.VisitChildren(ctx)
 }
