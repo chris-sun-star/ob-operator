@@ -2,6 +2,7 @@ package business
 
 import (
 	"context"
+	"time"
 
 	logger "github.com/sirupsen/logrus"
 
@@ -12,13 +13,16 @@ import (
 )
 
 func GetSqlDetailInfo(ctx context.Context, cm *oceanbase.ConnectionManager, auditStore *store.SqlAuditStore, planStore *store.PlanStore, req model.SqlDetailRequest) (*model.SqlDetailResponse, error) {
+	start := time.Now()
 	resp, err := auditStore.QuerySqlDetailInfo(planStore, req)
 	if err != nil {
 		return nil, err
 	}
+	logger.Infof("[GetSqlDetailInfo] QuerySqlDetailInfo took %v", time.Since(start))
 
 	// If we have tables and connection manager, query indexes
 	if resp != nil && len(resp.Tables) > 0 && cm != nil {
+		indexStart := time.Now()
 		opMgr, err := cm.GetSysReadonlyConnection()
 		if err != nil {
 			logger.Warnf("Failed to get sys connection for index query: %v", err)
@@ -37,24 +41,30 @@ func GetSqlDetailInfo(ctx context.Context, cm *oceanbase.ConnectionManager, audi
 
 			if tenantID > 0 {
 				for _, table := range resp.Tables {
+					tableStart := time.Now()
 					indexes, err := oceanbase.QueryTableIndexes(ctx, opMgr, tenantID, table.DatabaseName, table.TableName)
 					if err != nil {
 						logger.Warnf("Failed to query indexes for table %s.%s: %v", table.DatabaseName, table.TableName, err)
 						continue
 					}
 					resp.Indexes = append(resp.Indexes, indexes...)
+					logger.Debugf("[GetSqlDetailInfo] QueryTableIndexes for %s.%s took %v", table.DatabaseName, table.TableName, time.Since(tableStart))
 				}
 			}
 		}
+		logger.Infof("[GetSqlDetailInfo] Query Indexes total took %v", time.Since(indexStart))
 	}
 
 	// Initialize the SQL Analyzer and run analysis
 	// Analyze now requires Indexes
 	analyzerManager := analyzer.NewManager()
 	if resp != nil && resp.QuerySql != "" {
+		analyzeStart := time.Now()
 		diagnoseResults := analyzerManager.Analyze(resp.QuerySql, resp.Indexes)
 		resp.DiagnoseInfo = diagnoseResults
+		logger.Infof("[GetSqlDetailInfo] Analyze took %v", time.Since(analyzeStart))
 	}
 
+	logger.Infof("[GetSqlDetailInfo] Total execution time: %v", time.Since(start))
 	return resp, nil
 }
