@@ -76,6 +76,12 @@ func GetSqlDetailInfo(ctx context.Context, cm *oceanbase.ConnectionManager, audi
 		diagnoseResults := analyzerManager.Analyze(resp.QuerySql, resp.Indexes)
 		resp.DiagnoseInfo = diagnoseResults
 		logger.Infof("[GetSqlDetailInfo] Analyze took %v", time.Since(analyzeStart))
+	} else {
+		if resp == nil {
+			logger.Warn("[GetSqlDetailInfo] Response is nil, skipping analysis")
+		} else {
+			logger.Warnf("[GetSqlDetailInfo] QuerySql is empty for sqlId %s, skipping analysis. StartTime: %d, EndTime: %d", req.SqlId, req.StartTime, req.EndTime)
+		}
 	}
 
 	logger.Infof("[GetSqlDetailInfo] Total execution time: %v", time.Since(start))
