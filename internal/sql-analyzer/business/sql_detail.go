@@ -47,6 +47,7 @@ func GetSqlDetailInfo(ctx context.Context, cm *oceanbase.ConnectionManager, audi
 				// Deduplicate tables to avoid duplicate index queries
 				uniqueTables := make(map[string]model.TableInfo)
 				for _, table := range resp.Tables {
+					logger.Infof("[GetSqlDetailInfo] QueryTableIndexes for %s.%s with id %d", table.DatabaseName, table.TableName, table.TableID)
 					key := table.DatabaseName + "." + table.TableName
 					uniqueTables[key] = table
 				}
@@ -66,7 +67,7 @@ func GetSqlDetailInfo(ctx context.Context, cm *oceanbase.ConnectionManager, audi
 						resp.Indexes = append(resp.Indexes, indexes...)
 						mu.Unlock()
 
-						logger.Infof("[GetSqlDetailInfo] QueryTableIndexes for %s.%s took %v", t.DatabaseName, t.TableName, time.Since(tableStart))
+						logger.Infof("[GetSqlDetailInfo] QueryTableIndexes for %s.%s with table id %d took %v", t.DatabaseName, t.TableName, t.TableID, time.Since(tableStart))
 					}(table)
 				}
 				wg.Wait()
