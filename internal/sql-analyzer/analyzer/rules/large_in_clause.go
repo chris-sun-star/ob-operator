@@ -8,15 +8,15 @@ import (
 )
 
 type LargeInClauseRule struct {
-	*obmysql.BaseOBParserVisitor
+	*obmysql.BaseOBParserListener
 	diagnoseResults []model.SqlDiagnoseInfo
 	maxInElements   int
 }
 
 func NewLargeInClauseRule() *LargeInClauseRule {
 	return &LargeInClauseRule{
-		BaseOBParserVisitor: &obmysql.BaseOBParserVisitor{},
-		maxInElements:       200,
+		BaseOBParserListener: &obmysql.BaseOBParserListener{},
+		maxInElements:        200,
 	}
 }
 
@@ -30,11 +30,12 @@ func (r *LargeInClauseRule) Description() string {
 
 func (r *LargeInClauseRule) Analyze(tree antlr.ParseTree, indexes []model.IndexInfo) []model.SqlDiagnoseInfo {
 	r.diagnoseResults = []model.SqlDiagnoseInfo{}
-	tree.Accept(r)
+	walker := antlr.NewParseTreeWalker()
+	walker.Walk(r, tree)
 	return r.diagnoseResults
 }
 
-func (r *LargeInClauseRule) VisitPredicate(ctx *obmysql.PredicateContext) interface{} {
+func (r *LargeInClauseRule) EnterPredicate(ctx *obmysql.PredicateContext) {
 	// predicate : bit_expr IN in_expr ...
 	if ctx.IN() != nil {
 		inExpr := ctx.In_expr()
@@ -60,5 +61,4 @@ func (r *LargeInClauseRule) VisitPredicate(ctx *obmysql.PredicateContext) interf
 			}
 		}
 	}
-	return r.BaseOBParserVisitor.VisitChildren(ctx)
 }

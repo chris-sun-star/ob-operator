@@ -9,16 +9,16 @@ import (
 )
 
 type FunctionOnIndexedColumnRule struct {
-	*obmysql.BaseOBParserVisitor
+	*obmysql.BaseOBParserListener
 	diagnoseResults []model.SqlDiagnoseInfo
 	indexes         []model.IndexInfo
-	inPredicate     bool
-	inFunction      bool
+	predicateDepth  int
+	functionDepth   int
 }
 
 func NewFunctionOnIndexedColumnRule() *FunctionOnIndexedColumnRule {
 	return &FunctionOnIndexedColumnRule{
-		BaseOBParserVisitor: &obmysql.BaseOBParserVisitor{},
+		BaseOBParserListener: &obmysql.BaseOBParserListener{},
 	}
 }
 
@@ -33,32 +33,31 @@ func (r *FunctionOnIndexedColumnRule) Description() string {
 func (r *FunctionOnIndexedColumnRule) Analyze(tree antlr.ParseTree, indexes []model.IndexInfo) []model.SqlDiagnoseInfo {
 	r.diagnoseResults = []model.SqlDiagnoseInfo{}
 	r.indexes = indexes
-	r.inPredicate = false
-	r.inFunction = false
-	tree.Accept(r)
+	r.predicateDepth = 0
+	r.functionDepth = 0
+	walker := antlr.NewParseTreeWalker()
+	walker.Walk(r, tree)
 	return r.diagnoseResults
 }
 
-func (r *FunctionOnIndexedColumnRule) VisitPredicate(ctx *obmysql.PredicateContext) interface{} {
-	oldPredicate := r.inPredicate
-	r.inPredicate = true
-	defer func() { r.inPredicate = oldPredicate }()
-	return r.BaseOBParserVisitor.VisitChildren(ctx)
+func (r *FunctionOnIndexedColumnRule) EnterPredicate(ctx *obmysql.PredicateContext) {
+	r.predicateDepth++
 }
 
-func (r *FunctionOnIndexedColumnRule) VisitFunc_expr(ctx *obmysql.Func_exprContext) interface{} {
-	if !r.inPredicate {
-		return r.BaseOBParserVisitor.VisitChildren(ctx)
-	}
-
-	oldFunction := r.inFunction
-	r.inFunction = true
-	defer func() { r.inFunction = oldFunction }()
-	return r.BaseOBParserVisitor.VisitChildren(ctx)
+func (r *FunctionOnIndexedColumnRule) ExitPredicate(ctx *obmysql.PredicateContext) {
+	r.predicateDepth--
 }
 
-func (r *FunctionOnIndexedColumnRule) VisitColumn_ref(ctx *obmysql.Column_refContext) interface{} {
-	if r.inPredicate && r.inFunction {
+func (r *FunctionOnIndexedColumnRule) EnterFunc_expr(ctx *obmysql.Func_exprContext) {
+	r.functionDepth++
+}
+
+func (r *FunctionOnIndexedColumnRule) ExitFunc_expr(ctx *obmysql.Func_exprContext) {
+	r.functionDepth--
+}
+
+func (r *FunctionOnIndexedColumnRule) EnterColumn_ref(ctx *obmysql.Column_refContext) {
+	if r.predicateDepth > 0 && r.functionDepth > 0 {
 		colName := ctx.Column_name().GetText()
 		colName = strings.Trim(colName, "`")
 
@@ -72,8 +71,8 @@ func (r *FunctionOnIndexedColumnRule) VisitColumn_ref(ctx *obmysql.Column_refCon
 			r.addResult(colName)
 		}
 	}
-	return r.BaseOBParserVisitor.VisitChildren(ctx)
 }
+
 
 func (r *FunctionOnIndexedColumnRule) isColumnIndexed(tableName, colName string) bool {
 	for _, idx := range r.indexes {

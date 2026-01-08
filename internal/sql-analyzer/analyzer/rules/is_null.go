@@ -7,13 +7,13 @@ import (
 )
 
 type IsNullRule struct {
-	*obmysql.BaseOBParserVisitor
+	*obmysql.BaseOBParserListener
 	diagnoseResults []model.SqlDiagnoseInfo
 }
 
 func NewIsNullRule() *IsNullRule {
 	return &IsNullRule{
-		BaseOBParserVisitor: &obmysql.BaseOBParserVisitor{},
+		BaseOBParserListener: &obmysql.BaseOBParserListener{},
 	}
 }
 
@@ -27,11 +27,12 @@ func (r *IsNullRule) Description() string {
 
 func (r *IsNullRule) Analyze(tree antlr.ParseTree, indexes []model.IndexInfo) []model.SqlDiagnoseInfo {
 	r.diagnoseResults = []model.SqlDiagnoseInfo{}
-	tree.Accept(r)
+	walker := antlr.NewParseTreeWalker()
+	walker.Walk(r, tree)
 	return r.diagnoseResults
 }
 
-func (r *IsNullRule) VisitBool_pri(ctx *obmysql.Bool_priContext) interface{} {
+func (r *IsNullRule) EnterBool_pri(ctx *obmysql.Bool_priContext) {
 	// The rule is to warn against using `=`, `!=`, `<=>` with NULL.
 	// Valid forms: `col IS NULL`, `col IS NOT NULL`.
 	// Invalid forms: `col = NULL`, `col != NULL`, `NULL = col`, `NULL != col`.
@@ -40,11 +41,11 @@ func (r *IsNullRule) VisitBool_pri(ctx *obmysql.Bool_priContext) interface{} {
 	// If it contains `IS` and `NULLX`, it's a correct usage, so we skip it for this rule.
 	if ctx.IS() != nil && ctx.NULLX() != nil {
 		// This is a correct usage (`IS NULL`), so we skip it for this rule.
-		return r.BaseOBParserVisitor.VisitChildren(ctx)
+		return
 	}
 	if ctx.IS() != nil && ctx.Not() != nil && ctx.NULLX() != nil {
 		// This is also a correct usage (`IS NOT NULL`), skip.
-		return r.BaseOBParserVisitor.VisitChildren(ctx)
+		return
 	}
 
 	// Now check for comparisons that use operators like `=`, `!=`, `<=>`.
@@ -69,8 +70,6 @@ func (r *IsNullRule) VisitBool_pri(ctx *obmysql.Bool_priContext) interface{} {
 			r.addResult()
 		}
 	}
-
-	return r.BaseOBParserVisitor.VisitChildren(ctx)
 }
 
 func (r *IsNullRule) addResult() {

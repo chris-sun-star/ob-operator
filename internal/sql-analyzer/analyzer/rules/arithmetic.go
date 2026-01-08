@@ -7,13 +7,13 @@ import (
 )
 
 type ArithmeticRule struct {
-	*obmysql.BaseOBParserVisitor
+	*obmysql.BaseOBParserListener
 	diagnoseResults []model.SqlDiagnoseInfo
 }
 
 func NewArithmeticRule() *ArithmeticRule {
 	return &ArithmeticRule{
-		BaseOBParserVisitor: &obmysql.BaseOBParserVisitor{},
+		BaseOBParserListener: &obmysql.BaseOBParserListener{},
 	}
 }
 
@@ -27,11 +27,12 @@ func (r *ArithmeticRule) Description() string {
 
 func (r *ArithmeticRule) Analyze(tree antlr.ParseTree, indexes []model.IndexInfo) []model.SqlDiagnoseInfo {
 	r.diagnoseResults = []model.SqlDiagnoseInfo{}
-	tree.Accept(r)
+	walker := antlr.NewParseTreeWalker()
+	walker.Walk(r, tree)
 	return r.diagnoseResults
 }
 
-func (r *ArithmeticRule) VisitBit_expr(ctx *obmysql.Bit_exprContext) interface{} {
+func (r *ArithmeticRule) EnterBit_expr(ctx *obmysql.Bit_exprContext) {
 	// Check for arithmetic operators
 	if ctx.Plus() != nil || ctx.Minus() != nil || ctx.Star() != nil || ctx.Div() != nil || ctx.Mod() != nil || ctx.MOD() != nil || ctx.DIV() != nil {
 		// Bit_expr has children.
@@ -54,7 +55,6 @@ func (r *ArithmeticRule) VisitBit_expr(ctx *obmysql.Bit_exprContext) interface{}
 			}
 		}
 	}
-	return r.BaseOBParserVisitor.VisitChildren(ctx)
 }
 
 func (r *ArithmeticRule) isColumn(ctx obmysql.IBit_exprContext) bool {

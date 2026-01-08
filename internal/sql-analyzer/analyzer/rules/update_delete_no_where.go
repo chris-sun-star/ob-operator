@@ -7,13 +7,13 @@ import (
 )
 
 type UpdateDeleteWithoutWhereRule struct {
-	*obmysql.BaseOBParserVisitor
+	*obmysql.BaseOBParserListener
 	diagnoseResults []model.SqlDiagnoseInfo
 }
 
 func NewUpdateDeleteWithoutWhereRule() *UpdateDeleteWithoutWhereRule {
 	return &UpdateDeleteWithoutWhereRule{
-		BaseOBParserVisitor: &obmysql.BaseOBParserVisitor{},
+		BaseOBParserListener: &obmysql.BaseOBParserListener{},
 	}
 }
 
@@ -27,11 +27,12 @@ func (r *UpdateDeleteWithoutWhereRule) Description() string {
 
 func (r *UpdateDeleteWithoutWhereRule) Analyze(tree antlr.ParseTree, indexes []model.IndexInfo) []model.SqlDiagnoseInfo {
 	r.diagnoseResults = []model.SqlDiagnoseInfo{}
-	tree.Accept(r)
+	walker := antlr.NewParseTreeWalker()
+	walker.Walk(r, tree)
 	return r.diagnoseResults
 }
 
-func (r *UpdateDeleteWithoutWhereRule) VisitDelete_stmt(ctx *obmysql.Delete_stmtContext) interface{} {
+func (r *UpdateDeleteWithoutWhereRule) EnterDelete_stmt(ctx *obmysql.Delete_stmtContext) {
 	// delete_stmt: DELETE ... (WHERE expr)? ...
 	// If WHERE is missing, expr will be nil.
 
@@ -42,10 +43,9 @@ func (r *UpdateDeleteWithoutWhereRule) VisitDelete_stmt(ctx *obmysql.Delete_stmt
 			r.addResult()
 		}
 	}
-	return r.BaseOBParserVisitor.VisitChildren(ctx)
 }
 
-func (r *UpdateDeleteWithoutWhereRule) VisitUpdate_stmt(ctx *obmysql.Update_stmtContext) interface{} {
+func (r *UpdateDeleteWithoutWhereRule) EnterUpdate_stmt(ctx *obmysql.Update_stmtContext) {
 	// update_stmt: UPDATE ... (WHERE expr)? ...
 
 	if ctx.WHERE() == nil {
@@ -55,7 +55,6 @@ func (r *UpdateDeleteWithoutWhereRule) VisitUpdate_stmt(ctx *obmysql.Update_stmt
 			r.addResult()
 		}
 	}
-	return r.BaseOBParserVisitor.VisitChildren(ctx)
 }
 
 func (r *UpdateDeleteWithoutWhereRule) addResult() {

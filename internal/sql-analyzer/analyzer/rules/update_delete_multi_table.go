@@ -7,13 +7,13 @@ import (
 )
 
 type UpdateDeleteMultiTableRule struct {
-	*obmysql.BaseOBParserVisitor
+	*obmysql.BaseOBParserListener
 	diagnoseResults []model.SqlDiagnoseInfo
 }
 
 func NewUpdateDeleteMultiTableRule() *UpdateDeleteMultiTableRule {
 	return &UpdateDeleteMultiTableRule{
-		BaseOBParserVisitor: &obmysql.BaseOBParserVisitor{},
+		BaseOBParserListener: &obmysql.BaseOBParserListener{},
 	}
 }
 
@@ -27,19 +27,19 @@ func (r *UpdateDeleteMultiTableRule) Description() string {
 
 func (r *UpdateDeleteMultiTableRule) Analyze(tree antlr.ParseTree, indexes []model.IndexInfo) []model.SqlDiagnoseInfo {
 	r.diagnoseResults = []model.SqlDiagnoseInfo{}
-	tree.Accept(r)
+	walker := antlr.NewParseTreeWalker()
+	walker.Walk(r, tree)
 	return r.diagnoseResults
 }
 
-func (r *UpdateDeleteMultiTableRule) VisitDelete_stmt(ctx *obmysql.Delete_stmtContext) interface{} {
+func (r *UpdateDeleteMultiTableRule) EnterDelete_stmt(ctx *obmysql.Delete_stmtContext) {
 	// Check if multi_delete_table is used
 	if ctx.Multi_delete_table() != nil {
 		r.addResult()
 	}
-	return r.BaseOBParserVisitor.VisitChildren(ctx)
 }
 
-func (r *UpdateDeleteMultiTableRule) VisitUpdate_stmt(ctx *obmysql.Update_stmtContext) interface{} {
+func (r *UpdateDeleteMultiTableRule) EnterUpdate_stmt(ctx *obmysql.Update_stmtContext) {
 	// update_stmt: UPDATE ... table_references ...
 	// table_references -> table_reference (Comma table_reference)*
 	// table_reference -> joined_table
@@ -63,7 +63,6 @@ func (r *UpdateDeleteMultiTableRule) VisitUpdate_stmt(ctx *obmysql.Update_stmtCo
 			}
 		}
 	}
-	return r.BaseOBParserVisitor.VisitChildren(ctx)
 }
 
 func (r *UpdateDeleteMultiTableRule) addResult() {

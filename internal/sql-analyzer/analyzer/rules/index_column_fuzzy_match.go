@@ -9,14 +9,14 @@ import (
 )
 
 type IndexColumnFuzzyMatchRule struct {
-	*obmysql.BaseOBParserVisitor
+	*obmysql.BaseOBParserListener
 	diagnoseResults []model.SqlDiagnoseInfo
 	indexes         []model.IndexInfo
 }
 
 func NewIndexColumnFuzzyMatchRule() *IndexColumnFuzzyMatchRule {
 	return &IndexColumnFuzzyMatchRule{
-		BaseOBParserVisitor: &obmysql.BaseOBParserVisitor{},
+		BaseOBParserListener: &obmysql.BaseOBParserListener{},
 	}
 }
 
@@ -31,11 +31,12 @@ func (r *IndexColumnFuzzyMatchRule) Description() string {
 func (r *IndexColumnFuzzyMatchRule) Analyze(tree antlr.ParseTree, indexes []model.IndexInfo) []model.SqlDiagnoseInfo {
 	r.diagnoseResults = []model.SqlDiagnoseInfo{}
 	r.indexes = indexes
-	tree.Accept(r)
+	walker := antlr.NewParseTreeWalker()
+	walker.Walk(r, tree)
 	return r.diagnoseResults
 }
 
-func (r *IndexColumnFuzzyMatchRule) VisitPredicate(ctx *obmysql.PredicateContext) interface{} {
+func (r *IndexColumnFuzzyMatchRule) EnterPredicate(ctx *obmysql.PredicateContext) {
 	// predicate : bit_expr (NOT? LIKE simple_expr ...)
 	if ctx.LIKE() != nil {
 		// Use index 0 for Bit_expr and Simple_expr
@@ -56,7 +57,6 @@ func (r *IndexColumnFuzzyMatchRule) VisitPredicate(ctx *obmysql.PredicateContext
 			}
 		}
 	}
-	return r.BaseOBParserVisitor.VisitChildren(ctx)
 }
 
 func (r *IndexColumnFuzzyMatchRule) extractColumnInfo(bitExpr obmysql.IBit_exprContext) (string, string) {
