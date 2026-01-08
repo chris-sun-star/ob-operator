@@ -25,6 +25,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	webserver "github.com/oceanbase/ob-operator/internal/server"
+	"github.com/oceanbase/ob-operator/internal/sql-analyzer/analyzer"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/collector"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/config"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/handler"
@@ -180,6 +181,14 @@ func main() {
 		collectorLogger.Fatalf("Failed to initialize collector: %v", err)
 	}
 	go collector.Start()
+
+	// Warm up the analyzer parser
+	go func() {
+		analyzerLogger.Info("Warming up SQL Analyzer parser...")
+		start := time.Now()
+		analyzer.NewManager().WarmUp()
+		analyzerLogger.Infof("SQL Analyzer parser warm-up completed in %v", time.Since(start))
+	}()
 
 	httpServer := startHttpServer(ctx, analyzerLogger)
 	// Wait for a shutdown signal

@@ -39,6 +39,13 @@ func (m *Manager) RegisterRules() {
 	m.rules = append(m.rules, rules.NewFunctionOnIndexedColumnRule())
 }
 
+func (m *Manager) WarmUp() {
+	// Execute a sample query to warm up the ANTLR parser (ATN/DFA cache)
+	// This helps avoid the high latency on the first user request.
+	sql := "SELECT * FROM t1 JOIN t2 ON t1.id = t2.id WHERE t1.c1 = 'val' AND t2.c2 > 100 ORDER BY t1.c3 LIMIT 10"
+	_ = m.Analyze(sql, nil)
+}
+
 func (m *Manager) Analyze(sql string, indexes []model.IndexInfo) []model.SqlDiagnoseInfo {
 	var diagnostics []model.SqlDiagnoseInfo
 
