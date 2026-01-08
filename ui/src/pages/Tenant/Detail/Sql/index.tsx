@@ -3,7 +3,7 @@ import { listSqlMetrics, listSqlStats } from '@/services/sql';
 import { SettingOutlined } from '@ant-design/icons';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
-import { Link, useParams, useRequest } from '@umijs/max';
+import { Link, useParams, useRequest, useSearchParams } from '@umijs/max';
 import { Button, Checkbox, Tooltip } from 'antd';
 import type { RangePickerProps } from 'antd/es/date-picker';
 import dayjs from 'dayjs';
@@ -21,7 +21,10 @@ export default function SqlList() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedMetricKeys, setSelectedMetricKeys] = useState<string[]>([]);
   const [maxElapsedTime, setMaxElapsedTime] = useState<number>(0);
-  const [activeTab, setActiveTab] = useState<string>('sql_analysis');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<string>(
+    searchParams.get('activeTab') || 'sql_analysis',
+  );
   const [currentParams, setCurrentParams] = useState<{
     startTime?: number;
     endTime?: number;
@@ -55,10 +58,10 @@ export default function SqlList() {
     },
   );
 
-  const initialTimeRange: [dayjs.Dayjs, dayjs.Dayjs] = [
-    dayjs().subtract(30, 'minute'),
-    dayjs(),
-  ];
+  const initialTimeRange: [dayjs.Dayjs, dayjs.Dayjs] = useMemo(
+    () => [dayjs().subtract(30, 'minute'), dayjs()],
+    [],
+  );
 
   const range = (start: number, end: number) => {
     const result = [];
@@ -393,12 +396,40 @@ export default function SqlList() {
                 key: 'slow_sql',
               },
             ],
-            onChange: (key) => setActiveTab(key as string),
+            onChange: (key) => {
+              const k = key as string;
+              setActiveTab(k);
+              setSearchParams((prev) => {
+                prev.set('activeTab', k);
+                return prev;
+              });
+            },
           },
         }}
         form={{
-          initialValues: {
-            timeRange: initialTimeRange,
+          syncToUrl: (values, type) => {
+            if (type === 'get') {
+              const { startTime, endTime, ...rest } = values;
+              return {
+                ...rest,
+                timeRange:
+                  startTime && endTime
+                    ? [
+                        dayjs.unix(Number(startTime)),
+                        dayjs.unix(Number(endTime)),
+                      ]
+                    : initialTimeRange,
+              };
+            }
+            const { timeRange, ...rest } = values;
+            if (timeRange && timeRange[0] && timeRange[1]) {
+              return {
+                ...rest,
+                startTime: dayjs(timeRange[0]).unix(),
+                endTime: dayjs(timeRange[1]).unix(),
+              };
+            }
+            return rest;
           },
         }}
         search={{

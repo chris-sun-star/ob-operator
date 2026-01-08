@@ -16,7 +16,6 @@ import {
   useSearchParams,
 } from '@umijs/max';
 import {
-  Alert,
   Button,
   DatePicker,
   Drawer,
@@ -512,16 +511,41 @@ const SqlDetail: React.FC = () => {
           loading={detailLoading}
         >
           {sqlInfo?.diagnoseInfo && sqlInfo.diagnoseInfo.length > 0 ? (
-            sqlInfo.diagnoseInfo.map((diag, idx) => (
-              <Alert
-                key={idx}
-                message={diag.reason}
-                description={diag.suggestion}
-                type="warning"
-                showIcon
-                style={{ marginBottom: 8 }}
-              />
-            ))
+            <ProTable<any>
+              rowKey={(record, index) => `${record.ruleName}-${index}`}
+              dataSource={sqlInfo.diagnoseInfo}
+              search={false}
+              options={false}
+              toolBarRender={false}
+              pagination={false}
+              columns={[
+                {
+                  title: 'Level',
+                  dataIndex: 'level',
+                  width: 100,
+                  render: (level: string) => {
+                    let color = 'blue';
+                    if (level === 'CRITICAL') color = 'red';
+                    if (level === 'WARN') color = 'orange';
+                    if (level === 'NOTICE') color = 'cyan';
+                    return <Tag color={color}>{level}</Tag>;
+                  },
+                },
+                {
+                  title: 'Rule Name',
+                  dataIndex: 'ruleName',
+                  width: 200,
+                },
+                {
+                  title: 'Reason',
+                  dataIndex: 'reason',
+                },
+                {
+                  title: 'Suggestion',
+                  dataIndex: 'suggestion',
+                },
+              ]}
+            />
           ) : (
             <Tag color="green">No diagnosis issues found.</Tag>
           )}

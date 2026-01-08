@@ -12,6 +12,7 @@ type FullScanRule struct {
 	*obmysql.BaseOBParserListener
 	diagnoseResults []model.SqlDiagnoseInfo
 	hasSargablePred bool
+	isDML           bool
 }
 
 func NewFullScanRule() *FullScanRule {
@@ -31,11 +32,12 @@ func (r *FullScanRule) Description() string {
 func (r *FullScanRule) Analyze(tree antlr.ParseTree, indexes []model.IndexInfo) []model.SqlDiagnoseInfo {
 	r.diagnoseResults = []model.SqlDiagnoseInfo{}
 	r.hasSargablePred = false
+	r.isDML = false
 
 	walker := antlr.NewParseTreeWalker()
 	walker.Walk(r, tree)
 
-	if !r.hasSargablePred {
+	if r.isDML && !r.hasSargablePred {
 		r.addResult()
 	}
 
@@ -49,6 +51,18 @@ func (r *FullScanRule) addResult() {
 		Suggestion: "Detected a potential full table scan which may impact performance. Consider adding indexes, refining WHERE clauses, or restructuring the query to utilize existing indexes.",
 		Reason:     r.Description(),
 	})
+}
+
+func (r *FullScanRule) EnterSelect_stmt(ctx *obmysql.Select_stmtContext) {
+	r.isDML = true
+}
+
+func (r *FullScanRule) EnterUpdate_stmt(ctx *obmysql.Update_stmtContext) {
+	r.isDML = true
+}
+
+func (r *FullScanRule) EnterDelete_stmt(ctx *obmysql.Delete_stmtContext) {
+	r.isDML = true
 }
 
 func (r *FullScanRule) EnterBool_pri(ctx *obmysql.Bool_priContext) {
