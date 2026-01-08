@@ -4,6 +4,7 @@ import (
 	"github.com/antlr4-go/antlr/v4"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
 	obmysql "github.com/oceanbase/ob-operator/internal/sql-analyzer/parser/mysql"
+	logger "github.com/sirupsen/logrus"
 )
 
 // SelectAllRule checks for the usage of SELECT *
@@ -42,6 +43,7 @@ func (r *SelectAllRule) Analyze(tree antlr.ParseTree, indexes []model.IndexInfo)
 
 	// For "Select *" specifically, we are looking for 'projection' nodes.
 	// We rely on the tree's Accept method to start the process.
+	logger.Debugf("[SelectAllRule] Starting analysis")
 	tree.Accept(r)
 
 	return r.diagnoseResults
@@ -50,13 +52,17 @@ func (r *SelectAllRule) Analyze(tree antlr.ParseTree, indexes []model.IndexInfo)
 // VisitProjection is called when the visitor encounters a 'projection' rule.
 // Matches: projection : bit_expr | bit_expr AS? column_label | bit_expr AS? STRING_VALUE | Star ;
 func (r *SelectAllRule) VisitProjection(ctx *obmysql.ProjectionContext) interface{} {
+	logger.Debugf("[SelectAllRule] Visiting Projection. Text: %s", ctx.GetText())
 	if ctx.Star() != nil { // Check if the '*' token exists in this projection context
+		logger.Debugf("[SelectAllRule] Found Star in Projection")
 		r.diagnoseResults = append(r.diagnoseResults, model.SqlDiagnoseInfo{
 			RuleName:   r.Name(),
 			Level:      "WARN",
 			Suggestion: "Specify specific columns instead of using SELECT * to improve performance and clarity.",
 			Reason:     "Using SELECT * retrieves all columns, which can be inefficient and return unnecessary data.",
 		})
+	} else {
+		logger.Debugf("[SelectAllRule] No Star in Projection")
 	}
 	// Continue visiting children to ensure we don't miss nested queries
 	return r.BaseOBParserVisitor.VisitChildren(ctx)
