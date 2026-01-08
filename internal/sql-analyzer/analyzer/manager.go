@@ -54,9 +54,26 @@ func (m *Manager) Analyze(sql string, indexes []model.IndexInfo) []model.SqlDiag
 	// Add error listener to avoid printing to stdout
 	p.RemoveErrorListeners()
 
+	// Use SLL prediction mode for better performance, fallback to LL if it fails
+	p.GetInterpreter().SetPredictionMode(antlr.PredictionModeSLL)
+	p.SetErrorHandler(antlr.NewBailErrorStrategy())
+
 	// Parse the SQL (assuming 'Sql_stmt' is the entry point rule)
 	parseStart := time.Now()
-	tree := p.Sql_stmt()
+	var tree antlr.ParseTree
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				// Fallback to LL prediction mode
+				stream.Seek(0)
+				p.Reset()
+				p.GetInterpreter().SetPredictionMode(antlr.PredictionModeLL)
+				p.SetErrorHandler(antlr.NewDefaultErrorStrategy())
+				tree = p.Sql_stmt()
+			}
+		}()
+		tree = p.Sql_stmt()
+	}()
 	logger.Infof("[Analyzer] Parse took %v", time.Since(parseStart))
 
 	// Run all registered rules
