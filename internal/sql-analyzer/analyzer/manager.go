@@ -2,6 +2,7 @@ package analyzer
 
 import (
 	"sync"
+	"time"
 
 	"github.com/antlr4-go/antlr/v4"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/analyzer/rules"
@@ -9,6 +10,7 @@ import (
 	// Import the generated parser package.
 	// Note: This package path must match where 'make generate-parser' outputs the code.
 	obmysql "github.com/oceanbase/ob-operator/internal/sql-analyzer/parser/mysql"
+	logger "github.com/sirupsen/logrus"
 )
 
 type Manager struct {
@@ -53,7 +55,9 @@ func (m *Manager) Analyze(sql string, indexes []model.IndexInfo) []model.SqlDiag
 	p.RemoveErrorListeners()
 
 	// Parse the SQL (assuming 'Sql_stmt' is the entry point rule)
+	parseStart := time.Now()
 	tree := p.Sql_stmt()
+	logger.Infof("[Analyzer] Parse took %v", time.Since(parseStart))
 
 	// Run all registered rules
 	var mu sync.Mutex
