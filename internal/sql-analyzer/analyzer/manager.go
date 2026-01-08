@@ -66,7 +66,7 @@ func (m *Manager) Analyze(sql string, indexes []model.IndexInfo) []model.SqlDiag
 			if r := recover(); r != nil {
 				// Fallback to LL prediction mode
 				stream.Seek(0)
-				p.Reset()
+				p.SetTokenStream(stream)
 				p.GetInterpreter().SetPredictionMode(antlr.PredictionModeLL)
 				p.SetErrorHandler(antlr.NewDefaultErrorStrategy())
 				tree = p.Sql_stmt()
