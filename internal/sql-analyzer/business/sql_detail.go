@@ -44,15 +44,7 @@ func GetSqlDetailInfo(ctx context.Context, cm *oceanbase.ConnectionManager, audi
 				var mu sync.Mutex
 				var wg sync.WaitGroup
 
-				// Deduplicate tables to avoid duplicate index queries
-				uniqueTables := make(map[string]model.TableInfo)
 				for _, table := range resp.Tables {
-					logger.Infof("[GetSqlDetailInfo] QueryTableIndexes for %s.%s with id %d", table.DatabaseName, table.TableName, table.TableID)
-					key := table.DatabaseName + "." + table.TableName
-					uniqueTables[key] = table
-				}
-
-				for _, table := range uniqueTables {
 					wg.Add(1)
 					go func(t model.TableInfo) {
 						defer wg.Done()

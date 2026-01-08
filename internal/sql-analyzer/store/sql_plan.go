@@ -251,13 +251,15 @@ func (s *PlanStore) GetTableInfoBySqlId(sqlId string) ([]model.TableInfo, error)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	// keep the max object id(table id), tables may dropped and recreated
 	query := `
-		SELECT DISTINCT
+		SELECT 
 			OBJECT_OWNER,
 			OBJECT_NAME,
-			OBJECT_ID
+			MAX(OBJECT_ID) as OBJECT_ID
 		FROM sql_plan
 		WHERE SQL_ID = ? AND OBJECT_TYPE = 'BASIC TABLE'
+		GROUP BY OBJECT_OWNER, OBJECT_NAME
 	`
 	rows, err := s.db.Query(query, sqlId)
 	if err != nil {
