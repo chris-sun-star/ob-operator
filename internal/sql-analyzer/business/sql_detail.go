@@ -2,6 +2,7 @@ package business
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	logger "github.com/sirupsen/logrus"
@@ -40,16 +41,28 @@ func GetSqlDetailInfo(ctx context.Context, cm *oceanbase.ConnectionManager, audi
 			}
 
 			if tenantID > 0 {
+				var mu sync.Mutex
+				var wg sync.WaitGroup
+
 				for _, table := range resp.Tables {
-					tableStart := time.Now()
-					indexes, err := oceanbase.QueryTableIndexes(ctx, opMgr, tenantID, table.DatabaseName, table.TableName)
-					if err != nil {
-						logger.Warnf("Failed to query indexes for table %s.%s: %v", table.DatabaseName, table.TableName, err)
-						continue
-					}
-					resp.Indexes = append(resp.Indexes, indexes...)
-					logger.Debugf("[GetSqlDetailInfo] QueryTableIndexes for %s.%s took %v", table.DatabaseName, table.TableName, time.Since(tableStart))
+					wg.Add(1)
+					go func(t model.TableInfo) {
+						defer wg.Done()
+						tableStart := time.Now()
+						indexes, err := oceanbase.QueryTableIndexes(ctx, opMgr, tenantID, t.DatabaseName, t.TableName)
+						if err != nil {
+							logger.Warnf("Failed to query indexes for table %s.%s: %v", t.DatabaseName, t.TableName, err)
+							return
+						}
+						
+						mu.Lock()
+						resp.Indexes = append(resp.Indexes, indexes...)
+						mu.Unlock()
+						
+						logger.Debugf("[GetSqlDetailInfo] QueryTableIndexes for %s.%s took %v", t.DatabaseName, t.TableName, time.Since(tableStart))
+					}(table)
 				}
+				wg.Wait()
 			}
 		}
 		logger.Infof("[GetSqlDetailInfo] Query Indexes total took %v", time.Since(indexStart))

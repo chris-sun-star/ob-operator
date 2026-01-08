@@ -1,6 +1,8 @@
 package analyzer
 
 import (
+	"sync"
+
 	"github.com/antlr4-go/antlr/v4"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/analyzer/rules"
 	"github.com/oceanbase/ob-operator/internal/sql-analyzer/api/model"
@@ -54,10 +56,22 @@ func (m *Manager) Analyze(sql string, indexes []model.IndexInfo) []model.SqlDiag
 	tree := p.Sql_stmt()
 
 	// Run all registered rules
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
 	for _, rule := range m.rules {
-		results := rule.Analyze(tree, indexes)
-		diagnostics = append(diagnostics, results...)
+		wg.Add(1)
+		go func(r Rule) {
+			defer wg.Done()
+			results := r.Analyze(tree, indexes)
+			if len(results) > 0 {
+				mu.Lock()
+				diagnostics = append(diagnostics, results...)
+				mu.Unlock()
+			}
+		}(rule)
 	}
+	wg.Wait()
 
 	return diagnostics
 }
