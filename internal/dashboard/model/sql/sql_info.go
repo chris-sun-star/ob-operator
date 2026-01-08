@@ -22,8 +22,10 @@ type SqlStatisticMetric struct {
 }
 
 type SqlDiagnoseInfo struct {
-	Reason     string `json:"reason" binding:"required"`
-	Suggestion string `json:"suggestion,omitempty"`
+	RuleName   string `json:"ruleName"`
+	Level      string `json:"level"`
+	Reason     string `json:"reason"`
+	Suggestion string `json:"suggestion"`
 }
 
 type SqlMetaInfo struct {

@@ -331,6 +331,15 @@ func QuerySqlDetailInfo(ctx context.Context, param *sql.SqlDetailParam) (*sql.Sq
 		})
 	}
 
+	for _, diagnoseInfo := range resp.DiagnoseInfo {
+		detailedInfo.DiagnoseInfo = append(detailedInfo.DiagnoseInfo, sql.SqlDiagnoseInfo{
+			RuleName:   diagnoseInfo.RuleName,
+			Level:      diagnoseInfo.Level,
+			Reason:     diagnoseInfo.Reason,
+			Suggestion: diagnoseInfo.Suggestion,
+		})
+	}
+
 	return detailedInfo, nil
 }
 
