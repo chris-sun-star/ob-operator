@@ -86,6 +86,7 @@ func (m *Manager) Analyze(sql string, indexes []model.IndexInfo) []model.SqlDiag
 		go func(r Rule) {
 			defer wg.Done()
 			results := r.Analyze(tree, indexes)
+			logger.Infof("[Manager] Rule %s returned %d results", r.Name(), len(results))
 			if len(results) > 0 {
 				mu.Lock()
 				diagnostics = append(diagnostics, results...)
@@ -94,6 +95,7 @@ func (m *Manager) Analyze(sql string, indexes []model.IndexInfo) []model.SqlDiag
 		}(rule)
 	}
 	wg.Wait()
+	logger.Infof("[Manager] Total diagnostics found: %d", len(diagnostics))
 
 	return diagnostics
 }
