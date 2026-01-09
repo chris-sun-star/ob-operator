@@ -14,6 +14,7 @@ package oceanbase
 
 import (
 	"context"
+	"sort"
 	"sync"
 
 	"github.com/go-logr/logr"
@@ -27,6 +28,7 @@ import (
 	oceanbaseconst "github.com/oceanbase/ob-operator/internal/const/oceanbase"
 	secretconst "github.com/oceanbase/ob-operator/internal/const/secret"
 	clusterstatus "github.com/oceanbase/ob-operator/internal/const/status/obcluster"
+	observerstatus "github.com/oceanbase/ob-operator/internal/const/status/observer"
 	"github.com/oceanbase/ob-operator/pkg/k8s/client"
 	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/connector"
 	"github.com/oceanbase/ob-operator/pkg/oceanbase-sdk/operation"
@@ -70,6 +72,10 @@ func (cm *ConnectionManager) GetSysReadonlyConnectionByIP(svrIP string) (*operat
 	if len(observerList.Items) == 0 {
 		return nil, errors.Errorf("No observer belongs to cluster %s", cm.obcluster.Name)
 	}
+
+	sort.Slice(observerList.Items, func(i, j int) bool {
+		return observerList.Items[i].Status.Status == observerstatus.Running && observerList.Items[j].Status.Status != observerstatus.Running
+	})
 
 	var s *connector.OceanBaseDataSource
 	password, err := cm.readPassword()
