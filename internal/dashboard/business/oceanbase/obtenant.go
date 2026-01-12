@@ -481,18 +481,16 @@ func CreateOBTenant(ctx context.Context, nn types.NamespacedName, p *param.Creat
 		return nil, err
 	}
 
-	// TODO: create deployment only when enabled
-	//if p.EnableSQLAnalyzer {
-	if err := createSQLAnalyzerDeployment(ctx, tenant); err != nil {
-		// Log the error, but don't fail the tenant creation
-		logger.Errorf("failed to create sql-analyzer deployment: %v", err)
+	if p.EnableSQLAnalyzer {
+		if err := CreateSQLAnalyzerDeployment(ctx, tenant); err != nil {
+			logger.Errorf("failed to create sql-analyzer deployment: %v", err)
+		}
 	}
-	//}
 
 	return buildDetailFromApiType(ctx, tenant), nil
 }
 
-func createSQLAnalyzerDeployment(ctx context.Context, tenant *v1alpha1.OBTenant) error {
+func CreateSQLAnalyzerDeployment(ctx context.Context, tenant *v1alpha1.OBTenant) error {
 	k8sclient := client.GetClient()
 
 	obcluster, err := clients.GetOBCluster(ctx, tenant.Namespace, tenant.Spec.ClusterName)
@@ -728,6 +726,50 @@ func createSQLAnalyzerDeployment(ctx context.Context, tenant *v1alpha1.OBTenant)
 		return oberr.NewInternal(err.Error())
 	}
 	logger.Infof("create sql-analyzer deployment %s for tenant %s", deploymentName, tenant.Name)
+	return nil
+}
+
+func DeleteSQLAnalyzerDeployment(ctx context.Context, tenant *v1alpha1.OBTenant) error {
+	k8sclient := client.GetClient()
+	ns := tenant.Namespace
+	name := tenant.Name
+
+	// 1. Delete Deployment
+	deploymentName := fmt.Sprintf("sql-analyzer-%s", name)
+	err := k8sclient.ClientSet.AppsV1().Deployments(ns).Delete(ctx, deploymentName, v1.DeleteOptions{})
+	if err != nil && !kubeerrors.IsNotFound(err) {
+		return errors.Wrapf(err, "failed to delete deployment %s", deploymentName)
+	}
+
+	// 2. Delete PVC
+	pvcName := "pvc-sql-" + name
+	err = k8sclient.ClientSet.CoreV1().PersistentVolumeClaims(ns).Delete(ctx, pvcName, v1.DeleteOptions{})
+	if err != nil && !kubeerrors.IsNotFound(err) {
+		return errors.Wrapf(err, "failed to delete pvc %s", pvcName)
+	}
+
+	// 3. Delete RoleBinding
+	rbName := fmt.Sprintf("sql-analyzer-%s-rb", name)
+	err = k8sclient.ClientSet.RbacV1().RoleBindings(ns).Delete(ctx, rbName, v1.DeleteOptions{})
+	if err != nil && !kubeerrors.IsNotFound(err) {
+		return errors.Wrapf(err, "failed to delete role binding %s", rbName)
+	}
+
+	// 4. Delete Role
+	roleName := fmt.Sprintf("sql-analyzer-%s-role", name)
+	err = k8sclient.ClientSet.RbacV1().Roles(ns).Delete(ctx, roleName, v1.DeleteOptions{})
+	if err != nil && !kubeerrors.IsNotFound(err) {
+		return errors.Wrapf(err, "failed to delete role %s", roleName)
+	}
+
+	// 5. Delete ServiceAccount
+	saName := fmt.Sprintf("sql-analyzer-%s", name)
+	err = k8sclient.ClientSet.CoreV1().ServiceAccounts(ns).Delete(ctx, saName, v1.DeleteOptions{})
+	if err != nil && !kubeerrors.IsNotFound(err) {
+		return errors.Wrapf(err, "failed to delete service account %s", saName)
+	}
+
+	logger.Infof("delete sql-analyzer resources for tenant %s", name)
 	return nil
 }
 
