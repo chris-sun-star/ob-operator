@@ -181,7 +181,7 @@ func buildOBTenantApiType(nn types.NamespacedName, p *param.CreateOBTenantParam)
 
 func buildDetailFromApiType(ctx context.Context, t *v1alpha1.OBTenant) *response.OBTenantDetail {
 	rt := &response.OBTenantDetail{
-		OBTenantOverview: *buildOverviewFromApiType(t),
+		OBTenantOverview: *buildOverviewFromApiType(ctx, t),
 	}
 	rt.RootCredential = t.Status.Credentials.Root
 	rt.StandbyROCredential = t.Status.Credentials.StandbyRO
@@ -234,7 +234,20 @@ func buildDetailFromApiType(ctx context.Context, t *v1alpha1.OBTenant) *response
 	return rt
 }
 
-func buildOverviewFromApiType(t *v1alpha1.OBTenant) *response.OBTenantOverview {
+func checkSqlAnalyzerEnabled(ctx context.Context, t *v1alpha1.OBTenant) bool {
+	k8sclient := client.GetClient()
+	deploymentName := fmt.Sprintf("sql-analyzer-%s", t.Name)
+	_, err := k8sclient.ClientSet.AppsV1().Deployments(t.Namespace).Get(ctx, deploymentName, v1.GetOptions{})
+	if err != nil {
+		if !kubeerrors.IsNotFound(err) {
+			logger.Errorf("failed to get sql analyzer deployment: %v", err)
+		}
+		return false
+	}
+	return true
+}
+
+func buildOverviewFromApiType(ctx context.Context, t *v1alpha1.OBTenant) *response.OBTenantOverview {
 	rt := &response.OBTenantOverview{}
 	rt.UID = string(t.UID)
 	rt.Name = t.Name
@@ -250,6 +263,7 @@ func buildOverviewFromApiType(t *v1alpha1.OBTenant) *response.OBTenantOverview {
 	rt.PrimaryZone = t.Status.TenantRecordInfo.PrimaryZone
 	rt.Scenario = t.Spec.Scenario
 	rt.DeletionProtection = t.Annotations[oceanbaseconst.AnnotationsIgnoreDeletion] == "true"
+	rt.SqlAnalyzerEnabled = checkSqlAnalyzerEnabled(ctx, t)
 
 	for i := range t.Status.Pools {
 		pool := t.Status.Pools[i]
@@ -785,7 +799,7 @@ func ListAllOBTenants(ctx context.Context, ns string, listOptions v1.ListOptions
 	})
 	tenants := make([]*response.OBTenantOverview, 0, len(tenantList.Items))
 	for i := range tenantList.Items {
-		tenants = append(tenants, buildOverviewFromApiType(&tenantList.Items[i]))
+		tenants = append(tenants, buildOverviewFromApiType(ctx, &tenantList.Items[i]))
 	}
 	return tenants, nil
 }
