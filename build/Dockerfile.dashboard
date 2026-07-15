@@ -16,12 +16,22 @@ RUN swag --version
 RUN make dashboard
 
 # start build docker image
-FROM openanolis/anolisos:8.8
-WORKDIR /root
-RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
-RUN yum install -y mysql && yum clean all
+FROM registry.access.redhat.com/ubi8/ubi:8.10
+ARG VERSION
+LABEL name="oceanbase-dashboard" \
+      vendor="OceanBase" \
+      version=${VERSION} \
+      release="1" \
+      summary="OceanBase dashboard" \
+      description="Kubernetes dashboard for OceanBase" \
+      maintainer="OceanBase"
+WORKDIR /opt
+RUN mkdir -p /licenses
+COPY LICENSE /licenses
 COPY --from=builder-be /workspace/bin/oceanbase-dashboard .
 COPY --from=builder-fe /workspace/dist ./ui/dist
-USER root
+RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+RUN yum install -y mysql && yum clean all
+USER 65534:65534
 
 ENTRYPOINT ["/root/oceanbase-dashboard"]
