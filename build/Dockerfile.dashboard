@@ -31,7 +31,10 @@ COPY LICENSE /licenses
 COPY --from=builder-be /workspace/bin/oceanbase-dashboard .
 COPY --from=builder-fe /workspace/dist ./ui/dist
 RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
-RUN yum install -y mysql && yum clean all
+RUN yum update -y && yum install -y procps-ng && yum clean all
+RUN rpm -ivh https://mirrors.aliyun.com/mysql/MySQL-8.0/mysql-community-common-8.0.27-1.el8.x86_64.rpm
+RUN rpm -ivh https://mirrors.aliyun.com/mysql/MySQL-8.0/mysql-community-client-plugins-8.0.27-1.el8.x86_64.rpm
+RUN rpm -ivh https://mirrors.aliyun.com/mysql/MySQL-8.0/mysql-community-libs-8.0.27-1.el8.x86_64.rpm
+RUN rpm -ivh https://mirrors.aliyun.com/mysql/MySQL-8.0/mysql-community-client-8.0.27-1.el8.x86_64.rpm
 USER 65534:65534
-
-ENTRYPOINT ["/root/oceanbase-dashboard"]
+ENTRYPOINT ["/opt/oceanbase-dashboard"]
