@@ -23,7 +23,7 @@ LABEL name="oceanbase-operator" \
 WORKDIR /
 RUN mkdir -p /licenses
 COPY LICENSE /licenses
-COPY --from=builder /workspace/manager .
+COPY --from=builder /workspace/bin/manager .
 RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 USER 65534:65534
 
