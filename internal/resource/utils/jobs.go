@@ -71,6 +71,11 @@ func RunJob(ctx context.Context, c client.Client, logger *logr.Logger, namespace
 		Command:      []string{"bash", "-c", cmd},
 		VolumeMounts: mounts,
 	}
+	securityContext := GetDefaultSecurityContext()
+	if podFields != nil && podFields.SecurityContext != nil {
+		securityContext = podFields.SecurityContext
+	}
+
 	job := batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fullJobName,
@@ -83,7 +88,7 @@ func RunJob(ctx context.Context, c client.Client, logger *logr.Logger, namespace
 					RestartPolicy:   corev1.RestartPolicyNever,
 					Volumes:         volumes,
 					SchedulerName:   GetSchedulerName(podFields),
-					SecurityContext: GetDefaultSecurityContext(),
+					SecurityContext: securityContext,
 				},
 			},
 			BackoffLimit:            &backoffLimit,
@@ -190,6 +195,16 @@ func ExecuteUpgradeScript(ctx context.Context, c client.Client, logger *logr.Log
 		Image:   obcluster.Spec.OBServerTemplate.Image,
 		Command: []string{"bash", "-c", fmt.Sprintf("if [[ `command -v python2` ]]; then ln -sf /usr/bin/python2 /usr/bin/python; fi && python %s -h%s -P%d -uroot -p'%s' %s", filepath, address, rootserver.SqlPort, password, extraOpt)},
 	}
+
+	var schedulerName string
+	securityContext := GetDefaultSecurityContext()
+	if obcluster.Spec.OBServerTemplate.PodFields != nil {
+		schedulerName = GetSchedulerName(obcluster.Spec.OBServerTemplate.PodFields)
+		if obcluster.Spec.OBServerTemplate.PodFields.SecurityContext != nil {
+			securityContext = obcluster.Spec.OBServerTemplate.PodFields.SecurityContext
+		}
+	}
+
 	job := batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -206,7 +221,8 @@ func ExecuteUpgradeScript(ctx context.Context, c client.Client, logger *logr.Log
 				Spec: corev1.PodSpec{
 					Containers:      []corev1.Container{container},
 					RestartPolicy:   corev1.RestartPolicyNever,
-					SecurityContext: GetDefaultSecurityContext(),
+					SchedulerName:   schedulerName,
+					SecurityContext: securityContext,
 				},
 			},
 			BackoffLimit:            &backoffLimit,

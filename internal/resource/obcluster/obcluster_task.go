@@ -694,6 +694,15 @@ func CheckImageReady(m *OBClusterManager) tasktypes.TaskError {
 	jobName := "image-pull-ready-" + rand.String(8)
 	var ttl int32 = 120
 	var backoffLimit int32 = 32
+	var schedulerName string
+	securityContext := resourceutils.GetDefaultSecurityContext()
+	if m.OBCluster.Spec.OBServerTemplate.PodFields != nil {
+		schedulerName = resourceutils.GetSchedulerName(m.OBCluster.Spec.OBServerTemplate.PodFields)
+		if m.OBCluster.Spec.OBServerTemplate.PodFields.SecurityContext != nil {
+			securityContext = m.OBCluster.Spec.OBServerTemplate.PodFields.SecurityContext
+		}
+	}
+
 	checkImagePullJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -715,8 +724,8 @@ func CheckImageReady(m *OBClusterManager) tasktypes.TaskError {
 						Command:         []string{"bash", "-c", "/home/admin/oceanbase/bin/oceanbase-helper help"},
 					}},
 					RestartPolicy:   corev1.RestartPolicyNever,
-					SchedulerName:   resourceutils.GetSchedulerName(m.OBCluster.Spec.OBServerTemplate.PodFields),
-					SecurityContext: resourceutils.GetDefaultSecurityContext(),
+					SchedulerName:   schedulerName,
+					SecurityContext: securityContext,
 				},
 			},
 			TTLSecondsAfterFinished: &ttl,
