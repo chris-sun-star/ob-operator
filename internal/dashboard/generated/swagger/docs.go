@@ -9958,6 +9958,9 @@ const docTemplate = `{
         "obproxy.ConfigItem": {
             "type": "object",
             "properties": {
+                "configLevel": {
+                    "type": "string"
+                },
                 "info": {
                     "type": "string"
                 },
@@ -9966,6 +9969,9 @@ const docTemplate = `{
                 },
                 "needReboot": {
                     "type": "boolean"
+                },
+                "range": {
+                    "type": "string"
                 },
                 "value": {
                     "type": "string"
@@ -13480,7 +13486,8 @@ const docTemplate = `{
                     "$ref": "#/definitions/sql.PlanOperator"
                 },
                 "planHash": {
-                    "type": "integer"
+                    "type": "string",
+                    "example": "0"
                 },
                 "planID": {
                     "type": "integer"
@@ -13582,7 +13589,8 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "planHash": {
-                    "type": "integer"
+                    "type": "string",
+                    "example": "0"
                 },
                 "planID": {
                     "type": "integer"
@@ -13889,9 +13897,6 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/sql.SqlStatisticMetric"
                     }
-                },
-                "formatSqlId": {
-                    "type": "string"
                 },
                 "lastFailInfo": {
                     "type": "integer"

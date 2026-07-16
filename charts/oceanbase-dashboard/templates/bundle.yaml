@@ -70,6 +70,8 @@ spec:
               value: {{ .Release.Namespace }}
             - name: SERVICE_ACCOUNT
               value: {{ .Release.Name }}-sa
+            - name: LOG_FILE
+              value: /tmp/oceanbase-dashboard.log
         - name: prometheus
           image: quay.io/prometheus/prometheus:v2.51.1
           resources:

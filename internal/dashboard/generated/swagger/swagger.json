@@ -9951,6 +9951,9 @@
         "obproxy.ConfigItem": {
             "type": "object",
             "properties": {
+                "configLevel": {
+                    "type": "string"
+                },
                 "info": {
                     "type": "string"
                 },
@@ -9959,6 +9962,9 @@
                 },
                 "needReboot": {
                     "type": "boolean"
+                },
+                "range": {
+                    "type": "string"
                 },
                 "value": {
                     "type": "string"
@@ -13473,7 +13479,8 @@
                     "$ref": "#/definitions/sql.PlanOperator"
                 },
                 "planHash": {
-                    "type": "integer"
+                    "type": "string",
+                    "example": "0"
                 },
                 "planID": {
                     "type": "integer"
@@ -13575,7 +13582,8 @@
                     "type": "integer"
                 },
                 "planHash": {
-                    "type": "integer"
+                    "type": "string",
+                    "example": "0"
                 },
                 "planID": {
                     "type": "integer"
@@ -13882,9 +13890,6 @@
                     "items": {
                         "$ref": "#/definitions/sql.SqlStatisticMetric"
                     }
-                },
-                "formatSqlId": {
-                    "type": "string"
                 },
                 "lastFailInfo": {
                     "type": "integer"

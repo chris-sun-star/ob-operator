@@ -789,12 +789,16 @@ definitions:
     type: object
   obproxy.ConfigItem:
     properties:
+      configLevel:
+        type: string
       info:
         type: string
       name:
         type: string
       needReboot:
         type: boolean
+      range:
+        type: string
       value:
         type: string
       visibleLevel:
@@ -3260,7 +3264,8 @@ definitions:
       planDetail:
         $ref: '#/definitions/sql.PlanOperator'
       planHash:
-        type: integer
+        example: "0"
+        type: string
       planID:
         type: integer
       svrIP:
@@ -3332,7 +3337,8 @@ definitions:
       ioCost:
         type: integer
       planHash:
-        type: integer
+        example: "0"
+        type: string
       planID:
         type: integer
       realCost:
@@ -3544,8 +3550,6 @@ definitions:
         items:
           $ref: '#/definitions/sql.SqlStatisticMetric'
         type: array
-      formatSqlId:
-        type: string
       lastFailInfo:
         type: integer
       latencyStatistics:
